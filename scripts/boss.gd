@@ -6,6 +6,9 @@ var casting := false
 var six_seven := false  # gesto do Esmagar: uma mão sobe enquanto a outra desce
 var hair_color := Color(1.0, 0.38, 0.66)
 var t := 0.0
+var rage_t := 0.0
+var _rage_off := Vector3.ZERO
+const RAGE_TIME := 0.9
 var halo: MeshInstance3D
 var hands: Array[MeshInstance3D] = []
 var eye_mat: StandardMaterial3D
@@ -53,7 +56,7 @@ func _process(delta: float) -> void:
 	halo.rotate_y(delta * (5.0 if casting else 1.0))
 	for i in hands.size():
 		var s := -1.0 if i == 0 else 1.0
-		var lift := 2.2 if casting else 0.0
+		var lift := 2.2 if casting or rage_t > 0.0 else 0.0
 		var target := Vector3(s * (4.0 - lift * 0.4), 6.4 + lift + sin(t * 1.6 + i * 2.0) * 0.35, 1.6)
 		var follow := 4.0
 		if six_seven:
@@ -63,6 +66,20 @@ func _process(delta: float) -> void:
 		hands[i].position = hands[i].position.lerp(target, delta * follow)
 	if shield.visible:
 		shield.rotate_y(delta * 0.6)
+	# raiva (foi provocada): treme forte e vai acalmando
+	position -= _rage_off
+	_rage_off = Vector3.ZERO
+	if rage_t > 0.0:
+		rage_t -= delta
+		var k := maxf(0.0, rage_t / RAGE_TIME)
+		_rage_off = Vector3(randf_range(-1.0, 1.0), randf_range(-0.3, 0.3), 0.0) * 0.28 * k
+		dress_mat.emission_energy_multiplier = 0.5 + 2.5 * k
+	position += _rage_off
+
+
+## Provocada pelo Bora Biscoitar: treme de raiva, com os punhos fechados pra cima.
+func rage() -> void:
+	rage_t = RAGE_TIME
 
 
 func set_tint(c: Color) -> void:

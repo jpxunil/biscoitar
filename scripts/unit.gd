@@ -41,6 +41,9 @@ var cast_ai := false
 var guard_t := 0.0
 var targeted := false
 var chosen := false
+## Pra onde está fugindo de um ataque vermelho. Fica guardado até sair da área,
+## senão o ponto seguro troca de lado a cada frame e o personagem fica indo e voltando.
+var dodge_goal = null
 var enmity := 0.0
 var weak_t := 0.0      # Fraqueza: revivido pelo Reviver comum dá metade do dano
 var immortal_t := 0.0  # Limit Break do Tank

@@ -96,7 +96,7 @@ func setup(game) -> void:
 	keys.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(keys)
 	for pair in [["WASD", "mover"], ["J", "atacar"], ["ESPAÇO", "esquiva"], ["1-4", "trocar"], ["F1-F4", "alvo"],
-			["K", "skill"], ["L", "especial"], ["U", "biscoitar"], ["I", "limit"], ["Q", "reunir"], ["E", "espalhar"], ["R", "manter"], ["F", "atacar livre"]]:
+			["K", "skill"], ["L", "especial"], ["U", "extra"], ["I", "limit"], ["Q", "reunir"], ["E", "espalhar"], ["R", "manter"], ["F", "atacar livre"]]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
 		var key := UiStyle.slab(UiStyle.INK_SOFT, 0.0, 8, 2)
@@ -142,19 +142,23 @@ func _column(i: int) -> Control:
 	col.add_child(gap)
 
 	# --- roxa
-	var pb: Button
-	if d["purple"]:
-		pb = _slot(Knowledge.PURPLE_NAME.to_upper(), UiStyle.PURPLE, true, true, 50, 17)
-	elif not Knowledge.purple_known:
-		pb = _slot("?", UiStyle.PURPLE, false, false, 50, 17)
-	else:
-		pb = _slot(Knowledge.PURPLE_NAME, UiStyle.PURPLE, false, Knowledge.purple_left() > 0, 50, 17)
-	pb.pressed.connect(func():
-		Knowledge.toggle_purple(i)
-		_pulse = "p%d" % i
-		refresh())
-	_maybe_pulse(pb, "p%d" % i)
-	col.add_child(pb)
+	for pid in Knowledge.PURPLE_ORDER:
+		var pb: Button
+		var known: bool = Knowledge.purple_known if pid == "mark" else Knowledge.dps_known.has(u["key"])
+		var pname: String = Knowledge.PURPLE[pid]
+		if d["purple"] == pid:
+			pb = _slot(pname.to_upper(), UiStyle.PURPLE, true, true, 40, 16)
+		elif not known:
+			pb = _slot("?", UiStyle.PURPLE, false, false, 40, 16)
+		else:
+			pb = _slot(pname, UiStyle.PURPLE, false, Knowledge.purple_can(i, pid, u["key"]), 40, 16)
+		var tag := "p%d%s" % [i, pid]
+		pb.pressed.connect(func():
+			Knowledge.toggle_purple(i, pid, u["key"])
+			_pulse = tag
+			refresh())
+		_maybe_pulse(pb, tag)
+		col.add_child(pb)
 
 	# --- amarelas: todas as cartas aparecem; só YELLOW_SLOTS podem ficar equipadas
 	var equipped: int = d["yellow"].size()

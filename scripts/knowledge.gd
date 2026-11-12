@@ -12,6 +12,14 @@ const WHITE_SLOTS := 3
 const PURPLE_COPIES := 1
 
 const PURPLE_NAME := "Marca Elemental"
+## Roxas: "mark" resolve a mecânica elemental; "dps" é a rotação otimizada do personagem.
+## A de DPS é de cada herói: você libera jogando bem com ele, e aí a IA dele bate mais forte.
+const PURPLE := {"mark": "Marca Elemental", "dps": "Rotação"}
+const PURPLE_ORDER := ["mark", "dps"]
+## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói
+## (uns 60% do que a classe rende com a rotação perfeita, pra sobrar folga pros desvios).
+const DPS_GOAL := {"tank": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0}
+const DPS_WINDOW := 20
 
 ## Um único desvio cobre todos os avisos vermelhos. Não vem de fábrica:
 ## a party aprende quando você desvia de um ataque na mão.
@@ -91,6 +99,7 @@ static func actions_for(trigger: String, unit_key: String) -> Array:
 static var triggers_known := {}
 static var actions_known := {"center": true, "stay": true}
 static var purple_known := false
+static var dps_known := {}  # chave do herói -> true
 static var yellow_known := {}
 ## Quem você controla quando a luta começa (escolhido no menu).
 static var start_hero := 2
@@ -105,7 +114,7 @@ static func deck(i: int) -> Dictionary:
 		var whites: Array = []
 		for n in WHITE_SLOTS:
 			whites.append({"t": "", "a": ""})
-		decks[i] = {"purple": false, "yellow": [], "white": whites}
+		decks[i] = {"purple": "", "yellow": [], "white": whites}
 	return decks[i]
 
 
@@ -125,17 +134,24 @@ static func toggle_yellow(i: int, id: String) -> void:
 static func purple_left() -> int:
 	var used := 0
 	for i in decks:
-		if decks[i]["purple"]:
+		if decks[i]["purple"] == "mark":
 			used += 1
 	return PURPLE_COPIES - used
 
 
-static func toggle_purple(i: int) -> void:
+static func purple_can(i: int, id: String, unit_key: String) -> bool:
+	if id == "mark":
+		return purple_known and (deck(i)["purple"] == "mark" or purple_left() > 0)
+	return dps_known.has(unit_key)
+
+
+## Um slot roxo por herói: equipar uma tira a outra.
+static func toggle_purple(i: int, id: String, unit_key: String) -> void:
 	var d := deck(i)
-	if d["purple"]:
-		d["purple"] = false
-	elif purple_known and purple_left() > 0:
-		d["purple"] = true
+	if d["purple"] == id:
+		d["purple"] = ""
+	elif purple_can(i, id, unit_key):
+		d["purple"] = id
 
 
 static func set_white(i: int, slot: int, trigger: String, action: String) -> void:

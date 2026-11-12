@@ -48,7 +48,7 @@ const START_POS := [
 const UNIT_DEFS := [
 	{"name": "Tank", "range": MELEE_RANGE, "key": "tank", "color": Color(0.3, 0.5, 1.0), "hp": 160.0, "melee": true, "ai_dps": 6.0, "hit": 8.0},
 	{"name": "Healer", "range": RANGED_RANGE, "key": "healer", "color": Color(0.4, 0.95, 0.55), "hp": 90.0, "melee": false, "ai_dps": 3.0, "hit": 6.0},
-	{"name": "Assassina", "range": MELEE_RANGE, "key": "assassina", "color": Color(0.78, 0.38, 1.0), "hp": 100.0, "melee": true, "ai_dps": 8.0, "hit": 17.0},
+	{"name": "Assassina", "range": MELEE_RANGE, "key": "assassina", "color": Color(0.78, 0.38, 1.0), "hp": 100.0, "melee": true, "ai_dps": 10.0, "hit": 17.0},
 	{"name": "Maga", "range": RANGED_RANGE, "key": "maga", "color": Color(1.0, 0.72, 0.25), "hp": 90.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
 ]
 
@@ -98,19 +98,26 @@ const STEPS_ELEMENT := [
 ## burst, mitigação e reviver são motivo pra você assumir o personagem.
 const PROVOKE := {"name": "Bora Biscoitar", "cd": 20.0}
 ## Uma lista por herói, na ordem das teclas J, K, L, U. null = tecla sem habilidade.
-## U é o Bora Biscoitar pra todo mundo: qualquer um pode puxar o boss pra si.
+## U é o Bora Biscoitar, só do Tank: é ele quem puxa o boss pra si.
 const SKILLS := {
 	"tank": [{"name": "Golpe", "cd": 1.0, "dmg": 22.0},
 		{"name": "Mitigação", "cd": 10.0}, null, PROVOKE],
 	"healer": [{"name": "Faísca", "cd": 1.0, "dmg": 14.0, "cast": 0.5},
-		{"name": "Cura", "cd": 4.0, "cast": 0.5}, {"name": "Reviver", "cd": 25.0, "cast": 1.5}, PROVOKE],
+		{"name": "Cura", "cd": 4.0, "cast": 0.5}, {"name": "Reviver", "cd": 25.0, "cast": 1.5},
+		{"name": "Cura em Área", "cd": 8.0, "cast": 1.0}],
 	"assassina": [{"name": "Corte", "cd": 1.0, "dmg": 46.0},
-		{"name": "Execução", "cd": 7.0, "dmg": 70.0}, {"name": "Lâmina Final", "cd": 20.0, "dmg": 260.0, "cast": 2.0}, PROVOKE],
+		{"name": "Execução", "cd": 7.0, "dmg": 70.0}, {"name": "Lâmina Final", "cd": 20.0, "dmg": 260.0, "cast": 2.0}, null],
 	"maga": [{"name": "Raio", "cd": 1.0, "dmg": 34.0, "cast": 0.5},
-		{"name": "Meteoro", "cd": 7.0, "dmg": 55.0, "cast": 0.5}, {"name": "Ruína", "cd": 20.0, "dmg": 240.0, "cast": 2.0}, PROVOKE],
+		{"name": "Meteoro", "cd": 7.0, "dmg": 55.0, "cast": 0.5}, {"name": "Ruína", "cd": 20.0, "dmg": 240.0, "cast": 2.0}, null],
 }
 ## Cast curto trava o personagem no lugar; cast longo pode ser interrompido andando.
 const LOCKED_CAST := 1.0
+## DPS da IA com a carta roxa Rotação (sem ela vale o ai_dps de UNIT_DEFS).
+const ROTATION_DPS := {"tank": 10.0, "healer": 6.0, "assassina": 22.0, "maga": 16.0}
+## Cura em Área: metade da Cura, em todo mundo perto do Healer.
+const AOE_HEAL_R := 6.0
+const HEAL_PLAYER := 55.0
+const HEAL_AI := 45.0
 const COOKIE_COL := Color(0.86, 0.6, 0.3)
 const SKILL_KEYS := ["J", "K", "L", "U"]
 const AUTO_EVERY := 2.0
@@ -170,7 +177,6 @@ var stacks: Array = []  # círculos laranjas ativos
 var stack_need := 4
 var stack_t := 0.0
 var stack_total := 1.0
-var stack_red_done := false
 var buster = null  # Dictionary enquanto o Esmagar está carregando
 var zones: Array = []
 var zones_active := false
@@ -185,6 +191,9 @@ var won := false
 ## Fúria: o tempo do DPS check acabou e os biscoitos estão caindo.
 var fury := false
 var log_lines: Array[String] = []
+var rot_unit := -1
+var rot_buckets: Array[float] = []
+var hit_count := {}  # só pro relatório de teste: quantas vezes cada motivo acertou alguém
 var auto_t := 0.0
 var target: Unit
 var heal_focus: Unit
@@ -254,9 +263,12 @@ func _ready() -> void:
 		for id in Knowledge.YELLOW:
 			Knowledge.yellow_known[id] = true
 		Knowledge.purple_known = true
+		for def in UNIT_DEFS:
+			Knowledge.dps_known[def["key"]] = true
 		Knowledge.set_white(0, 0, "got_element", "zone_opp")
 		Knowledge.toggle_yellow(1, "dodge")
-		Knowledge.toggle_purple(2)
+		Knowledge.toggle_purple(2, "mark", "assassina")
+		Knowledge.toggle_purple(3, "dps", "maga")
 	prep = not autoplay
 	hud.set_prep(prep)
 	for a in args:
@@ -566,6 +578,9 @@ func _process(delta: float) -> void:
 
 func _print_report() -> void:
 	print("--- REPORT ---")
+	for line in log_lines:
+		print("morte: ", line)
+	print("acertos: ", hit_count)
 	print("boss=", boss_def["name"], " ended=", ended, " won=", won, " boss_hp=", int(boss_hp), "/", int(boss_max), " phase=", phase, " t=", int(fight_time))
 	for u in units:
 		print(u.unit_name, " alive=", u.alive, " hp=", int(u.hp), " dps=", int(u.dmg_total / maxf(fight_time, 1.0)))
@@ -590,11 +605,35 @@ func _tick_dps(delta: float) -> void:
 		u.dps = (recent + u.dmg_bucket) / (u.dmg_buckets.size() + bucket_t)
 	if bucket_t >= 1.0:
 		bucket_t -= 1.0
+		_tick_rotation(units[ctrl])
 		for u in units:
 			u.dmg_buckets.append(u.dmg_bucket)
 			u.dmg_bucket = 0.0
 			if u.dmg_buckets.size() > 3:
 				u.dmg_buckets.pop_front()
+
+
+## Carta roxa Rotação: segure um DPS bom pra classe por DPS_WINDOW segundos seguidos
+## no controle do herói e a IA dele aprende a bater assim. Chamado uma vez por segundo.
+func _tick_rotation(u: Unit) -> void:
+	if autoplay or not u.alive or Knowledge.dps_known.has(u.key):
+		return
+	if rot_unit != u.idx:
+		rot_unit = u.idx
+		rot_buckets.clear()
+	rot_buckets.append(u.dmg_bucket)
+	if rot_buckets.size() > Knowledge.DPS_WINDOW:
+		rot_buckets.pop_front()
+	if rot_buckets.size() < Knowledge.DPS_WINDOW:
+		return
+	var sum := 0.0
+	for b in rot_buckets:
+		sum += b
+	if sum / Knowledge.DPS_WINDOW >= Knowledge.DPS_GOAL[u.key]:
+		Knowledge.dps_known[u.key] = true
+		if Knowledge.deck(u.idx)["purple"] == "":
+			Knowledge.toggle_purple(u.idx, "dps", u.key)
+		hud.toast("Carta roxa: " + Knowledge.PURPLE["dps"] + " · " + u.unit_name, 3.5)
 
 
 # ---------------------------------------------------------------- jogador
@@ -687,10 +726,23 @@ func _tick_ai(u: Unit, delta: float) -> void:
 			kind = 2
 
 	# Desvio: cada personagem só enxerga os ataques pros quais tem a carta amarela.
-	if _danger_at(u.position, u, true, 0.1):
-		var safe = _safe_point(u, goal)
-		if safe != null:
-			goal = safe
+	var in_danger := _danger_at(u.position, u, true, 0.1)
+	if u.dodge_goal != null and not in_danger and (hazards.is_empty() or u.position.distance_to(u.dodge_goal) <= 0.15):
+		u.dodge_goal = null  # chegou na saída (ou o ataque já passou)
+	if in_danger:
+		# escolhe uma saída e vai até ela; só troca se a saída deixar de ser segura
+		if u.dodge_goal == null or _danger_at(u.dodge_goal, u, true, 0.3):
+			# folga diferente a cada desvio: ninguém para colado na borda do ataque
+			u.dodge_goal = _safe_point(u, goal, randf_range(0.9, 1.6))
+			if u.dodge_goal == null:
+				u.dodge_goal = _safe_point(u, goal, 0.45)
+		if u.dodge_goal != null:
+			goal = u.dodge_goal
+		text = "Desviando"
+		kind = 1
+	elif u.dodge_goal != null and not _danger_at(u.dodge_goal, u, true, 0.3):
+		# saiu da área por pouco: termina de chegar na saída antes de voltar a atacar
+		goal = u.dodge_goal
 		text = "Desviando"
 		kind = 1
 	elif _danger_at(u.position, u, false, 0.0):
@@ -718,12 +770,19 @@ func _tick_ai(u: Unit, delta: float) -> void:
 			# primeiro ele mesmo: healer morto não cura ninguém
 			var ht: Unit = u if u.hp / u.max_hp < Knowledge.LOW_HP else _heal_target()
 			# o Tank é socorrido mais cedo: ele precisa de folga pra aguentar o Esmagar
-			if ht != null and ht.hp / ht.max_hp < Knowledge.LOW_HP + (0.2 if ht.idx == 0 else 0.0):
+			if ht != null and ht.hp / ht.max_hp < Knowledge.LOW_HP + (0.3 if ht.idx == 0 else 0.0):
 				heal_focus = ht
 			# começou a socorrer alguém, termina o serviço (até 80%) antes de parar
 			if heal_focus != null and (not heal_focus.alive or heal_focus.hp / heal_focus.max_hp >= 0.9):
 				heal_focus = null
-			if heal_focus != null:
+			# dois ou mais machucados por perto: a cura em área rende mais que a de um alvo só
+			var hurt_near := 0
+			for o in units:
+				if o.alive and o.hp / o.max_hp < 0.7 and o.position.distance_to(u.position) <= AOE_HEAL_R:
+					hurt_near += 1
+			if hurt_near >= 3 and u.skill_cd[3] <= 0.0:
+				use_skill(u, 3, true)
+			elif heal_focus != null:
 				use_skill(u, 1, true, heal_focus)
 
 	if u.key == "tank" and Knowledge.has_yellow(i, "provoke") and target != null and target != u and u.skill_cd[3] <= 0.0:
@@ -731,8 +790,10 @@ func _tick_ai(u: Unit, delta: float) -> void:
 
 	# Auto-ataque conservador: bem mais fraco que o jogador no controle.
 	if _in_range(u):
-		_damage_boss(u, u.ai_dps * delta, false, false)
-		u.dmg_acc += u.ai_dps * delta * _dmg_mult()
+		# carta roxa Rotação: a IA usa a rotação que você mostrou jogando bem com esse herói
+		var rate: float = ROTATION_DPS[u.key] if Knowledge.deck(i)["purple"] == "dps" else u.ai_dps
+		_damage_boss(u, rate * delta, false, false)
+		u.dmg_acc += rate * delta * _dmg_mult()
 		u.dmg_timer += delta
 		if u.dmg_timer >= 1.2:
 			_popup(int(u.dmg_acc), Color(0.75, 0.75, 0.8), 30)
@@ -746,7 +807,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 ## Devolve [posição, texto] da primeira carta que se aplica agora, ou null.
 func _card_plan(u: Unit):
 	var d := Knowledge.deck(u.idx)
-	if d["purple"]:
+	if d["purple"] == "mark":
 		var r = null
 		if zones_active:
 			r = _act(u, "zone_opp")
@@ -942,6 +1003,15 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 		"Mitigação":
 			u.guard_t = GUARD_TIME
 			_burst(u.position, Color(0.3, 0.9, 1.0), 2.2)
+		"Cura em Área":
+			var each := (HEAL_AI if by_ai else HEAL_PLAYER) * 0.5
+			_burst(u.position, Color(0.4, 1.0, 0.6), AOE_HEAL_R)
+			for o in units:
+				if o.alive and o.position.distance_to(u.position) <= AOE_HEAL_R and o.hp < o.max_hp:
+					o.hp = minf(o.max_hp, o.hp + each)
+					u.enmity += each * HEAL_ENMITY
+					_burst(o.position, Color(0.4, 1.0, 0.6), 1.4)
+					_popup(int(each), Color(0.5, 1.0, 0.65), 56, o.position + Vector3(0, 2.6, 0), "+")
 		"Bora Biscoitar":
 			# provoke: quem usa pula pro topo da lista de enmity na hora, com folga
 			var top := 0.0
@@ -954,6 +1024,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			u.enmity = maxf(u.enmity, top) + PROVOKE_BONUS
 			_burst(u.position, Color(1.0, 0.35, 0.6), 3.2)
 			_beam(u.position, Vector3(0, 5.0, -11.5), Color(1.0, 0.35, 0.6, 0.95), 0.45)
+			boss.rage()
 			hud.toast("BORA BISCOITAR", 1.6)
 		"Cura":
 			var ht: Unit = u.cast_target
@@ -961,7 +1032,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				ht = _heal_target()
 			if ht == null:
 				return
-			var amount := 45.0 if by_ai else 55.0
+			var amount := HEAL_AI if by_ai else HEAL_PLAYER
 			ht.hp = minf(ht.max_hp, ht.hp + amount)
 			u.enmity += amount * HEAL_ENMITY
 			_beam(u.position, ht.position, Color(0.5, 1.0, 0.65, 0.95), 0.3)
@@ -1134,7 +1205,7 @@ func _danger_at(p: Vector3, u: Unit, known: bool, margin: float) -> bool:
 
 
 ## Ponto seguro mais próximo, preferindo o lado do destino atual.
-func _safe_point(u: Unit, goal):
+func _safe_point(u: Unit, goal, margin := 0.45):
 	var best = null
 	var best_cost := 1e9
 	for ring in range(1, 14):
@@ -1142,7 +1213,7 @@ func _safe_point(u: Unit, goal):
 		for k in 16:
 			var a := k * TAU / 16.0
 			var p := u.position + Vector3(cos(a), 0, sin(a)) * r
-			if Vector2(p.x, p.z).length() > ARENA_R - 0.2 or _danger_at(p, u, true, 0.45):
+			if Vector2(p.x, p.z).length() > ARENA_R - 0.2 or _danger_at(p, u, true, margin):
 				continue
 			var cost := r
 			if goal != null:
@@ -1210,7 +1281,6 @@ func _start_stacks(total: float, need: int) -> void:
 	stack_need = need
 	stack_t = total
 	stack_total = total
-	stack_red_done = false
 	var count := 1
 	if need == 2 and pool.size() >= 4:
 		count = 2
@@ -1278,13 +1348,6 @@ func _tick_stacks(delta: float) -> void:
 			st["mats"][j].albedo_color.a = alpha
 			for row in st["arrows"]:
 				row[j].position.z = st["r"] + 0.45 + d
-
-	# durante o stack de 4 vem um vermelho lento: dá tempo do grupo inteiro andar junto
-	if stack_need == 4 and not stack_red_done and elapsed >= 1.2:
-		stack_red_done = true
-		var m0: Unit = stacks[0]["target"]
-		_add_hazard({"shape": "circle", "pos": Vector3(m0.position.x, 0, m0.position.z), "r": CIRCLE_R,
-			"total": 2.9, "dmg": 30.0, "card": "dodge", "why": "ficou no círculo"})
 
 	if stack_t > 0.0:
 		return
@@ -1524,6 +1587,7 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 	if u.guard_t > 0.0:
 		dmg *= MITIGATION
 	u.hp -= dmg
+	hit_count[reason] = hit_count.get(reason, 0) + 1
 	u.flash_hit(dmg / u.max_hp)
 	_popup(int(dmg), DANGER.lightened(0.3), 72, u.position + Vector3(0, 2.6, 0), "-")
 	# alguém ficou por um fio: a party aprende a reagir a pouca vida
@@ -1540,6 +1604,8 @@ func kill(u: Unit, reason: String, force := false) -> void:
 	if u.immortal_t > 0.0 and not force:
 		_burst(u.position, Color(1.0, 0.9, 0.5), 1.8)
 		return
+	if u.controlled and not fury:
+		hud.flash(Color(1.0, 0.1, 0.2) * Color(1, 1, 1, 0.6))
 	u.die()
 	log_lines.append(u.unit_name + ": " + reason)
 	var any_alive := false
