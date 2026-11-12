@@ -8,8 +8,9 @@ class_name Knowledge
 const PURPLE_SLOTS := 1
 const YELLOW_SLOTS := 4
 const WHITE_SLOTS := 3
-## Quantas cópias da carta roxa a party tem no total.
-const PURPLE_COPIES := 1
+## Quantas cópias da Marca Elemental a party tem no total. Uma pra cada herói:
+## o boss de fusão mistura elementos com as outras mecânicas, e três brancas não dão conta de tudo.
+const PURPLE_COPIES := 4
 
 const PURPLE_NAME := "Marca Elemental"
 ## Roxas: "mark" resolve a mecânica elemental; "dps" é a rotação otimizada do personagem.

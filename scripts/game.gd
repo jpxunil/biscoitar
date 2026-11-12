@@ -108,6 +108,41 @@ const STEPS_DODGE := [
 	{"t": "circles", "n": 2, "dur": 2.0},
 	{"t": "idle", "dur": 1.5},
 ]
+## Boss de fusão: tudo dos dois primeiros, mais a Contagem.
+## count (Contagem): cada herói ganha um número; os golpes saem na ordem,
+## ímpar = corte em círculo em cima do herói, par = investida em linha do boss até ele.
+const STEPS_FUSION := [
+	{"t": "idle", "dur": 2.5},
+	{"t": "circles", "n": 2, "dur": 2.4},
+	{"t": "idle", "dur": 1.0},
+	{"t": "buster", "dur": 3.0},
+	{"t": "idle", "dur": 1.0},
+	{"t": "count", "dur": 9.0},
+	{"t": "idle", "dur": 1.0},
+	{"t": "stack", "need": 4, "dur": 5.5},
+	{"t": "idle", "dur": 1.0},
+	{"t": "mark", "dur": 2.0},
+	{"t": "zones", "dur": 9.0, "volley_at": 3.0},
+	{"t": "cata", "dur": 12.0, "volley_at": 4.5},
+	{"t": "burn", "dur": 8.0},
+	{"t": "spread", "n": 4, "dur": 5.5},
+	{"t": "idle", "dur": 1.0},
+	{"t": "knives", "n": 3, "dur": 2.4},
+	{"t": "buster", "dur": 3.0},
+	{"t": "idle", "dur": 1.0},
+	{"t": "dodgetime", "dur": 5.0},
+	{"t": "combo", "dur": 5.0},
+	{"t": "idle", "dur": 0.6},
+	{"t": "grid", "dur": 5.0},
+	{"t": "idle", "dur": 0.5},
+	{"t": "nova", "dur": 2.5, "total": 2.4},
+	{"t": "core", "dur": 2.4, "total": 2.2},
+	{"t": "blast", "dur": 3.5},
+	# depois da explosão vem só desvio, pra dar tempo de curar antes da próxima volta
+	{"t": "idle", "dur": 3.0},
+	{"t": "count", "dur": 9.0},
+	{"t": "idle", "dur": 3.0},
+]
 const STEPS_ELEMENT := [
 	{"t": "idle", "dur": 3.0},
 	{"t": "circles", "n": 2, "dur": 2.3},
@@ -149,6 +184,8 @@ const HEAL_PLAYER := 55.0
 const SHIELD_RATIO := 0.5
 const SHIELD_TIME := 12.0
 const HEAL_AI := 45.0
+const SFX_FART := preload("res://assets/sfx/fart.wav")
+const SFX_DEATH := preload("res://assets/sfx/death.wav")
 const COOKIE_COL := Color(0.86, 0.6, 0.3)
 const SKILL_KEYS := ["J", "K", "L", "U", "O"]
 const AUTO_EVERY := 2.0
@@ -176,6 +213,8 @@ const WEAK_TIME := 30.0    # revivido pelo Reviver comum: metade do dano por 30 
 const BOSSES := [
 	{"name": "MINI-CHAN", "hp": 7000.0, "enrage": 120.0, "steps": STEPS_DODGE, "hair": Color(0.25, 0.8, 0.9), "scale": 0.95},
 	{"name": "PROTÓTIPO-CHAN", "hp": 10400.0, "enrage": 150.0, "steps": STEPS_ELEMENT, "elements": true, "hair": Color(1.0, 0.38, 0.66), "scale": 1.2},
+	# haste: tudo dela (passos, avisos, casts) corre esse tanto mais rápido
+	{"name": "FUSÃO-CHAN", "hp": 11500.0, "enrage": 165.0, "steps": STEPS_FUSION, "elements": true, "haste": 1.2, "hair": Color(0.75, 0.45, 1.0), "scale": 1.3},
 ]
 
 var units: Array[Unit] = []
@@ -205,6 +244,13 @@ var cast_name := ""
 
 var hazards: Array = []
 var stacks: Array = []  # círculos laranjas ativos
+var haste := 1.0
+var cur_step: Dictionary = {}
+## Contagem: ordem dos golpes, qual é o próximo e quanto falta pra ele.
+var count_order: Array = []
+var count_labels: Array = []
+var count_i := 0
+var count_t := 0.0
 var spreads: Array = []  # círculos roxos ativos
 var spread_t := 0.0
 var spread_total := 1.0
@@ -254,6 +300,7 @@ func _ready() -> void:
 	steps = boss_def["steps"]
 	boss_max = boss_def["hp"]
 	enrage = boss_def["enrage"]
+	haste = boss_def.get("haste", 1.0)
 	for a in args:
 		if a.begins_with("--hero="):
 			Knowledge.start_hero = clampi(int(a.trim_prefix("--hero=")), 0, 3)
@@ -276,7 +323,9 @@ func _ready() -> void:
 		for i in 4:
 			var d := Knowledge.deck(i)
 			d["yellow"] = [["dodge", "spread", "provoke"], ["dodge", "spread", "instinct", "safe_cast"], ["dodge", "spread"], ["dodge", "spread", "safe_cast"]][i]
-			if Knowledge.boss == 0:
+			if Knowledge.boss == 2:
+				d["purple"] = "mark"
+			if Knowledge.boss != 1:
 				d["white"] = [
 					{"t": "stack", "a": "to_marked"},
 					{"t": "stack2", "a": "pair_up"},
@@ -581,6 +630,7 @@ func _process(delta: float) -> void:
 	_tick_hazards(delta)
 	_tick_stacks(delta)
 	_tick_spreads(delta)
+	_tick_count(delta)
 	_tick_buster(delta)
 	_tick_pairs(delta)
 	for u in units:
@@ -1144,6 +1194,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_burst(u.position, Color(1.0, 0.35, 0.6), 3.2)
 			_beam(u.position, Vector3(0, 5.0, -11.5), Color(1.0, 0.35, 0.6, 0.95), 0.45)
 			boss.rage()
+			hud.show_biscoito()
 			hud.toast("BORA BISCOITAR", 1.6)
 		"Cura":
 			var ht: Unit = u.cast_target
@@ -1248,6 +1299,7 @@ func _beam(from: Vector3, to: Vector3, col: Color, time: float) -> void:
 ## Um perigo no chão: aviso (telegraph) por h.total segundos e depois o golpe.
 ## shape: circle (pos, r) · rect (pos, dir, half_l, half_w) · donut (seguro só dentro de r, no centro)
 func _add_hazard(h: Dictionary) -> void:
+	h["total"] = h["total"] / haste
 	h["t"] = h["total"]
 	var node := Node3D.new()
 	fx_root.add_child(node)
@@ -1733,19 +1785,76 @@ func _spawn_circles(n: int) -> void:
 func _spawn_lines(n: int, half_w: float, total: float, dmg: float, why: String) -> void:
 	var pool := _alive_shuffled()
 	for k in mini(n, pool.size()):
-		var u: Unit = pool[k]
-		var from := Vector3(0, 0, -ARENA_R - 1.0)
-		var dir := Vector3(u.position.x, 0, u.position.z) - from
-		dir = dir.normalized()
-		# a faixa cobre só o trecho que cruza a arena, sem sobrar pra fora do chão
-		var b := from.dot(dir)
-		var disc := b * b - (from.length_squared() - ARENA_R * ARENA_R)
-		if disc <= 0.0:
-			continue
-		var t1 := -b - sqrt(disc)
-		var t2 := -b + sqrt(disc)
-		_add_hazard({"shape": "rect", "pos": from + dir * ((t1 + t2) * 0.5), "dir": dir, "half_l": (t2 - t1) * 0.5, "half_w": half_w,
-			"total": total + k * 0.25, "dmg": dmg, "card": "dodge", "why": why})
+		_line_at(pool[k], half_w, total + k * 0.25, dmg, why)
+
+
+func _line_at(u: Unit, half_w: float, total: float, dmg: float, why: String) -> void:
+	var from := Vector3(0, 0, -ARENA_R - 1.0)
+	var dir := Vector3(u.position.x, 0, u.position.z) - from
+	dir = dir.normalized()
+	# a faixa cobre só o trecho que cruza a arena, sem sobrar pra fora do chão
+	var b := from.dot(dir)
+	var disc := b * b - (from.length_squared() - ARENA_R * ARENA_R)
+	if disc <= 0.0:
+		return
+	var t1 := -b - sqrt(disc)
+	var t2 := -b + sqrt(disc)
+	_add_hazard({"shape": "rect", "pos": from + dir * ((t1 + t2) * 0.5), "dir": dir, "half_l": (t2 - t1) * 0.5, "half_w": half_w,
+		"total": total, "dmg": dmg, "card": "dodge", "why": why})
+
+
+# ---------------------------------------------------------------- Contagem (golpes numerados)
+
+## Cada herói vivo ganha um número em cima da cabeça. Depois de um tempo pra decorar,
+## os golpes saem na ordem, um atrás do outro, mirados em onde o dono do número está:
+## ímpar = corte em círculo · par = investida em linha, do boss até ele.
+## Quem sabe que é o próximo se afasta da party antes; os outros desviam do aviso curto.
+func _start_count() -> void:
+	_clear_count()
+	count_order = _alive_shuffled()
+	count_i = 0
+	count_t = 2.5 / haste
+	for k in count_order.size():
+		var u: Unit = count_order[k]
+		var l := Fx.label(u, str(k + 1), Vector3(0, 3.5, 0), 120)
+		l.outline_size = 24
+		l.outline_modulate = Color(0.07, 0.08, 0.16)
+		# ímpar em vermelho (círculo), par em claro (linha)
+		l.modulate = DANGER.lightened(0.15) if k % 2 == 0 else Color(0.96, 0.95, 0.9)
+		count_labels.append(l)
+
+
+func _clear_count() -> void:
+	for l in count_labels:
+		if is_instance_valid(l):
+			l.queue_free()
+	count_labels.clear()
+	count_order.clear()
+
+
+func _tick_count(delta: float) -> void:
+	if count_order.is_empty():
+		return
+	# o número da vez pulsa
+	if count_i < count_labels.size() and is_instance_valid(count_labels[count_i]):
+		count_labels[count_i].scale = Vector3.ONE * (1.0 + 0.18 * sin(fight_time * 14.0))
+	count_t -= delta
+	if count_t > 0.0:
+		return
+	var u: Unit = count_order[count_i]
+	if u.alive:
+		if count_i % 2 == 0:
+			_add_hazard({"shape": "circle", "pos": Vector3(u.position.x, 0, u.position.z), "r": 3.4,
+				"total": 1.0, "dmg": 45.0, "card": "dodge", "why": "ficou no corte da Contagem"})
+		else:
+			_line_at(u, 1.3, 1.0, 45.0, "ficou na investida da Contagem")
+			_beam(Vector3(0, 5.0, -11.5), u.position, Color(1.0, 0.35, 0.4, 0.9), 0.35)
+	if is_instance_valid(count_labels[count_i]):
+		count_labels[count_i].queue_free()
+	count_i += 1
+	count_t = 1.3 / haste
+	if count_i >= count_order.size():
+		_clear_count()
 
 
 # ---------------------------------------------------------------- dano
@@ -1844,6 +1953,7 @@ func kill(u: Unit, reason: String, force := false) -> void:
 	if u.controlled and not fury:
 		hud.flash(Color(1.0, 0.1, 0.2) * Color(1, 1, 1, 0.6))
 	u.die()
+	_sfx(SFX_DEATH, -4.0)
 	log_lines.append(u.unit_name + ": " + reason)
 	var any_alive := false
 	for o in units:
@@ -1903,7 +2013,11 @@ func learn_yellow(id: String) -> void:
 
 func _next_step() -> void:
 	step = (step + 1) % steps.size()
-	var s: Dictionary = steps[step]
+	var s: Dictionary = steps[step].duplicate()
+	for key in ["dur", "volley_at"]:
+		if s.has(key):
+			s[key] = s[key] / haste
+	cur_step = s
 	phase = s["t"]
 	phase_t = 0.0
 	phase_dur = s["dur"]
@@ -1921,6 +2035,10 @@ func _next_step() -> void:
 			cast_name = "Esmagar"
 			boss.casting = true
 			_start_buster(s["dur"])
+		"count":
+			cast_name = "Contagem"
+			boss.casting = true
+			_start_count()
 		"spread":
 			cast_name = "Dispersão"
 			boss.casting = true
@@ -1980,7 +2098,7 @@ func _next_step() -> void:
 
 func _tick_boss(delta: float) -> void:
 	phase_t += delta
-	var s: Dictionary = steps[step]
+	var s: Dictionary = cur_step
 	if s.has("volley_at") and not volley_done and phase_t >= s["volley_at"]:
 		volley_done = true
 		_spawn_circles(1)
@@ -2129,6 +2247,8 @@ func _resolve_cataclysm() -> void:
 ## Fim do DPS check: o boss chama os biscoitos e cada um cai em cima de alguém.
 func _start_fury() -> void:
 	fury = true
+	_sfx(SFX_FART)
+	hud.show_biscoito(1.0)
 	boss.casting = true
 	boss.six_seven = false
 	hud.flash(Color(1.0, 0.2, 0.35) * Color(1, 1, 1, 0.45))
@@ -2191,6 +2311,18 @@ func _drop_cookie(at: Vector3, delay: float, size: float, victim: Unit) -> void:
 			_popup(9999, Color(1.0, 0.3, 0.35), 90, victim.position + Vector3(0, 2.4, 0))
 			victim.hp = 0.0
 			kill(victim, "Fúria: o tempo acabou", true))
+
+
+## Toca um som uma vez; o player se apaga sozinho quando termina.
+func _sfx(stream: AudioStream, volume_db := 0.0) -> void:
+	if autoplay:
+		return  # os testes automáticos rodam mudos
+	var p := AudioStreamPlayer.new()
+	p.stream = stream
+	p.volume_db = volume_db
+	add_child(p)
+	p.finished.connect(p.queue_free)
+	p.play()
 
 
 func _burst(p: Vector3, col: Color, radius: float) -> void:

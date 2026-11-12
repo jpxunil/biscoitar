@@ -33,6 +33,8 @@ var cards: Array = []
 var boss_center: Control
 var legend: Control
 var fight_ui: Control
+var biscoito: TextureRect
+var _biscoito_tw: Tween
 var cast_plate: PanelContainer
 var my_cast_label: Label
 var my_cast_bar: Control
@@ -65,6 +67,23 @@ func setup(game) -> void:
 	_build_lb()
 	_build_castbar()
 
+	# rosto do biscoito: aparece com fade quando alguém usa o Bora Biscoitar
+	biscoito = TextureRect.new()
+	biscoito.texture = preload("res://assets/biscoitar.png")
+	biscoito.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	biscoito.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	biscoito.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	biscoito.anchor_left = 0.5
+	biscoito.anchor_right = 0.5
+	biscoito.anchor_top = 0.5
+	biscoito.anchor_bottom = 0.5
+	biscoito.offset_left = -130
+	biscoito.offset_right = 130
+	biscoito.offset_top = -190
+	biscoito.offset_bottom = 70
+	biscoito.pivot_offset = Vector2(130, 130)
+	biscoito.modulate.a = 0.0
+	root.add_child(biscoito)
 	flash_rect = ColorRect.new()
 	flash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -481,6 +500,20 @@ func toast(text: String, time := 2.5) -> void:
 	toast_slab.visible = true
 	toast_slab.modulate.a = 1.0
 	toast_t = time
+
+
+## Mostra o rosto do biscoito: entra com fade e um leve crescimento, segura e some.
+func show_biscoito(hold := 0.7) -> void:
+	if _biscoito_tw != null:
+		_biscoito_tw.kill()
+	biscoito.scale = Vector2.ONE * 0.85
+	_biscoito_tw = create_tween()
+	_biscoito_tw.set_parallel(true)
+	_biscoito_tw.tween_property(biscoito, "modulate:a", 0.92, 0.18)
+	_biscoito_tw.tween_property(biscoito, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_biscoito_tw.set_parallel(false)
+	_biscoito_tw.tween_interval(hold)
+	_biscoito_tw.tween_property(biscoito, "modulate:a", 0.0, 0.5)
 
 
 func flash(c: Color) -> void:
