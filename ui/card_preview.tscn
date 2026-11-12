@@ -1,0 +1,95 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://ui/card_preview.gd" id="1"]
+[ext_resource type="PackedScene" path="res://ui/character_card.tscn" id="2"]
+
+[ext_resource type="Texture2D" path="res://assets/portraits/tank_face.png" id="f1"]
+[ext_resource type="Texture2D" path="res://assets/portraits/healer_face.png" id="f2"]
+[ext_resource type="Texture2D" path="res://assets/portraits/assassina_face.png" id="f3"]
+[ext_resource type="Texture2D" path="res://assets/portraits/maga_face.png" id="f4"]
+
+[node name="CardPreview" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.16, 0.13, 0.3, 1)
+
+[node name="Party" type="VBoxContainer" parent="."]
+offset_left = 80.0
+offset_top = 90.0
+offset_right = 380.0
+offset_bottom = 440.0
+theme_override_constants/separation = 10
+
+[node name="Tank" parent="Party" instance=ExtResource("2")]
+layout_mode = 2
+face = ExtResource("f1")
+hp = 160.0
+max_hp = 160.0
+state_text = "Atacando"
+
+[node name="Healer" parent="Party" instance=ExtResource("2")]
+layout_mode = 2
+face = ExtResource("f2")
+index = 2
+char_name = "Healer"
+accent = Color(0.4, 0.95, 0.55, 1)
+hp = 38.0
+max_hp = 90.0
+has_element = true
+element_color = Color(0.2, 0.5, 1, 1)
+state_text = "→ Zona de Fogo"
+state_kind = 1
+
+[node name="Assassina" parent="Party" instance=ExtResource("2")]
+layout_mode = 2
+face = ExtResource("f3")
+index = 3
+char_name = "Assassina"
+accent = Color(0.78, 0.38, 1, 1)
+hp = 100.0
+has_element = true
+selected = true
+
+[node name="Maga" parent="Party" instance=ExtResource("2")]
+layout_mode = 2
+face = ExtResource("f4")
+index = 4
+char_name = "Maga"
+accent = Color(1, 0.72, 0.25, 1)
+hp = 18.0
+max_hp = 90.0
+has_element = true
+element_color = Color(0.88, 0.95, 1, 1)
+state_text = "???"
+state_kind = 2
+
+[node name="States" type="VBoxContainer" parent="."]
+offset_left = 480.0
+offset_top = 90.0
+offset_right = 780.0
+offset_bottom = 440.0
+theme_override_constants/separation = 10
+
+[node name="Dead" parent="States" instance=ExtResource("2")]
+layout_mode = 2
+face = ExtResource("f1")
+hp = 0.0
+max_hp = 160.0
+dead = true
+
+[node name="SelectedLow" parent="States" instance=ExtResource("2")]
+layout_mode = 2
+face = ExtResource("f4")
+index = 4
+char_name = "Maga"
+accent = Color(1, 0.72, 0.25, 1)
+hp = 20.0
+max_hp = 90.0
+selected = true

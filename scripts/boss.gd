@@ -1,0 +1,80 @@
+extends Node3D
+## Boss placeholder feito de primitivas. A ideia final é uma ilustração
+## enorme (Sprite3D / AnimatedSprite3D) parada aqui no fundo da arena.
+
+var casting := false
+var six_seven := false  # gesto do Esmagar: uma mão sobe enquanto a outra desce
+var hair_color := Color(1.0, 0.38, 0.66)
+var t := 0.0
+var halo: MeshInstance3D
+var hands: Array[MeshInstance3D] = []
+var eye_mat: StandardMaterial3D
+var dress_mat: StandardMaterial3D
+var shield: MeshInstance3D
+var core: Node3D
+
+
+func _ready() -> void:
+	core = Node3D.new()
+	add_child(core)
+	var skin := Fx.mat(Color(0.95, 0.8, 0.74))
+	var hair := Fx.mat(hair_color, 0.35)
+	dress_mat = Fx.mat(Color(0.16, 0.08, 0.3), 0.5)
+
+	Fx.inst(core, Fx.cyl(0.9, 3.5, 6.6), dress_mat, Vector3(0, 3.3, 0))
+	Fx.inst(core, Fx.torus(3.3, 3.6), Fx.mat(Color(1.0, 0.5, 0.8), 2.0), Vector3(0, 0.25, 0))
+	Fx.inst(core, Fx.cyl(1.05, 0.85, 2.3), Fx.mat(Color(0.8, 0.78, 0.92)), Vector3(0, 7.5, 0))
+	Fx.inst(core, Fx.sphere(0.5), Fx.mat(Color(1.0, 0.3, 0.5), 2.5), Vector3(0, 7.9, 0.95))
+	Fx.inst(core, Fx.sphere(1.25), skin, Vector3(0, 9.7, 0))
+	var back_hair := Fx.inst(core, Fx.sphere(1.45), hair, Vector3(0, 9.95, -0.35))
+	back_hair.scale = Vector3(1.0, 1.0, 0.95)
+	for s in [-1.0, 1.0]:
+		var tail := Fx.inst(core, Fx.capsule(0.48, 4.6), hair, Vector3(s * 2.1, 8.3, -0.3))
+		tail.rotation.z = s * 0.38
+		Fx.inst(core, Fx.sphere(0.34), Fx.mat(Color(1.0, 0.9, 0.3), 2.0), Vector3(s * 1.35, 10.5, 0.0))
+
+	eye_mat = Fx.mat(Color(0.3, 0.95, 1.0), 3.0)
+	for s in [-1.0, 1.0]:
+		var eye := Fx.inst(core, Fx.sphere(0.2), eye_mat, Vector3(s * 0.47, 9.7, 1.12))
+		eye.scale = Vector3(1.0, 1.6, 0.4)
+		var hand := Fx.inst(core, Fx.sphere(0.62), skin, Vector3(s * 4.0, 6.4, 1.6))
+		hands.append(hand)
+
+	halo = Fx.inst(core, Fx.torus(1.35, 1.55), Fx.mat(Color(1.0, 0.85, 0.35), 3.0), Vector3(0, 11.8, 0))
+	halo.rotation.x = 0.25
+
+	shield = Fx.inst(self, Fx.sphere(7.2), Fx.mat(Color(0.35, 0.9, 1.0, 0.16), 1.2), Vector3(0, 6.0, 0))
+	shield.visible = false
+
+
+func _process(delta: float) -> void:
+	t += delta
+	core.position.y = sin(t * 1.2) * 0.22
+	halo.rotate_y(delta * (5.0 if casting else 1.0))
+	for i in hands.size():
+		var s := -1.0 if i == 0 else 1.0
+		var lift := 2.2 if casting else 0.0
+		var target := Vector3(s * (4.0 - lift * 0.4), 6.4 + lift + sin(t * 1.6 + i * 2.0) * 0.35, 1.6)
+		var follow := 4.0
+		if six_seven:
+			# mãos na frente do corpo, balançando em oposição
+			target = Vector3(s * 2.6, 6.6 + s * sin(t * 9.0) * 1.3, 2.4)
+			follow = 14.0
+		hands[i].position = hands[i].position.lerp(target, delta * follow)
+	if shield.visible:
+		shield.rotate_y(delta * 0.6)
+
+
+func set_tint(c: Color) -> void:
+	eye_mat.albedo_color = c
+	eye_mat.emission = c
+
+
+func set_shield(on: bool) -> void:
+	shield.visible = on
+
+
+func hit_flash() -> void:
+	dress_mat.emission_energy_multiplier = 2.5
+	var tw := create_tween()
+	tw.tween_property(dress_mat, "emission_energy_multiplier", 0.5, 0.12)
