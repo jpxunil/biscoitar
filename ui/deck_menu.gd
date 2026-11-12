@@ -1,6 +1,6 @@
 extends Control
 ## Menu de cartas, antes da luta. Uma coluna por personagem:
-## 1 roxa, 3 amarelas, 3 brancas (programáveis, na ordem de prioridade).
+## 1 roxa, 4 amarelas, 3 brancas (programáveis, na ordem de prioridade).
 ##
 ## Leitura visual: carta equipada = cor cheia · slot vazio = só contorno na cor do tipo.
 
@@ -19,6 +19,15 @@ var _pulse := ""
 func setup(game) -> void:
 	g = game
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# descrição das cartas ao passar o mouse: mesma placa escura do resto da UI
+	var th := Theme.new()
+	var tip := UiStyle.box(UiStyle.INK, 0.0, 12, 8)
+	tip.border_color = UiStyle.PAPER
+	tip.set_border_width_all(2)
+	th.set_stylebox("panel", "TooltipPanel", tip)
+	th.set_color("font_color", "TooltipLabel", UiStyle.PAPER)
+	th.set_font_size("font_size", "TooltipLabel", 15)
+	theme = th
 
 	var bg := ColorRect.new()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -96,7 +105,7 @@ func setup(game) -> void:
 	keys.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(keys)
 	for pair in [["WASD", "mover"], ["J", "atacar"], ["ESPAÇO", "esquiva"], ["1-4", "trocar"], ["F1-F4", "alvo"],
-			["K", "skill"], ["L", "especial"], ["U", "extra"], ["I", "limit"], ["Q", "reunir"], ["E", "espalhar"], ["R", "manter"], ["F", "atacar livre"]]:
+			["K", "skill"], ["L", "especial"], ["U / O", "extra"], ["I", "limit"], ["Q", "reunir"], ["E", "espalhar"], ["R", "manter"], ["F", "atacar livre"]]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
 		var key := UiStyle.slab(UiStyle.INK_SOFT, 0.0, 8, 2)
@@ -147,11 +156,13 @@ func _column(i: int) -> Control:
 		var known: bool = Knowledge.purple_known if pid == "mark" else Knowledge.dps_known.has(u["key"])
 		var pname: String = Knowledge.PURPLE[pid]
 		if d["purple"] == pid:
-			pb = _slot(pname.to_upper(), UiStyle.PURPLE, true, true, 40, 16)
+			pb = _slot(pname.to_upper(), UiStyle.PURPLE, true, true, 34, 15)
 		elif not known:
-			pb = _slot("?", UiStyle.PURPLE, false, false, 40, 16)
+			pb = _slot("?", UiStyle.PURPLE, false, false, 34, 15)
 		else:
-			pb = _slot(pname, UiStyle.PURPLE, false, Knowledge.purple_can(i, pid, u["key"]), 40, 16)
+			pb = _slot(pname, UiStyle.PURPLE, false, Knowledge.purple_can(i, pid, u["key"]), 34, 15)
+		if known:
+			pb.tooltip_text = Knowledge.PURPLE_DESC[pid]
 		var tag := "p%d%s" % [i, pid]
 		pb.pressed.connect(func():
 			Knowledge.toggle_purple(i, pid, u["key"])
@@ -167,12 +178,13 @@ func _column(i: int) -> Control:
 		var yb: Button
 		var key := "y%d_%s" % [i, id]
 		if not Knowledge.yellow_known.has(id):
-			yb = _slot("?", UiStyle.YELLOW, false, false, 40, 15)
+			yb = _slot("?", UiStyle.YELLOW, false, false, 34, 15)
 		else:
 			var on := Knowledge.has_yellow(i, id)
 			var label: String = Knowledge.YELLOW[id]
 			# sem slot livre, as que sobram ficam apagadas: o limite aparece sem precisar de texto
-			yb = _slot(label.to_upper() if on else label, UiStyle.YELLOW, on, on or equipped < Knowledge.YELLOW_SLOTS, 40, 15)
+			yb = _slot(label.to_upper() if on else label, UiStyle.YELLOW, on, on or equipped < Knowledge.YELLOW_SLOTS, 34, 15)
+			yb.tooltip_text = Knowledge.YELLOW_DESC.get(id, "")
 			yb.pressed.connect(func():
 				Knowledge.toggle_yellow(i, id)
 				_pulse = key
@@ -180,7 +192,7 @@ func _column(i: int) -> Control:
 			_maybe_pulse(yb, key)
 		col.add_child(yb)
 	for n in maxi(0, Knowledge.YELLOW_SLOTS - mine_yellow.size()):
-		col.add_child(_slot("", UiStyle.YELLOW, false, false, 40, 15))
+		col.add_child(_slot("", UiStyle.YELLOW, false, false, 34, 15))
 
 	# --- brancas
 	for slot in Knowledge.WHITE_SLOTS:

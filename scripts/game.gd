@@ -26,6 +26,17 @@ const PAIR_TOTAL := 60.0
 const BUSTER_DMG := 170.0
 const MITIGATION := 0.4  # Mitigação: o Tank toma 40% do dano (reduz 60%)
 const STACK_COL := Color(1.0, 0.6, 0.1)
+## Spread (círculo roxo): quem estiver dentro do círculo de outro herói leva dano.
+## É grande o bastante pra só caber um herói em cada canto da arena.
+const SPREAD_COL := Color(0.72, 0.35, 1.0)
+const SPREAD_R := 9.5
+const SPREAD_DMG := 55.0
+## Canto de cada herói (Tank NO, Healer SO, Assassina NE, Maga SE): a IA com Dispersão vai pro dela.
+const CORNERS := [Vector3(-5.6, 0, -5.6), Vector3(-5.6, 0, 5.6), Vector3(5.6, 0, -5.6), Vector3(5.6, 0, 5.6)]
+const BLAST_RATIO := 0.7
+const DODGE_PHASES := ["dodgetime", "combo", "grid", "nova", "core", "blast"]
+## Dentro do Dodge Time as duplas doem pouco: o dano de verdade é a explosão do fim.
+const DODGE_PAIR_TOTAL := 24.0
 
 const ZONE_POS := [
 	Vector3(-4.8, 0, -2.5), Vector3(4.8, 0, -2.5),
@@ -57,6 +68,8 @@ const UNIT_DEFS := [
 ## buster (golpe pesado no alvo 1: o Tank precisa de Mitigação)
 ## circles (n alvos) · line (n faixas largas) · knives (n faixas finas e rápidas)
 ## core (explosão no centro: saia) · nova (explosão nas bordas: vá pro centro)
+## spread (círculo roxo enorme em n heróis: cada um num canto) · dodgetime (cast de 5 s sem bater)
+## combo (2 spreads + 1 dupla ao mesmo tempo) · grid (grade de faixas + duas duplas) · blast (70% da vida em todos)
 const STEPS_DODGE := [
 	{"t": "idle", "dur": 2.5},
 	{"t": "circles", "n": 2, "dur": 2.4},
@@ -69,6 +82,8 @@ const STEPS_DODGE := [
 	{"t": "idle", "dur": 1.0},
 	{"t": "stack", "need": 4, "dur": 5.5},
 	{"t": "idle", "dur": 1.0},
+	{"t": "spread", "n": 4, "dur": 5.5},
+	{"t": "idle", "dur": 1.0},
 	{"t": "core", "dur": 3.0},
 	{"t": "idle", "dur": 1.0},
 	{"t": "circles", "n": 3, "dur": 2.4},
@@ -76,9 +91,19 @@ const STEPS_DODGE := [
 	{"t": "idle", "dur": 1.0},
 	{"t": "stack", "need": 2, "dur": 5.5},
 	{"t": "idle", "dur": 1.0},
-	{"t": "nova", "dur": 3.4},
-	{"t": "idle", "dur": 1.2},
 	{"t": "buster", "dur": 3.0},
+	{"t": "idle", "dur": 1.0},
+	# --- Dodge Time: 5 s de cast sem bater, depois uma sequência rápida de desvios
+	{"t": "dodgetime", "dur": 5.0},
+	{"t": "combo", "dur": 5.0},
+	{"t": "idle", "dur": 0.6},
+	{"t": "grid", "dur": 5.0},
+	{"t": "idle", "dur": 0.5},
+	{"t": "nova", "dur": 2.5, "total": 2.4},
+	{"t": "core", "dur": 2.4, "total": 2.2},
+	{"t": "blast", "dur": 3.5},
+	{"t": "idle", "dur": 2.0},
+	{"t": "spread", "n": 1, "dur": 5.0},
 	{"t": "knives", "n": 4, "dur": 2.4},
 	{"t": "circles", "n": 2, "dur": 2.0},
 	{"t": "idle", "dur": 1.5},
@@ -104,7 +129,7 @@ const SKILLS := {
 		{"name": "Mitigação", "cd": 10.0}, null, PROVOKE],
 	"healer": [{"name": "Faísca", "cd": 1.0, "dmg": 14.0, "cast": 0.5},
 		{"name": "Cura", "cd": 4.0, "cast": 0.5}, {"name": "Reviver", "cd": 25.0, "cast": 1.5},
-		{"name": "Cura em Área", "cd": 8.0, "cast": 1.0}],
+		{"name": "Cura em Área", "cd": 8.0, "cast": 1.0}, {"name": "Escudo", "cd": 20.0, "cast": 1.0}],
 	"assassina": [{"name": "Corte", "cd": 1.0, "dmg": 46.0},
 		{"name": "Execução", "cd": 7.0, "dmg": 70.0}, {"name": "Lâmina Final", "cd": 20.0, "dmg": 260.0, "cast": 2.0}, null],
 	"maga": [{"name": "Raio", "cd": 1.0, "dmg": 34.0, "cast": 0.5},
@@ -113,15 +138,19 @@ const SKILLS := {
 ## Cast curto trava o personagem no lugar; cast longo pode ser interrompido andando.
 const LOCKED_CAST := 1.0
 ## DPS da IA com a carta roxa Rotação (sem ela vale o ai_dps de UNIT_DEFS).
-const ROTATION_DPS := {"tank": 10.0, "healer": 6.0, "assassina": 22.0, "maga": 16.0}
+## Assassina e Maga, além disso, soltam o golpe forte de 20 s (Lâmina Final / Ruína) sempre que dá.
+const ROTATION_DPS := {"tank": 10.0, "healer": 6.0, "assassina": 14.0, "maga": 10.0}
 ## Cura em Área: metade da Cura, em todo mundo perto do Healer.
 const AOE_HEAL_R := 6.0
 ## Quanto tempo Maga e Healer ficam presos no cast quando um vermelho aparece e não têm Cautela.
 const CAST_STUCK := 0.9
 const HEAL_PLAYER := 55.0
+## Escudo da Healer: metade da vida máxima do alvo, por SHIELD_TIME segundos.
+const SHIELD_RATIO := 0.5
+const SHIELD_TIME := 12.0
 const HEAL_AI := 45.0
 const COOKIE_COL := Color(0.86, 0.6, 0.3)
-const SKILL_KEYS := ["J", "K", "L", "U"]
+const SKILL_KEYS := ["J", "K", "L", "U", "O"]
 const AUTO_EVERY := 2.0
 const AUTO_DMG := 6.0
 const GUARD_TIME := 4.0
@@ -145,7 +174,7 @@ const LB_IMMORTAL := 2.0   # Limit Break do Tank: party imortal por 2 s
 const WEAK_TIME := 30.0    # revivido pelo Reviver comum: metade do dano por 30 s
 
 const BOSSES := [
-	{"name": "MINI-CHAN", "hp": 7400.0, "enrage": 120.0, "steps": STEPS_DODGE, "hair": Color(0.25, 0.8, 0.9), "scale": 0.95},
+	{"name": "MINI-CHAN", "hp": 7000.0, "enrage": 120.0, "steps": STEPS_DODGE, "hair": Color(0.25, 0.8, 0.9), "scale": 0.95},
 	{"name": "PROTÓTIPO-CHAN", "hp": 10400.0, "enrage": 150.0, "steps": STEPS_ELEMENT, "elements": true, "hair": Color(1.0, 0.38, 0.66), "scale": 1.2},
 ]
 
@@ -176,7 +205,11 @@ var cast_name := ""
 
 var hazards: Array = []
 var stacks: Array = []  # círculos laranjas ativos
+var spreads: Array = []  # círculos roxos ativos
+var spread_t := 0.0
+var spread_total := 1.0
 var stack_need := 4
+var stack_dmg := 0.0
 var stack_t := 0.0
 var stack_total := 1.0
 var buster = null  # Dictionary enquanto o Esmagar está carregando
@@ -222,6 +255,8 @@ func _ready() -> void:
 	boss_max = boss_def["hp"]
 	enrage = boss_def["enrage"]
 	for a in args:
+		if a.begins_with("--hero="):
+			Knowledge.start_hero = clampi(int(a.trim_prefix("--hero=")), 0, 3)
 		if a.begins_with("--enrage="):
 			enrage = float(a.trim_prefix("--enrage="))
 	boss_hp = boss_max
@@ -240,7 +275,7 @@ func _ready() -> void:
 		Engine.time_scale = 6.0
 		for i in 4:
 			var d := Knowledge.deck(i)
-			d["yellow"] = [["dodge", "provoke"], ["dodge", "instinct", "safe_cast"], ["dodge"], ["dodge", "safe_cast"]][i]
+			d["yellow"] = [["dodge", "spread", "provoke"], ["dodge", "spread", "instinct", "safe_cast"], ["dodge", "spread"], ["dodge", "spread", "safe_cast"]][i]
 			if Knowledge.boss == 0:
 				d["white"] = [
 					{"t": "stack", "a": "to_marked"},
@@ -397,6 +432,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_K: use_skill(units[ctrl], 1)
 		KEY_L: use_skill(units[ctrl], 2)
 		KEY_U: use_skill(units[ctrl], 3)
+		KEY_O: use_skill(units[ctrl], 4)
 		KEY_I: use_lb()
 		KEY_ESCAPE: retry()  # desistir e voltar pras cartas
 
@@ -439,7 +475,7 @@ func select_target(i: int) -> void:
 
 
 func mechanic_active() -> bool:
-	return zones_active or phase == "cata" or not stacks.is_empty()
+	return zones_active or phase == "cata" or not stacks.is_empty() or not spreads.is_empty()
 
 
 func set_ctrl(i: int) -> void:
@@ -544,6 +580,7 @@ func _process(delta: float) -> void:
 	_tick_boss(delta)
 	_tick_hazards(delta)
 	_tick_stacks(delta)
+	_tick_spreads(delta)
 	_tick_buster(delta)
 	_tick_pairs(delta)
 	for u in units:
@@ -555,8 +592,13 @@ func _process(delta: float) -> void:
 		u.guard_t = maxf(0.0, u.guard_t - delta)
 		u.weak_t = maxf(0.0, u.weak_t - delta)
 		u.immortal_t = maxf(0.0, u.immortal_t - delta)
-		for n in 4:
+		for n in u.skill_cd.size():
 			u.skill_cd[n] = maxf(0.0, u.skill_cd[n] - delta)
+		u.cancel_t = maxf(0.0, u.cancel_t - delta)
+		u.shield_t = maxf(0.0, u.shield_t - delta)
+		if u.shield_t <= 0.0:
+			u.shield_hp = 0.0
+		_shield_fx(u)
 		u.dash_cd = maxf(0.0, u.dash_cd - delta)
 		if u.controlled and not autoplay:
 			_tick_player(u, delta)
@@ -668,8 +710,12 @@ func _tick_player(u: Unit, delta: float) -> void:
 func _tick_cast(u: Unit, delta: float, moving: bool) -> bool:
 	if u.channel_t <= 0.0:
 		return false
-	if moving and u.channel_total >= LOCKED_CAST:
-		# cast longo: andar ou esquivar interrompe, sem gastar a recarga
+	if moving:
+		# andar ou esquivar interrompe qualquer cast, sem gastar a recarga
+		u.cancel_ratio = 1.0 - u.channel_t / u.channel_total
+		u.cancel_t = 0.7
+		if u.channel_slot >= 0:
+			u.skill_cd[u.channel_slot] = 0.0
 		u.channel_t = 0.0
 		return false
 	u.channel_t -= delta
@@ -695,9 +741,13 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	var caster := u.key == "healer" or u.key == "maga"
 	var careful := not caster or Knowledge.has_yellow(i, "safe_cast")
 	# Cautela: larga o cast (sem gastar a recarga) se um vermelho aparecer embaixo
-	if caster and careful and u.channel_t > 0.0 and u.channel_slot >= 0 and _danger_at(u.position, u, true, 0.1):
-		u.skill_cd[u.channel_slot] = 0.0
-		u.channel_t = 0.0
+	var rot_card: bool = Knowledge.deck(i)["purple"] == "dps" and (u.key == "assassina" or u.key == "maga")
+	if careful and u.channel_t > 0.0 and u.channel_slot >= 0:
+		# o golpe forte da Rotação também é largado se uma mecânica de juntar começar
+		var must_move: bool = rot_card and u.channel_slot == 2 and not stacks.is_empty()
+		if must_move or _danger_at(u.position, u, true, 0.1):
+			u.skill_cd[u.channel_slot] = 0.0
+			u.channel_t = 0.0
 	if _tick_cast(u, delta, false):
 		return
 	var goal = null
@@ -726,7 +776,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		if (zones_active or phase == "cata") and u.element >= 0:
 			text = "???"
 			kind = 2
-		elif not stacks.is_empty():
+		elif not stacks.is_empty() or not spreads.is_empty():
 			text = "???"
 			kind = 2
 		elif phase == "cata" and shelter_pos != null:
@@ -784,30 +834,39 @@ func _tick_ai(u: Unit, delta: float) -> void:
 			u.face(BOSS_POINT - u.position)
 
 	# Instinto (carta amarela): só reage a pouca vida, então não fica gastando cura à toa.
-	if Knowledge.has_yellow(i, "instinct"):
-		if u.key == "healer" and u.skill_cd[1] <= 0.0:
-			# primeiro ele mesmo: healer morto não cura ninguém
-			var ht: Unit = u if u.hp / u.max_hp < Knowledge.LOW_HP else _heal_target()
-			# o Tank é socorrido mais cedo: ele precisa de folga pra aguentar o Esmagar
-			if ht != null and ht.hp / ht.max_hp < Knowledge.LOW_HP + (0.3 if ht.idx == 0 else 0.0):
-				heal_focus = ht
-			# começou a socorrer alguém, termina o serviço (até 80%) antes de parar
-			if heal_focus != null and (not heal_focus.alive or heal_focus.hp / heal_focus.max_hp >= 0.9):
-				heal_focus = null
-			# dois ou mais machucados por perto: a cura em área rende mais que a de um alvo só
-			var hurt_near := 0
-			for o in units:
-				if o.alive and o.hp / o.max_hp < 0.7 and o.position.distance_to(u.position) <= AOE_HEAL_R:
-					hurt_near += 1
-			if careful and in_danger:
-				pass  # Cautela: primeiro sai do vermelho, depois cura
-			elif hurt_near >= 3 and u.skill_cd[3] <= 0.0:
-				use_skill(u, 3, true)
-			elif heal_focus != null:
-				use_skill(u, 1, true, heal_focus)
+	if Knowledge.has_yellow(i, "instinct") and u.key == "healer":
+		# no Dodge Time a explosão do fim tira 70% da vida: ele enche todo mundo antes
+		var topping: bool = DODGE_PHASES.has(phase)
+		var low: float = 0.95 if topping else Knowledge.LOW_HP
+		# primeiro ele mesmo: healer morto não cura ninguém
+		var ht: Unit = u if u.hp / u.max_hp < Knowledge.LOW_HP else _heal_target()
+		# o Tank é socorrido mais cedo: ele precisa de folga pra aguentar o Esmagar
+		if ht != null and ht.hp / ht.max_hp < low + (0.3 if ht.idx == 0 and not topping else 0.0):
+			heal_focus = ht
+		# começou a socorrer alguém, termina o serviço antes de parar
+		if heal_focus != null and (not heal_focus.alive or heal_focus.hp / heal_focus.max_hp >= (0.97 if topping else 0.9)):
+			heal_focus = null
+		# vários machucados por perto: a cura em área rende mais que a de um alvo só
+		var hurt_near := 0
+		for o in units:
+			if o.alive and o.hp / o.max_hp < (0.9 if topping else 0.7) and o.position.distance_to(u.position) <= AOE_HEAL_R:
+				hurt_near += 1
+		if careful and in_danger:
+			pass  # Cautela: primeiro sai do vermelho, depois cura
+		elif hurt_near >= (2 if topping else 3) and u.skill_cd[3] <= 0.0:
+			use_skill(u, 3, true)
+		elif heal_focus != null and u.skill_cd[1] <= 0.0:
+			use_skill(u, 1, true, heal_focus)
 
 	if u.key == "tank" and Knowledge.has_yellow(i, "provoke") and target != null and target != u and u.skill_cd[3] <= 0.0:
 		use_skill(u, 3, true)
+
+	# Rotação: o golpe forte sai quando não tem nada pra resolver e ele já está no lugar
+	if rot_card and u.skill_cd[2] <= 0.0 and _in_range(u) and not in_danger and stacks.is_empty() \
+			and (goal == null or u.position.distance_to(goal) < 0.3):
+		if use_skill(u, 2, true):
+			u.set_action("Conjurando", 1)
+			return
 
 	# Auto-ataque conservador: bem mais fraco que o jogador no controle.
 	if _in_range(u):
@@ -825,9 +884,28 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	u.set_action(text, kind)
 
 
+## Bolha do escudo em volta do herói; criada na primeira vez que ele recebe um.
+func _shield_fx(u: Unit) -> void:
+	var fx: MeshInstance3D = u.get_node_or_null("ShieldFx")
+	if u.shield_hp <= 0.0 or not u.alive:
+		if fx != null:
+			fx.visible = false
+		return
+	if fx == null:
+		fx = Fx.inst(u, Fx.sphere(1.05), Fx.mat(Color(0.45, 0.9, 1.0, 0.22), 1.2, true), Vector3(0, 1.0, 0))
+		fx.name = "ShieldFx"
+	fx.visible = true
+	# a bolha encolhe conforme o escudo é gasto
+	var k := clampf(u.shield_hp / (u.max_hp * SHIELD_RATIO), 0.0, 1.0)
+	fx.scale = Vector3.ONE * lerpf(0.75, 1.0, k)
+
+
 ## Devolve [posição, texto] da primeira carta que se aplica agora, ou null.
 func _card_plan(u: Unit):
 	var d := Knowledge.deck(u.idx)
+	# Dispersão: marcado de roxo vai pro próprio canto. Sem dupla pra formar, todo mundo vai.
+	if not spreads.is_empty() and Knowledge.has_yellow(u.idx, "spread") and (_spread_on(u) or stacks.is_empty()):
+		return [CORNERS[u.idx], "→ Canto"]
 	if d["purple"] == "mark":
 		var r = null
 		if zones_active:
@@ -936,6 +1014,8 @@ func _tick_auto(delta: float) -> void:
 		u.targeted = u == target
 	if target == null:
 		return
+	if phase == "dodgetime":
+		return  # conjurando o Dodge Time: ela não bate
 	auto_t += delta
 	if auto_t < AUTO_EVERY:
 		return
@@ -971,6 +1051,9 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 	if not u.alive or slot >= list.size() or list[slot] == null or u.skill_cd[slot] > 0.0 or u.channel_t > 0.0 or intro_left > 0.0:
 		return false
 	var sk: Dictionary = list[slot]
+	# segurar o ataque básico andando não fica começando e cancelando cast a cada frame
+	if slot == 0 and sk.has("cast") and not by_ai and _input_dir() != Vector3.ZERO:
+		return false
 	u.cast_target = null
 	if sk.has("dmg") and not _in_range(u):
 		u.set_action("Longe demais", 2)
@@ -986,6 +1069,12 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 			if ht == null:
 				return false
 			u.cast_target = ht
+		"Escudo":
+			# no alvo focado; sem foco, em quem o boss está batendo
+			var st: Unit = target if target != null else u
+			if not by_ai and sel >= 0 and units[sel].alive:
+				st = units[sel]
+			u.cast_target = st
 		"Reviver":
 			var dead: Unit = null
 			for o in units:
@@ -1024,6 +1113,15 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 		"Mitigação":
 			u.guard_t = GUARD_TIME
 			_burst(u.position, Color(0.3, 0.9, 1.0), 2.2)
+		"Escudo":
+			var st: Unit = u.cast_target
+			if st == null or not st.alive:
+				st = u
+			st.shield_hp = st.max_hp * SHIELD_RATIO
+			st.shield_t = SHIELD_TIME
+			u.enmity += st.shield_hp * HEAL_ENMITY * 0.5
+			_beam(u.position, st.position, Color(0.45, 0.9, 1.0, 0.95), 0.3)
+			_burst(st.position, Color(0.45, 0.9, 1.0), 2.2)
 		"Cura em Área":
 			var each := (HEAL_AI if by_ai else HEAL_PLAYER) * 0.5
 			_burst(u.position, Color(0.4, 1.0, 0.6), AOE_HEAL_R)
@@ -1297,8 +1395,12 @@ func _hazard_boom(h: Dictionary) -> void:
 ## need 4: um círculo pra party toda. Menos gente dentro = fatia maior pra cada um.
 ## need 2: dois círculos, 2 em cada. Com mais de 2 (ou alguém nos dois), todo mundo dentro morre.
 ## O número de grupos de setas é o número de pessoas que o círculo pede.
-func _start_stacks(total: float, need: int) -> void:
-	var pool := _alive_shuffled()
+func _start_stacks(total: float, need: int, exclude: Array = [], dmg := -1.0) -> void:
+	stack_dmg = dmg if dmg > 0.0 else (STACK_TOTAL if need == 4 else PAIR_TOTAL)
+	var pool: Array = []
+	for u in _alive_shuffled():
+		if not exclude.has(u):
+			pool.append(u)
 	if pool.is_empty():
 		return
 	stack_need = need
@@ -1399,7 +1501,7 @@ func _tick_stacks(delta: float) -> void:
 				deaths[u] = "gente demais no círculo de dupla"
 		else:
 			# divisão justa: o dano total é fixo, cada um dentro leva a sua parte
-			var total := STACK_TOTAL if stack_need == 4 else PAIR_TOTAL
+			var total := stack_dmg
 			var share := total / maxf(1.0, inside.size())
 			for u in inside:
 				hits.append([u, share, "dividiu o círculo laranja com pouca gente"])
@@ -1426,6 +1528,11 @@ func _pair_plan(u: Unit):
 	var marked: Array = []
 	for st in stacks:
 		marked.append(st["target"])
+	if _spread_on(u):
+		return null  # marcado de roxo não entra em dupla
+	if marked.has(u) and not spreads.is_empty():
+		# com roxo junto, a dupla se forma num canto, longe dos círculos roxos
+		return [CORNERS[u.idx], "→ Canto"]
 	if marked.has(u):
 		for o in marked:
 			if o != u and o.alive and o.position.distance_to(u.position) < PAIR_R * 2.0 + 1.5:
@@ -1436,7 +1543,7 @@ func _pair_plan(u: Unit):
 		return [u.position, "Esperando o par"]
 	var free: Array = []
 	for o in units:
-		if o.alive and not marked.has(o):
+		if o.alive and not marked.has(o) and not _spread_on(o):
 			free.append(o)
 	var mine = null
 	if marked.size() == 2 and free.size() == 2:
@@ -1463,6 +1570,105 @@ func _pair_plan(u: Unit):
 		if m.position.distance_to(u.position) < PAIR_R + 0.6:
 			return [u.position + (u.position - m.position).normalized() * 1.5, "Afastando"]
 	return [u.position, "Fora dos círculos"]
+
+
+# ---------------------------------------------------------------- círculos roxos (espalhar)
+
+func _spread_on(u: Unit) -> bool:
+	for sp in spreads:
+		if sp["target"] == u:
+			return true
+	return false
+
+
+## n heróis ganham um círculo roxo enorme. Devolve quem foi marcado.
+func _start_spreads(total: float, n: int) -> Array:
+	var pool := _alive_shuffled()
+	var picked: Array = []
+	spread_t = total
+	spread_total = total
+	for c in mini(n, pool.size()):
+		var node := Node3D.new()
+		fx_root.add_child(node)
+		Fx.inst(node, Fx.disc(SPREAD_R), Fx.mat(Color(SPREAD_COL.r, SPREAD_COL.g, SPREAD_COL.b, 0.05), 0.0, true))
+		Fx.inst(node, Fx.torus(SPREAD_R - 0.12, SPREAD_R), Fx.mat(SPREAD_COL, 3.0, true))
+		# marca no próprio herói: anel + setas marchando pra fora
+		var mark := Fx.inst(node, Fx.torus(1.0, 1.12), Fx.mat(SPREAD_COL, 3.0, true), Vector3(0, 0.02, 0))
+		var mats: Array = []
+		var arrows: Array = []
+		for j in 3:
+			mats.append(Fx.mat(Color(SPREAD_COL.r, SPREAD_COL.g, SPREAD_COL.b, 0.99).lightened(0.25), 0.0, true))
+		for k in 4:
+			var arm := Node3D.new()
+			arm.rotation.y = k * TAU / 4.0 + PI / 4.0
+			node.add_child(arm)
+			var row: Array = []
+			for j in 3:
+				var a := Fx.inst(arm, _arrow_mesh(), mats[j])
+				a.rotation.y = PI  # bico pra fora
+				row.append(a)
+			arrows.append(row)
+		spreads.append({"target": pool[c], "node": node, "mark": mark, "mats": mats, "arrows": arrows})
+		picked.append(pool[c])
+	_tick_spreads(0.0)
+	return picked
+
+
+func _tick_spreads(delta: float) -> void:
+	if spreads.is_empty():
+		return
+	spread_t -= delta
+	var elapsed := spread_total - spread_t
+	var phase_k := fmod(elapsed * 1.5, 1.0)
+	for sp in spreads:
+		var m: Unit = sp["target"]
+		sp["node"].position = Vector3(m.position.x, 0.05, m.position.z)
+		sp["node"].visible = m.alive
+		for j in 3:
+			var d := (j + phase_k) * 0.62
+			var alpha := clampf(d / 0.3, 0.0, 1.0) * clampf(1.0 - (d - 0.6) / 1.2, 0.0, 1.0)
+			sp["mats"][j].albedo_color.a = alpha
+			for row in sp["arrows"]:
+				row[j].position.z = 1.4 + d
+	if spread_t > 0.0:
+		return
+
+	var player := units[ctrl]
+	var hits: Array = []
+	var player_clean := player.alive
+	for sp in spreads:
+		var m: Unit = sp["target"]
+		sp["node"].queue_free()
+		if not m.alive:
+			continue
+		var clean := true
+		for u in units:
+			if u != m and u.alive and u.position.distance_to(m.position) <= SPREAD_R:
+				hits.append([u, "ficou no círculo roxo de " + m.unit_name])
+				clean = false
+				if u == player:
+					player_clean = false
+		if m == player and not clean:
+			player_clean = false
+		_burst(m.position, SPREAD_COL if not clean else SPREAD_COL.lightened(0.4), 3.0)
+	spreads.clear()
+	for h in hits:
+		hurt(h[0], SPREAD_DMG, h[1])
+	if player_clean:
+		learn_yellow("spread")
+	if stacks.is_empty():
+		for u in units:
+			u.hold_pos = null
+
+
+## Grade de faixas vermelhas: sobram quadrados seguros entre elas.
+func _spawn_grid(total: float) -> void:
+	for c in [-4.5, 0.0, 4.5]:
+		for dir in [Vector3(1, 0, 0), Vector3(0, 0, 1)]:
+			var pos := Vector3(0, 0, c) if dir.x > 0.5 else Vector3(c, 0, 0)
+			var half_l := sqrt(ARENA_R * ARENA_R - c * c)
+			_add_hazard({"shape": "rect", "pos": pos, "dir": dir, "half_l": half_l, "half_w": 0.8,
+				"total": total, "dmg": 26.0, "card": "dodge", "why": "ficou na grade"})
 
 
 # ---------------------------------------------------------------- Esmagar (tank buster)
@@ -1609,6 +1815,14 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 		return
 	if u.guard_t > 0.0:
 		dmg *= MITIGATION
+	if u.shield_hp > 0.0:
+		var soak := minf(dmg, u.shield_hp)
+		u.shield_hp -= soak
+		dmg -= soak
+		_popup(int(soak), Color(0.45, 0.9, 1.0), 56, u.position + Vector3(0, 2.6, 0), "")
+		if dmg <= 0.0:
+			_burst(u.position, Color(0.45, 0.9, 1.0), 1.4)
+			return
 	u.hp -= dmg
 	hit_count[reason] = hit_count.get(reason, 0) + 1
 	u.flash_hit(dmg / u.max_hp)
@@ -1707,6 +1921,27 @@ func _next_step() -> void:
 			cast_name = "Esmagar"
 			boss.casting = true
 			_start_buster(s["dur"])
+		"spread":
+			cast_name = "Dispersão"
+			boss.casting = true
+			_start_spreads(s["dur"], s["n"])
+		"dodgetime":
+			cast_name = "Dodge Time"
+			boss.casting = true
+		"combo":
+			cast_name = "Dodge Time"
+			boss.casting = true
+			var purple := _start_spreads(s["dur"], 2)
+			_start_stacks(s["dur"], 2, purple, DODGE_PAIR_TOTAL)
+		"grid":
+			cast_name = "Dodge Time"
+			boss.casting = true
+			_spawn_grid(2.6)
+			_start_stacks(s["dur"], 2, [], DODGE_PAIR_TOTAL)
+		"blast":
+			cast_name = "Explosão"
+			boss.casting = true
+			boss.rage_t = s["dur"]
 		"line":
 			cast_name = "Rajada"
 			boss.casting = true
@@ -1717,12 +1952,12 @@ func _next_step() -> void:
 		"core":
 			cast_name = "Implosão"
 			boss.casting = true
-			_add_hazard({"shape": "circle", "pos": Vector3.ZERO, "r": 5.6, "total": 2.5, "dmg": 34.0,
+			_add_hazard({"shape": "circle", "pos": Vector3.ZERO, "r": 5.6, "total": s.get("total", 2.5), "dmg": 34.0,
 				"card": "dodge", "why": "ficou no meio da Implosão"})
 		"nova":
 			cast_name = "Supernova"
 			boss.casting = true
-			_add_hazard({"shape": "donut", "pos": Vector3.ZERO, "r": 3.2, "total": 3.0, "dmg": 34.0,
+			_add_hazard({"shape": "donut", "pos": Vector3.ZERO, "r": 3.2, "total": s.get("total", 3.0), "dmg": 34.0,
 				"card": "dodge", "why": "ficou na borda da Supernova"})
 		"mark":
 			cast_name = "Marca Elemental"
@@ -1752,6 +1987,13 @@ func _tick_boss(delta: float) -> void:
 	if phase_t < phase_dur:
 		return
 	match phase:
+		"blast":
+			# explosão no fim do Dodge Time: não dá pra desviar, é cura e escudo que seguram
+			hud.flash(Color(1.0, 0.2, 0.35) * Color(1, 1, 1, 0.5))
+			_burst(Vector3(0, 0.2, 0), DANGER, ARENA_R)
+			for u in units:
+				if u.alive:
+					hurt(u, u.max_hp * BLAST_RATIO, "Explosão do Dodge Time")
 		"zones": _resolve_zones()
 		"cata": _resolve_cataclysm()
 		"burn":

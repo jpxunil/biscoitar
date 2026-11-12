@@ -71,7 +71,7 @@ func _process(delta: float) -> void:
 	_rage_off = Vector3.ZERO
 	if rage_t > 0.0:
 		rage_t -= delta
-		var k := maxf(0.0, rage_t / RAGE_TIME)
+		var k := clampf(rage_t / RAGE_TIME, 0.0, 1.0)
 		_rage_off = Vector3(randf_range(-1.0, 1.0), randf_range(-0.3, 0.3), 0.0) * 0.28 * k
 		dress_mat.emission_energy_multiplier = 0.5 + 2.5 * k
 	position += _rage_off

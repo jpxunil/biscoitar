@@ -6,7 +6,7 @@ class_name Knowledge
 ## BRANCA — em branco: você monta "QUANDO x → FAZ y" com as peças que descobriu lutando.
 
 const PURPLE_SLOTS := 1
-const YELLOW_SLOTS := 3
+const YELLOW_SLOTS := 4
 const WHITE_SLOTS := 3
 ## Quantas cópias da carta roxa a party tem no total.
 const PURPLE_COPIES := 1
@@ -16,6 +16,18 @@ const PURPLE_NAME := "Marca Elemental"
 ## A de DPS é de cada herói: você libera jogando bem com ele, e aí a IA dele bate mais forte.
 const PURPLE := {"mark": "Marca Elemental", "dps": "Rotação"}
 const PURPLE_ORDER := ["mark", "dps"]
+## Texto que aparece ao passar o mouse na carta, no menu.
+const PURPLE_DESC := {
+	"mark": "Resolve a Marca Elemental sozinho: zona oposta, par e abrigo.",
+	"dps": "Bate mais forte. Assassina e Maga soltam o golpe de 20 s sempre que dá.",
+}
+const YELLOW_DESC := {
+	"dodge": "Sai dos ataques vermelhos.",
+	"instinct": "Cura quem está com pouca vida.",
+	"provoke": "Usa Bora Biscoitar quando o boss larga dele.",
+	"safe_cast": "Não conjura em cima de ataque vermelho.",
+	"spread": "No círculo roxo, corre pro próprio canto.",
+}
 ## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói
 ## (uns 60% do que a classe rende com a rotação perfeita, pra sobrar folga pros desvios).
 const DPS_GOAL := {"tank": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0}
@@ -27,8 +39,11 @@ const YELLOW := {
 	"instinct": "Instinto",
 	"provoke": "Biscoiteiro",
 	"safe_cast": "Cautela",
+	"spread": "Dispersão",
 }
-const YELLOW_ORDER := ["dodge", "instinct", "provoke", "safe_cast"]
+## Dispersão: no círculo roxo cada um corre pro próprio canto da arena.
+## A party aprende quando você resolve um círculo roxo na mão sem ninguém te acertar.
+const YELLOW_ORDER := ["dodge", "spread", "instinct", "provoke", "safe_cast"]
 ## Instinto: reage a pouca vida. O Healer cura quem está mal (ele mesmo primeiro).
 ## A party aprende quando alguém fica por um fio.
 ## Biscoiteiro: o Tank usa o Bora Biscoitar sozinho sempre que o boss não está nele

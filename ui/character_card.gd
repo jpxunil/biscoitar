@@ -35,6 +35,9 @@ const STATE_COLORS := [Color(0.62, 0.65, 0.8), Color(0.3, 0.9, 1.0), Color(1.0, 
 @export var locked := false: set = set_locked
 ## Quanto falta da recarga de troca (1 = acabou de trocar, 0 = liberado).
 @export_range(0.0, 1.0) var lock_ratio := 0.0
+## Escudo, como fração da vida máxima: linha fina azul em cima da barra de vida.
+@export_range(0.0, 1.0) var shield_ratio := 0.0
+var _shield_bar: ColorRect
 var _cd_bar: ColorRect
 const CD_LEFT := -8.0
 const CD_WIDTH := 274.0
@@ -60,6 +63,12 @@ func _ready() -> void:
 	_cd_bar.size = Vector2(CD_WIDTH, 4.0)
 	_cd_bar.visible = false
 	add_child(_cd_bar)
+	_shield_bar = ColorRect.new()
+	_shield_bar.color = Color(0.45, 0.9, 1.0)
+	_shield_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shield_bar.position = $Body/HpBack.position + Vector2(0, -5)
+	_shield_bar.size = Vector2(0, 3)
+	$Body.add_child(_shield_bar)
 	_ghost = clampf(hp / maxf(max_hp, 1.0), 0.0, 1.0)
 	refresh()
 	$Body.position.x = _base_x
@@ -67,6 +76,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var body: Control = $Body
+	if _shield_bar != null:
+		_shield_bar.visible = shield_ratio > 0.0 and not dead
+		_shield_bar.size.x = _hp_width * shield_ratio
 	if _cd_bar != null:
 		_cd_bar.visible = locked and not selected and not dead
 		_cd_bar.size.x = CD_WIDTH * lock_ratio

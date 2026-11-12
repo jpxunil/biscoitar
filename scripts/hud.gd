@@ -33,6 +33,10 @@ var cards: Array = []
 var boss_center: Control
 var legend: Control
 var fight_ui: Control
+var cast_plate: PanelContainer
+var my_cast_label: Label
+var my_cast_bar: Control
+var my_cast_red: Control
 var flash_rect: ColorRect
 var deck_menu
 var end_layer: Control
@@ -59,6 +63,7 @@ func setup(game) -> void:
 	_build_toast()
 	_build_skills()
 	_build_lb()
+	_build_castbar()
 
 	flash_rect = ColorRect.new()
 	flash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -208,6 +213,33 @@ func _build_skills() -> void:
 	center.add_child(skill_row)
 
 
+## Barra de cast: pequena, logo abaixo do meio da tela, só enquanto você conjura.
+func _build_castbar() -> void:
+	cast_plate = UiStyle.slab(UiStyle.INK, 0.0, 10, 6)
+	cast_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fight_ui.add_child(cast_plate)
+	cast_plate.anchor_left = 0.5
+	cast_plate.anchor_right = 0.5
+	cast_plate.anchor_top = 0.5
+	cast_plate.anchor_bottom = 0.5
+	cast_plate.offset_left = -95
+	cast_plate.offset_right = 95
+	cast_plate.offset_top = 84
+	cast_plate.offset_bottom = 84
+	cast_plate.grow_vertical = Control.GROW_DIRECTION_END
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 4)
+	cast_plate.add_child(v)
+	my_cast_label = UiStyle.text("", 12, UiStyle.PAPER)
+	my_cast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(my_cast_label)
+	my_cast_bar = UiStyle.bar(UiStyle.PAPER, 5, 0.0)
+	v.add_child(my_cast_bar)
+	my_cast_red = UiStyle.bar(UiStyle.DANGER, 5, 0.0)
+	v.add_child(my_cast_red)
+	cast_plate.visible = false
+
+
 ## Cápsula do Limit Break: enche de 0 a 100% com o dano da party; cheia, vira o botão.
 func _build_lb() -> void:
 	var holder := Control.new()
@@ -273,7 +305,7 @@ func _show_skills(i: int) -> void:
 		if list[n] == null:
 			continue
 		var slab := UiStyle.slab(UiStyle.INK, UiStyle.SKEW, 20, 7)
-		slab.custom_minimum_size.x = 186
+		slab.custom_minimum_size.x = 186 if list.size() <= 4 else 168
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 5)
 		slab.add_child(v)
@@ -346,6 +378,28 @@ func _process(delta: float) -> void:
 		# pulso lento: chama o olho sem piscar feito alarme
 		lb_button.modulate = Color(1, 1, 1).lerp(Color(1.35, 1.35, 1.35), 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.006))
 
+	# barra de cast do herói controlado; vermelha por um instante se o cast foi cancelado
+	if me.alive and me.channel_t > 0.0:
+		cast_plate.visible = true
+		my_cast_bar.visible = true
+		my_cast_red.visible = false
+		var cname := "LIMIT BREAK" if me.channel_slot == -1 else String(g.SKILLS[me.key][me.channel_slot]["name"]).to_upper()
+		my_cast_label.text = "%s  %.1f" % [cname, me.channel_t]
+		my_cast_label.add_theme_color_override("font_color", UiStyle.PAPER)
+		UiStyle.set_bar(my_cast_bar, 1.0 - me.channel_t / me.channel_total)
+	elif me.alive and me.cancel_t > 0.0:
+		cast_plate.visible = true
+		my_cast_bar.visible = false
+		my_cast_red.visible = true
+		my_cast_label.text = "CANCELADO"
+		my_cast_label.add_theme_color_override("font_color", UiStyle.DANGER)
+		UiStyle.set_bar(my_cast_red, maxf(me.cancel_ratio, 0.04))
+		cast_plate.modulate.a = clampf(me.cancel_t * 3.0, 0.0, 1.0)
+	else:
+		cast_plate.visible = false
+	if me.channel_t > 0.0:
+		cast_plate.modulate.a = 1.0
+
 	UiStyle.set_bar(swap_bar, 1.0 - g.swap_cd / g.SWAP_CD)
 	swap_name.modulate.a = 1.0 if g.swap_cd <= 0.0 else 0.45
 	for s in skill_ui:
@@ -408,6 +462,7 @@ func _process(delta: float) -> void:
 		if card.selected != u.controlled:
 			card.selected = u.controlled
 		card.lock_ratio = g.swap_cd / g.SWAP_CD
+		card.shield_ratio = u.shield_hp / u.max_hp
 		if card.locked != (g.swap_cd > 0.0):
 			card.locked = g.swap_cd > 0.0
 		if card.dead != (not u.alive):

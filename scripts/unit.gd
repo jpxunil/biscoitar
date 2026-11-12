@@ -34,7 +34,7 @@ var dmg_bucket := 0.0
 var dmg_buckets: Array[float] = []
 var dps := 0.0
 var key := ""
-var skill_cd := [0.0, 0.0, 0.0, 0.0]
+var skill_cd := [0.0, 0.0, 0.0, 0.0, 0.0]
 var atk_range := 4.8
 var cast_target: Unit
 var cast_ai := false
@@ -44,6 +44,12 @@ var chosen := false
 ## Pra onde está fugindo de um ataque vermelho. Fica guardado até sair da área,
 ## senão o ponto seguro troca de lado a cada frame e o personagem fica indo e voltando.
 var dodge_goal = null
+## Escudo da Healer: absorve dano antes da vida.
+var shield_hp := 0.0
+var shield_t := 0.0
+## Cast interrompido: o HUD mostra a barra em vermelho por um instante.
+var cancel_t := 0.0
+var cancel_ratio := 0.0
 ## Conjurador sem a carta Cautela: fica preso terminando o cast quando o vermelho aparece.
 var in_red := false
 var stuck_t := 0.0
@@ -246,6 +252,9 @@ func die() -> void:
 	enmity = 0.0  # morrer zera a enmity, como no FFXIV
 	guard_t = 0.0
 	channel_t = 0.0
+	shield_hp = 0.0
+	shield_t = 0.0
+	cancel_t = 0.0
 	visual.rotation.x = -PI / 2.0
 	visual.position.y = 0.35
 	body_mat.albedo_color = Color(0.25, 0.25, 0.28)
