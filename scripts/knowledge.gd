@@ -21,8 +21,7 @@ const PURPLE_ORDER := ["mark", "dps"]
 const DPS_GOAL := {"tank": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0}
 const DPS_WINDOW := 20
 
-## Um único desvio cobre todos os avisos vermelhos. Não vem de fábrica:
-## a party aprende quando você desvia de um ataque na mão.
+## Um único desvio cobre todos os avisos vermelhos. Vem de fábrica, já equipado em todo mundo.
 const YELLOW := {
 	"dodge": "Desvio",
 	"instinct": "Instinto",
@@ -100,7 +99,7 @@ static var triggers_known := {}
 static var actions_known := {"center": true, "stay": true}
 static var purple_known := false
 static var dps_known := {}  # chave do herói -> true
-static var yellow_known := {}
+static var yellow_known := {"dodge": true}
 ## Quem você controla quando a luta começa (escolhido no menu).
 static var start_hero := 2
 static var boss := 0
@@ -114,7 +113,7 @@ static func deck(i: int) -> Dictionary:
 		var whites: Array = []
 		for n in WHITE_SLOTS:
 			whites.append({"t": "", "a": ""})
-		decks[i] = {"purple": "", "yellow": [], "white": whites}
+		decks[i] = {"purple": "", "yellow": ["dodge"], "white": whites}
 	return decks[i]
 
 
