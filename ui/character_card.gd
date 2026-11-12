@@ -31,6 +31,13 @@ const STATE_COLORS := [Color(0.62, 0.65, 0.8), Color(0.3, 0.9, 1.0), Color(1.0, 
 @export var chosen := false: set = set_chosen
 @export var selected := false: set = set_selected
 @export var dead := false: set = set_dead
+## Troca em recarga: não dá pra assumir este herói agora.
+@export var locked := false: set = set_locked
+## Quanto falta da recarga de troca (1 = acabou de trocar, 0 = liberado).
+@export_range(0.0, 1.0) var lock_ratio := 0.0
+var _cd_bar: ColorRect
+const CD_LEFT := -8.0
+const CD_WIDTH := 274.0
 
 var _hp_width := 0.0
 var _base_x := 0.0
@@ -45,6 +52,14 @@ const SHAKE_TIME := 0.2
 
 func _ready() -> void:
 	_hp_width = $Body/HpBack.size.x
+	# barra de recarga da troca: fora do Body pra não escurecer junto com o card
+	_cd_bar = ColorRect.new()
+	_cd_bar.color = PAPER
+	_cd_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cd_bar.position = Vector2(CD_LEFT, 74.0)
+	_cd_bar.size = Vector2(CD_WIDTH, 4.0)
+	_cd_bar.visible = false
+	add_child(_cd_bar)
 	_ghost = clampf(hp / maxf(max_hp, 1.0), 0.0, 1.0)
 	refresh()
 	$Body.position.x = _base_x
@@ -52,6 +67,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var body: Control = $Body
+	if _cd_bar != null:
+		_cd_bar.visible = locked and not selected and not dead
+		_cd_bar.size.x = CD_WIDTH * lock_ratio
 	if Engine.is_editor_hint():
 		body.position = Vector2(_base_x, 0)
 		return
@@ -163,6 +181,11 @@ func set_selected(v: bool) -> void:
 	selected = v
 	refresh()
 
+func set_locked(v: bool) -> void:
+	locked = v
+	refresh()
+
+
 func set_dead(v: bool) -> void:
 	dead = v
 	refresh()
@@ -209,4 +232,13 @@ func refresh() -> void:
 		dps_col = HP_LOW.darkened(0.25) if selected else HP_LOW
 	$Body/Dps.add_theme_color_override("font_color", dps_col)
 
-	modulate = Color(0.55, 0.55, 0.62, 0.8) if dead else Color.WHITE
+	var off := locked and not selected and not dead
+	if dead:
+		modulate = Color(0.55, 0.55, 0.62, 0.8)
+	else:
+		modulate = Color.WHITE
+	var dim := Color(0.5, 0.5, 0.56) if off else Color.WHITE
+	$Body.modulate = Color(dim.r, dim.g, dim.b, $Body.modulate.a)
+	if off:
+		$Body/HpFill.self_modulate = Color(0.62, 0.62, 0.68)
+	$Body/Face.set_instance_shader_parameter("grey", 1.0 if dead or off else 0.0)

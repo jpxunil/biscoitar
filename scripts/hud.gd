@@ -407,6 +407,9 @@ func _process(delta: float) -> void:
 			card.targeted = u.targeted
 		if card.selected != u.controlled:
 			card.selected = u.controlled
+		card.lock_ratio = g.swap_cd / g.SWAP_CD
+		if card.locked != (g.swap_cd > 0.0):
+			card.locked = g.swap_cd > 0.0
 		if card.dead != (not u.alive):
 			card.dead = not u.alive
 

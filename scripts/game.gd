@@ -145,6 +145,7 @@ var ctrl := 0
 var swap_cd := 0.0
 var lb := 0.0  # carga do Limit Break, 0..1, da party toda
 var enrage := 120.0
+var swap_test := 0.0  # só pra teste: --swaptest=N troca de herói aos N segundos
 var lb_test := 0.0  # só pra teste: --lbtest=N dispara o Limit Break aos N segundos
 var sel := -1  # alvo escolhido no card (cura, reviver); -1 = automático
 var order := "atk"  # atk | gather | spread | hold
@@ -259,6 +260,8 @@ func _ready() -> void:
 	prep = not autoplay
 	hud.set_prep(prep)
 	for a in args:
+		if a.begins_with("--swaptest="):
+			swap_test = float(a.trim_prefix("--swaptest="))
 		if a.begins_with("--lbtest="):
 			lb_test = float(a.trim_prefix("--lbtest="))
 		if a.begins_with("--sel="):
@@ -516,6 +519,9 @@ func _process(delta: float) -> void:
 		return
 
 	fight_time += delta
+	if swap_test > 0.0 and fight_time >= swap_test:
+		swap_test = 0.0
+		_cycle_ctrl()
 	if lb_test > 0.0 and fight_time >= lb_test:
 		lb_test = 0.0
 		lb = 1.0

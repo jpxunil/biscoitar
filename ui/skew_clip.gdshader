@@ -6,6 +6,7 @@ uniform float skew = 0.22;
 uniform vec2 rect_size = vec2(86.0, 72.0);
 uniform float slab_width = 75.0;
 uniform float border = 0.0;
+instance uniform float grey = 0.0;
 
 void fragment() {
 	vec2 p = UV * rect_size;
@@ -13,5 +14,8 @@ void fragment() {
 	float left = (rect_size.x - slab_width) * 0.5 + shift;
 	float d = min(min(p.x - left - border, left + slab_width - border - p.x), min(p.y - border, rect_size.y - border - p.y));
 	COLOR = texture(TEXTURE, UV);
+	// cinza: herói indisponível (morto ou troca em recarga)
+	float l = dot(COLOR.rgb, vec3(0.3, 0.59, 0.11));
+	COLOR.rgb = mix(COLOR.rgb, vec3(l) * 0.6, grey);
 	COLOR.a *= smoothstep(-0.5, 0.5, d);
 }
