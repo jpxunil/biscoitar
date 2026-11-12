@@ -116,6 +116,8 @@ const LOCKED_CAST := 1.0
 const ROTATION_DPS := {"tank": 10.0, "healer": 6.0, "assassina": 22.0, "maga": 16.0}
 ## Cura em Área: metade da Cura, em todo mundo perto do Healer.
 const AOE_HEAL_R := 6.0
+## Quanto tempo Maga e Healer ficam presos no cast quando um vermelho aparece e não têm Cautela.
+const CAST_STUCK := 0.9
 const HEAL_PLAYER := 55.0
 const HEAL_AI := 45.0
 const COOKIE_COL := Color(0.86, 0.6, 0.3)
@@ -238,7 +240,7 @@ func _ready() -> void:
 		Engine.time_scale = 6.0
 		for i in 4:
 			var d := Knowledge.deck(i)
-			d["yellow"] = [["dodge", "provoke"], ["dodge", "instinct"], ["dodge"], ["dodge"]][i]
+			d["yellow"] = [["dodge", "provoke"], ["dodge", "instinct", "safe_cast"], ["dodge"], ["dodge", "safe_cast"]][i]
 			if Knowledge.boss == 0:
 				d["white"] = [
 					{"t": "stack", "a": "to_marked"},
@@ -689,12 +691,18 @@ func _in_range(u: Unit) -> bool:
 
 func _tick_ai(u: Unit, delta: float) -> void:
 	# conjurando (a Cura da IA também tem cast): fica parado até soltar
+	var i := u.idx
+	var caster := u.key == "healer" or u.key == "maga"
+	var careful := not caster or Knowledge.has_yellow(i, "safe_cast")
+	# Cautela: larga o cast (sem gastar a recarga) se um vermelho aparecer embaixo
+	if caster and careful and u.channel_t > 0.0 and u.channel_slot >= 0 and _danger_at(u.position, u, true, 0.1):
+		u.skill_cd[u.channel_slot] = 0.0
+		u.channel_t = 0.0
 	if _tick_cast(u, delta, false):
 		return
 	var goal = null
 	var text := "Atacando"
 	var kind := 0
-	var i := u.idx
 
 	# Prioridade: cartas do deck > ordem manual > comportamento padrão.
 	var plan = _card_plan(u)
@@ -729,7 +737,18 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	var in_danger := _danger_at(u.position, u, true, 0.1)
 	if u.dodge_goal != null and not in_danger and (hazards.is_empty() or u.position.distance_to(u.dodge_goal) <= 0.15):
 		u.dodge_goal = null  # chegou na saída (ou o ataque já passou)
-	if in_danger:
+	if not in_danger:
+		u.in_red = false
+	elif not u.in_red:
+		u.in_red = true
+		u.stuck_t = 0.0 if careful else CAST_STUCK
+	if in_danger and u.stuck_t > 0.0:
+		# sem Cautela: termina o cast que estava fazendo antes de pensar em sair
+		u.stuck_t -= delta
+		goal = u.position
+		text = "Conjurando"
+		kind = 2
+	elif in_danger:
 		# escolhe uma saída e vai até ela; só troca se a saída deixar de ser segura
 		if u.dodge_goal == null or _danger_at(u.dodge_goal, u, true, 0.3):
 			# folga diferente a cada desvio: ninguém para colado na borda do ataque
@@ -780,7 +799,9 @@ func _tick_ai(u: Unit, delta: float) -> void:
 			for o in units:
 				if o.alive and o.hp / o.max_hp < 0.7 and o.position.distance_to(u.position) <= AOE_HEAL_R:
 					hurt_near += 1
-			if hurt_near >= 3 and u.skill_cd[3] <= 0.0:
+			if careful and in_danger:
+				pass  # Cautela: primeiro sai do vermelho, depois cura
+			elif hurt_near >= 3 and u.skill_cd[3] <= 0.0:
 				use_skill(u, 3, true)
 			elif heal_focus != null:
 				use_skill(u, 1, true, heal_focus)
@@ -1253,6 +1274,8 @@ func _tick_hazards(delta: float) -> void:
 		# desviou na mão de um ataque que ia te pegar: a carta daquele desvio é sua
 		if player.alive and not player_hit and h["inside"].has(player.idx):
 			learn_yellow(h["card"])
+			if player.key == "healer" or player.key == "maga":
+				learn_yellow("safe_cast")
 
 
 func _hazard_boom(h: Dictionary) -> void:

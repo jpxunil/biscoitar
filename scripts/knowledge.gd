@@ -6,7 +6,7 @@ class_name Knowledge
 ## BRANCA — em branco: você monta "QUANDO x → FAZ y" com as peças que descobriu lutando.
 
 const PURPLE_SLOTS := 1
-const YELLOW_SLOTS := 2
+const YELLOW_SLOTS := 3
 const WHITE_SLOTS := 3
 ## Quantas cópias da carta roxa a party tem no total.
 const PURPLE_COPIES := 1
@@ -26,13 +26,16 @@ const YELLOW := {
 	"dodge": "Desvio",
 	"instinct": "Instinto",
 	"provoke": "Biscoiteiro",
+	"safe_cast": "Cautela",
 }
-const YELLOW_ORDER := ["dodge", "instinct", "provoke"]
+const YELLOW_ORDER := ["dodge", "instinct", "provoke", "safe_cast"]
 ## Instinto: reage a pouca vida. O Healer cura quem está mal (ele mesmo primeiro).
 ## A party aprende quando alguém fica por um fio.
 ## Biscoiteiro: o Tank usa o Bora Biscoitar sozinho sempre que o boss não está nele
 ## (por exemplo depois de morrer e ser revivido). Aprende quando você recupera o aggro na mão.
-const YELLOW_ONLY := {"instinct": ["healer"], "provoke": ["tank"]}
+## Cautela: Maga e Healer não conjuram em cima de ataque vermelho. Sem ela, terminam o cast
+## antes de sair da área. A party aprende quando você desvia na mão jogando de Maga ou Healer.
+const YELLOW_ONLY := {"instinct": ["healer"], "provoke": ["tank"], "safe_cast": ["healer", "maga"]}
 const LOW_HP := 0.5
 
 

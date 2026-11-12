@@ -1,6 +1,6 @@
 extends Control
 ## Menu de cartas, antes da luta. Uma coluna por personagem:
-## 1 roxa, 2 amarelas, 3 brancas (programáveis, na ordem de prioridade).
+## 1 roxa, 3 amarelas, 3 brancas (programáveis, na ordem de prioridade).
 ##
 ## Leitura visual: carta equipada = cor cheia · slot vazio = só contorno na cor do tipo.
 
