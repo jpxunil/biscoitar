@@ -2,13 +2,21 @@ extends Control
 ## Menu de cartas, antes da luta. Uma coluna por personagem:
 ## 1 roxa, 4 amarelas, 3 brancas (programáveis, na ordem de prioridade).
 ##
-## Leitura visual: carta equipada = cor cheia · slot vazio = só contorno na cor do tipo.
+## O menu é uma mesa de cartas: cada herói tem a sua raia, com as cartas em cascata
+## (como numa paciência, só a faixa do título de cada uma aparece).
+## Leitura visual: carta equipada = virada pra cima (clara) e puxada pra fora da pilha ·
+## carta disponível = escura com contorno na cor do tipo · carta desconhecida = verso com "?".
 
 signal fight_pressed
 
 const COL_W := 276
-const BG := Color(0.11, 0.1, 0.22)
-const SLOT_BG := Color(0.09, 0.09, 0.19)
+const BG := Color(0.085, 0.08, 0.17)
+const SLOT_BG := Color(0.1, 0.1, 0.21)
+## Cascata: quanto de cada carta aparece, altura real dela e quanto a equipada sai da pilha.
+const STRIP := 34
+const CARD_H := 44
+const PULL := 12
+const RADIUS := 7
 
 var g
 var columns: HBoxContainer
@@ -33,14 +41,20 @@ func setup(game) -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.color = BG
 	add_child(bg)
-	# faixas diagonais bem discretas: dão direção ao fundo sem competir com as cartas
-	for band in [[820.0, 300.0, 0.035], [1020.0, 120.0, 0.05]]:
-		var p := Panel.new()
-		p.position = Vector2(band[0], -40)
-		p.size = Vector2(band[1], 800)
-		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		p.add_theme_stylebox_override("panel", UiStyle.box(Color(1, 1, 1, band[2]), 0.45))
-		add_child(p)
+	# o pano da mesa: uma área mais clara no meio, com uma linha fina de costura
+	var felt := Panel.new()
+	felt.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	felt.offset_left = 30
+	felt.offset_right = -30
+	felt.offset_top = 80
+	felt.offset_bottom = -48
+	felt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fsb := UiStyle.box(Color(0.115, 0.11, 0.235))
+	fsb.set_corner_radius_all(18)
+	fsb.border_color = Color(1, 1, 1, 0.07)
+	fsb.set_border_width_all(2)
+	felt.add_theme_stylebox_override("panel", fsb)
+	add_child(felt)
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -58,9 +72,7 @@ func setup(game) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 14)
 	v.add_child(head)
-	var title := UiStyle.slab(UiStyle.PAPER, UiStyle.SKEW, 30, 4)
-	title.add_child(UiStyle.text("CARTAS", 30, UiStyle.INK))
-	head.add_child(title)
+	head.add_child(_title_deck())
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(gap)
@@ -72,9 +84,9 @@ func setup(game) -> void:
 		tab.custom_minimum_size = Vector2(0, 50)
 		tab.add_theme_font_size_override("font_size", 17)
 		if bi == Knowledge.boss:
-			_style_button(tab, UiStyle.BOSS, UiStyle.INK, UiStyle.SKEW)
+			_style_button(tab, UiStyle.BOSS, UiStyle.INK, 0.0, Color(-1, 0, 0), UiStyle.BOSS.lightened(0.3), RADIUS)
 		else:
-			_style_button(tab, UiStyle.INK, UiStyle.BOSS, UiStyle.SKEW, UiStyle.INK_SOFT)
+			_style_button(tab, UiStyle.INK, UiStyle.BOSS, 0.0, UiStyle.INK_SOFT, UiStyle.BOSS.darkened(0.45), RADIUS)
 			tab.pressed.connect(g.select_boss.bind(bi))
 		for st in ["normal", "hover", "pressed"]:
 			var tsb := tab.get_theme_stylebox(st) as StyleBoxFlat
@@ -89,7 +101,7 @@ func setup(game) -> void:
 	fight.focus_mode = Control.FOCUS_NONE
 	fight.custom_minimum_size = Vector2(200, 50)
 	fight.add_theme_font_size_override("font_size", 24)
-	_style_button(fight, UiStyle.PAPER, UiStyle.INK, UiStyle.SKEW, Color.WHITE)
+	_style_button(fight, UiStyle.PAPER, UiStyle.INK, 0.0, Color.WHITE, UiStyle.INK, RADIUS)
 	fight.pressed.connect(func(): fight_pressed.emit())
 	head.add_child(fight)
 
@@ -132,6 +144,15 @@ func refresh() -> void:
 			col.modulate.a = 0.0
 			var tw := col.create_tween()
 			tw.tween_property(col, "modulate:a", 1.0, 0.22).set_delay(0.05 + i * 0.07)
+			# as cartas são "dadas" na mesa: cada uma cai no lugar, uma depois da outra
+			var n := 0
+			for card in col.find_children("Card*", "Control", true, false):
+				var home: float = card.position.y
+				card.position.y = home - 26.0
+				var ct := card.create_tween()
+				ct.tween_property(card, "position:y", home, 0.2).set_delay(0.08 + i * 0.07 + n * 0.035) \
+					.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				n += 1
 	_animate_next = false
 	_pulse = ""
 
@@ -143,24 +164,24 @@ func _column(i: int) -> Control:
 	var d: Dictionary = Knowledge.deck(i)
 	var col := VBoxContainer.new()
 	col.custom_minimum_size.x = COL_W
-	col.add_theme_constant_override("separation", 6)
+	# sem espaço automático: as cartas da cascata encostam, e os vãos são explícitos
+	col.add_theme_constant_override("separation", 0)
 	col.add_child(_hero_header(i, u))
+	col.add_child(_spacer(12))
 
-	var gap := Control.new()
-	gap.custom_minimum_size.y = 5
-	col.add_child(gap)
-
-	# --- roxa
+	# --- roxas: uma pilha em cascata
+	var seat_n := 0
 	for pid in Knowledge.PURPLE_ORDER:
 		var pb: Button
 		var known: bool = Knowledge.purple_known if pid == "mark" else Knowledge.dps_known.has(u["key"])
 		var pname: String = Knowledge.PURPLE[pid]
-		if d["purple"] == pid:
-			pb = _slot(pname.to_upper(), UiStyle.PURPLE, true, true, 34, 15)
+		var p_on: bool = d["purple"] == pid
+		if p_on:
+			pb = _slot(pname.to_upper(), UiStyle.PURPLE, "on", true)
 		elif not known:
-			pb = _slot("?", UiStyle.PURPLE, false, false, 34, 15)
+			pb = _slot("?", UiStyle.PURPLE, "back", false)
 		else:
-			pb = _slot(pname, UiStyle.PURPLE, false, Knowledge.purple_can(i, pid, u["key"]), 34, 15)
+			pb = _slot(pname, UiStyle.PURPLE, "off", Knowledge.purple_can(i, pid, u["key"]))
 		if known:
 			pb.tooltip_text = Knowledge.PURPLE_DESC[pid]
 		var tag := "p%d%s" % [i, pid]
@@ -169,7 +190,9 @@ func _column(i: int) -> Control:
 			_pulse = tag
 			refresh())
 		_maybe_pulse(pb, tag)
-		col.add_child(pb)
+		_seat(col, pb, seat_n, p_on)
+		seat_n += 1
+	col.add_child(_spacer(CARD_H - STRIP + 8))
 
 	# --- amarelas: todas as cartas aparecem; só YELLOW_SLOTS podem ficar equipadas
 	var equipped: int = d["yellow"].size()
@@ -177,36 +200,41 @@ func _column(i: int) -> Control:
 	for id in mine_yellow:
 		var yb: Button
 		var key := "y%d_%s" % [i, id]
+		var y_on := false
 		if not Knowledge.yellow_known.has(id):
-			yb = _slot("?", UiStyle.YELLOW, false, false, 34, 15)
+			yb = _slot("?", UiStyle.YELLOW, "back", false)
 		else:
-			var on := Knowledge.has_yellow(i, id)
+			y_on = Knowledge.has_yellow(i, id)
 			var label: String = Knowledge.YELLOW[id]
 			# sem slot livre, as que sobram ficam apagadas: o limite aparece sem precisar de texto
-			yb = _slot(label.to_upper() if on else label, UiStyle.YELLOW, on, on or equipped < Knowledge.YELLOW_SLOTS, 34, 15)
+			yb = _slot(label.to_upper() if y_on else label, UiStyle.YELLOW, "on" if y_on else "off", y_on or equipped < Knowledge.YELLOW_SLOTS)
 			yb.tooltip_text = Knowledge.YELLOW_DESC.get(id, "")
 			yb.pressed.connect(func():
 				Knowledge.toggle_yellow(i, id)
 				_pulse = key
 				refresh())
 			_maybe_pulse(yb, key)
-		col.add_child(yb)
+		_seat(col, yb, seat_n, y_on)
+		seat_n += 1
 	for n in maxi(0, Knowledge.YELLOW_SLOTS - mine_yellow.size()):
-		col.add_child(_slot("", UiStyle.YELLOW, false, false, 34, 15))
+		_seat(col, _slot("", UiStyle.YELLOW, "empty", false), seat_n, false)
+		seat_n += 1
+	col.add_child(_spacer(CARD_H - STRIP + 12))
 
 	# --- brancas
 	for slot in Knowledge.WHITE_SLOTS:
 		var card := _white_card(i, slot, d["white"][slot])
 		_maybe_pulse(card, "w%d_%d" % [i, slot])
 		col.add_child(card)
+		col.add_child(_spacer(6))
 	return col
 
 
-## Faixa do herói: rosto recortado na inclinação + nome, na cor da classe.
+## Carta do herói: retrato numa janela + nome, na cor da classe.
 func _hero_header(i: int, u: Unit) -> Control:
 	var c := Control.new()
 	c.custom_minimum_size = Vector2(COL_W, 60)
-	# clicar na faixa escolhe com quem você começa a luta
+	# clicar na carta escolhe com quem você começa a luta
 	var mine := Knowledge.start_hero == i
 	c.mouse_filter = Control.MOUSE_FILTER_STOP
 	c.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -214,79 +242,214 @@ func _hero_header(i: int, u: Unit) -> Control:
 		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT and not mine:
 			g.select_hero(i)
 			refresh())
-	if mine:
-		# moldura clara = "este é você"; os outros ficam um tom abaixo
-		var frame := Panel.new()
-		frame.position = Vector2(-5, -5)
-		frame.size = Vector2(COL_W + 10, 70)
-		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		frame.add_theme_stylebox_override("panel", UiStyle.box(UiStyle.PAPER, UiStyle.SKEW))
-		c.add_child(frame)
-	else:
-		c.modulate = Color(0.72, 0.72, 0.78)
-	var slab := Panel.new()
-	slab.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	slab.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slab.add_theme_stylebox_override("panel", UiStyle.box(u.color, UiStyle.SKEW))
-	c.add_child(slab)
+	var card := Panel.new()
+	card.name = "CardHero"
+	card.position = Vector2(0, -4 if mine else 0)
+	card.size = Vector2(COL_W, 60)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# borda clara e carta levantada = "este é você"; os outros ficam um tom abaixo
+	var sb := _card_box(u.color, UiStyle.PAPER if mine else u.color.darkened(0.45), 9, 3)
+	card.add_theme_stylebox_override("panel", sb)
+	c.add_child(card)
+	if not mine:
+		c.modulate = Color(0.7, 0.7, 0.76)
+	card.add_child(_inner_frame(Vector2(COL_W, 60), UiStyle.INK, 0.22, 6))
 
+	# janela do retrato, como a ilustração de uma carta
+	var win := Panel.new()
+	win.position = Vector2(8, 7)
+	win.size = Vector2(46, 46)
+	win.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	win.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var wsb := UiStyle.box(UiStyle.INK)
+	wsb.set_corner_radius_all(6)
+	win.add_theme_stylebox_override("panel", wsb)
+	card.add_child(win)
 	var face := TextureRect.new()
 	face.texture = load("res://assets/portraits/%s_face.png" % g.UNIT_DEFS[i]["key"])
 	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	face.position = Vector2(-7, 0)
-	face.size = Vector2(88, 60)
-	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://ui/skew_clip.gdshader")
-	mat.set_shader_parameter("rect_size", face.size)
-	mat.set_shader_parameter("slab_width", 74.0)
-	mat.set_shader_parameter("skew", UiStyle.SKEW)
-	face.material = mat
+	face.position = Vector2(2, 2)
+	face.size = Vector2(42, 42)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	c.add_child(face)
+	win.add_child(face)
 
-	var name_l := UiStyle.text(u.unit_name.to_upper(), 23, UiStyle.INK)
-	name_l.position = Vector2(92, 0)
-	name_l.size = Vector2(COL_W - 100, 60)
+	var name_l := UiStyle.text(u.unit_name.to_upper(), 22, UiStyle.INK)
+	name_l.position = Vector2(66, 0)
+	name_l.size = Vector2(COL_W - 76, 60)
 	name_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	c.add_child(name_l)
+	card.add_child(name_l)
 	return c
 
 
-## Slot de carta pronta (roxa/amarela). Cheio = equipada; contorno = vazio ou disponível.
-func _slot(text: String, col: Color, filled: bool, enabled: bool, height: int, font: int) -> Button:
+## Carta pronta (roxa/amarela). kind: "on" = equipada, virada pra cima · "off" = na pilha ·
+## "back" = ainda não descoberta, de verso · "empty" = lugar vazio na mesa.
+func _slot(text: String, col: Color, kind: String, enabled: bool) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
 	b.disabled = not enabled
-	b.custom_minimum_size.y = height
-	b.add_theme_font_size_override("font_size", font)
-	if filled:
-		_style_button(b, col, UiStyle.INK, 0.0, col.lightened(0.18))
-	else:
-		var edge := col if enabled else col.darkened(0.3)
-		_style_button(b, SLOT_BG, edge, 0.0, SLOT_BG.lightened(0.08), edge)
+	b.add_theme_font_size_override("font_size", 15)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var edge := col if enabled or kind == "on" else col.darkened(0.35)
+	match kind:
+		"on":
+			_style_card(b, UiStyle.PAPER, UiStyle.INK, col, Color.WHITE)
+			b.add_child(_pip(col, true))
+		"off":
+			_style_card(b, SLOT_BG, edge, edge, SLOT_BG.lightened(0.09))
+			b.add_child(_pip(edge, false))
+		"back":
+			_style_card(b, UiStyle.INK_SOFT, col.lightened(0.2), edge, UiStyle.INK_SOFT)
+			b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+			b.add_child(_card_back(col))
+		_:
+			# lugar vazio: só a marca de onde uma carta caberia
+			for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+				var sb := UiStyle.box(Color(0, 0, 0, 0.16))
+				sb.set_corner_radius_all(RADIUS)
+				sb.border_color = Color(col.r, col.g, col.b, 0.22)
+				sb.set_border_width_all(1)
+				b.add_theme_stylebox_override(state, sb)
 	return b
+
+
+## Coloca a carta na cascata da coluna: só STRIP pixels dela ficam à mostra, a próxima cobre o resto.
+## A equipada sai da pilha pro lado e fica levemente torta, como carta puxada à mão.
+func _seat(col: Control, card: Button, n: int, pulled: bool) -> void:
+	var seat := Control.new()
+	seat.custom_minimum_size = Vector2(COL_W, STRIP)
+	seat.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.name = "Card%d" % n
+	card.position = Vector2(PULL if pulled else 0, 0)
+	# lugar vazio não é carta: fica raso, sem entrar na cascata
+	card.size = Vector2(COL_W - PULL, STRIP - 5 if card.text == "" else CARD_H)
+	card.pivot_offset = card.size * 0.5
+	if pulled:
+		card.rotation_degrees = 0.7 if n % 2 == 0 else -0.7
+	seat.add_child(card)
+	col.add_child(seat)
+
+
+func _spacer(h: int) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size.y = h
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return c
+
+
+## Naipe no canto da carta: losango, cheio quando a carta está em jogo.
+func _pip(col: Color, filled: bool) -> Control:
+	var p := Panel.new()
+	p.position = Vector2(14, 11)
+	p.size = Vector2(12, 12)
+	p.pivot_offset = Vector2(6, 6)
+	p.rotation_degrees = 45
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := UiStyle.box(col if filled else Color(0, 0, 0, 0))
+	sb.border_color = col
+	sb.set_border_width_all(2)
+	p.add_theme_stylebox_override("panel", sb)
+	return p
+
+
+## Verso de carta: treliça de losangos na cor do tipo, bem apagada.
+func _card_back(col: Color) -> Control:
+	var c := Control.new()
+	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	c.offset_left = 5
+	c.offset_right = -5
+	c.offset_top = 5
+	c.offset_bottom = -5
+	c.clip_contents = true
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var line := Color(col.r, col.g, col.b, 0.2)
+	c.draw.connect(func():
+		var w := c.size.x
+		var h := c.size.y
+		var x := -h
+		while x < w:
+			c.draw_line(Vector2(x, 0), Vector2(x + h, h), line, 1.0)
+			c.draw_line(Vector2(x + h, 0), Vector2(x, h), line, 1.0)
+			x += 12.0)
+	return c
+
+
+## Moldura interna fina: o detalhe que faz um retângulo parecer carta.
+func _inner_frame(size_px: Vector2, col: Color, alpha: float, inset := 4) -> Control:
+	var f := Panel.new()
+	f.position = Vector2(inset, inset)
+	f.size = size_px - Vector2(inset, inset) * 2.0
+	f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := UiStyle.box(Color(0, 0, 0, 0))
+	sb.set_corner_radius_all(maxi(2, RADIUS - inset + 1))
+	sb.border_color = Color(col.r, col.g, col.b, alpha)
+	sb.set_border_width_all(1)
+	f.add_theme_stylebox_override("panel", sb)
+	return f
+
+
+## Título como um baralho: versos empilhados e a carta de cima virada com o nome.
+func _title_deck() -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(200, 50)
+	for k in 3:
+		var back := Panel.new()
+		back.position = Vector2(6 + k * 5, 3 - k * 2)
+		back.size = Vector2(170, 46)
+		back.pivot_offset = back.size * 0.5
+		back.rotation_degrees = [-5.0, 3.5, -1.5][k]
+		back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		back.add_theme_stylebox_override("panel", _card_box(UiStyle.INK_SOFT, UiStyle.PURPLE.darkened(0.35), RADIUS, 2))
+		c.add_child(back)
+	var top := Panel.new()
+	top.position = Vector2(12, 0)
+	top.size = Vector2(172, 48)
+	top.pivot_offset = top.size * 0.5
+	top.rotation_degrees = -2.0
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_theme_stylebox_override("panel", _card_box(UiStyle.PAPER, UiStyle.INK, RADIUS, 2))
+	c.add_child(top)
+	top.add_child(_inner_frame(top.size, UiStyle.INK, 0.3))
+	var t := UiStyle.text("CARTAS", 28, UiStyle.INK)
+	t.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	top.add_child(t)
+	return c
 
 
 func _white_card(i: int, slot: int, w: Dictionary) -> Control:
 	var filled: bool = w["t"] != "" and w["a"] != ""
 	var card := PanelContainer.new()
-	var sb := UiStyle.box(UiStyle.PAPER if filled else SLOT_BG, 0.0, 8, 8)
-	if not filled:
-		sb.border_color = UiStyle.PAPER.darkened(0.62)
-		sb.set_border_width_all(2)
+	card.name = "White%d" % slot
+	# preenchida = carta clara virada pra cima; em branco = carta escura esperando as peças
+	var sb := _card_box(UiStyle.PAPER if filled else SLOT_BG, UiStyle.INK if filled else UiStyle.PAPER.darkened(0.6), 8, 2)
+	sb.content_margin_left = 9
+	sb.content_margin_right = 9
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
 	card.add_theme_stylebox_override("panel", sb)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	card.add_child(row)
 	# a ordem das brancas é a prioridade, então o número faz parte da carta
-	var num := UiStyle.text(str(slot + 1), 24, UiStyle.INK if filled else UiStyle.PAPER.darkened(0.5))
-	num.custom_minimum_size.x = 16
+	# o número vai num selo redondo no canto, como o valor de uma carta
+	var seal := PanelContainer.new()
+	seal.custom_minimum_size = Vector2(26, 26)
+	seal.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	seal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ssb := UiStyle.box(UiStyle.INK if filled else Color(0, 0, 0, 0))
+	ssb.set_corner_radius_all(13)
+	ssb.border_color = UiStyle.INK if filled else UiStyle.PAPER.darkened(0.5)
+	ssb.set_border_width_all(2)
+	seal.add_theme_stylebox_override("panel", ssb)
+	var num := UiStyle.text(str(slot + 1), 15, UiStyle.PAPER if filled else UiStyle.PAPER.darkened(0.4))
 	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(num)
+	seal.add_child(num)
+	row.add_child(seal)
 
 	var inner := VBoxContainer.new()
 	inner.add_theme_constant_override("separation", 5)
@@ -316,7 +479,7 @@ func _piece_row(tag: String, tag_col: Color, current: String, order: Array, name
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	var l := UiStyle.text(tag, 10, tag_col)
-	l.custom_minimum_size.x = 50
+	l.custom_minimum_size.x = 46
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(l)
 
@@ -358,12 +521,42 @@ func _maybe_pulse(node: Control, key: String) -> void:
 	node.create_tween().tween_property(node, "modulate:a", 1.0, 0.18)
 
 
-func _style_button(b: Button, bg: Color, fg: Color, skew := 0.0, hover_bg := Color(-1, 0, 0), border := Color(-1, 0, 0)) -> void:
+## Fundo de carta: cantos arredondados, borda e uma sombra curta de carta apoiada na mesa.
+func _card_box(bg: Color, border: Color, radius := RADIUS, width := 2) -> StyleBoxFlat:
+	var sb := UiStyle.box(bg)
+	sb.set_corner_radius_all(radius)
+	sb.border_color = border
+	sb.set_border_width_all(width)
+	sb.shadow_color = Color(0, 0, 0, 0.35)
+	sb.shadow_size = 3
+	sb.shadow_offset = Vector2(0, 2)
+	sb.anti_aliasing = true
+	return sb
+
+
+## Carta clicável da cascata: o título fica na faixa de cima, que é a parte que aparece.
+func _style_card(b: Button, bg: Color, fg: Color, border: Color, hover_bg: Color) -> void:
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		var sb := _card_box(hover_bg if state == "hover" or state == "pressed" else bg, border)
+		sb.content_margin_left = 36
+		sb.content_margin_right = 10
+		sb.content_margin_top = 5
+		# o texto fica na faixa visível, não no meio da carta inteira
+		sb.content_margin_bottom = CARD_H - STRIP + 3
+		b.add_theme_stylebox_override(state, sb)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_disabled_color"]:
+		b.add_theme_color_override(c, fg)
+
+
+func _style_button(b: Button, bg: Color, fg: Color, skew := 0.0, hover_bg := Color(-1, 0, 0), border := Color(-1, 0, 0), radius := 0) -> void:
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		var col := bg
 		if hover_bg.r >= 0.0 and (state == "hover" or state == "pressed"):
 			col = hover_bg
 		var sb := UiStyle.box(col, skew, 8, 4)
+		if radius > 0:
+			sb.set_corner_radius_all(radius)
+			sb.anti_aliasing = true
 		if border.r >= 0.0:
 			sb.border_color = border
 			sb.set_border_width_all(2)

@@ -6,6 +6,8 @@ class_name UiStyle
 ##    DANGER = perigo/pouca vida · CYAN = seguindo carta · YELLOW = confuso/atenção
 ##    PURPLE = carta roxa · BOSS = tudo que é do boss.
 ## 4. Formas chapadas e inclinadas (skew), sem cantos arredondados, sem gradiente.
+##    Exceção: o menu de cartas (ui/deck_menu.gd) é uma mesa de baralho, então lá as
+##    cartas têm cantos arredondados, moldura interna e sombra curta. As cores seguem as mesmas.
 
 const INK := Color(0.07, 0.08, 0.16)
 const INK_SOFT := Color(0.14, 0.15, 0.27)
