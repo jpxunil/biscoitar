@@ -95,8 +95,8 @@ func setup(game) -> void:
 	keys.add_theme_constant_override("separation", 7)
 	keys.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(keys)
-	for pair in [["WASD", "mover"], ["J", "atacar"], ["ESPAÇO", "esquiva"], ["TAB", "trocar"], ["1-4", "focar"],
-			["K", "habilidade"], ["L", "especial"], ["U", "biscoitar"], ["I", "limit break"], ["Q", "reunir"], ["E", "espalhar"], ["R", "manter"], ["F", "atacar livre"]]:
+	for pair in [["WASD", "mover"], ["J", "atacar"], ["ESPAÇO", "esquiva"], ["1-4", "trocar"], ["F1-F4", "alvo"],
+			["K", "skill"], ["L", "especial"], ["U", "biscoitar"], ["I", "limit"], ["Q", "reunir"], ["E", "espalhar"], ["R", "manter"], ["F", "atacar livre"]]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
 		var key := UiStyle.slab(UiStyle.INK_SOFT, 0.0, 8, 2)

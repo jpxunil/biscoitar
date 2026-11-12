@@ -160,7 +160,7 @@ func _build_party() -> void:
 func _on_card_input(event: InputEvent, i: int) -> void:
 	if not (event is InputEventMouseButton) or not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
 		return
-	g.select_target(i)
+	g.pick_hero(i)
 
 
 func _build_legend() -> void:

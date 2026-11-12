@@ -111,6 +111,7 @@ const SKILLS := {
 }
 ## Cast curto trava o personagem no lugar; cast longo pode ser interrompido andando.
 const LOCKED_CAST := 1.0
+const COOKIE_COL := Color(0.86, 0.6, 0.3)
 const SKILL_KEYS := ["J", "K", "L", "U"]
 const AUTO_EVERY := 2.0
 const AUTO_DMG := 6.0
@@ -180,6 +181,8 @@ var prep := true
 var intro_left := 0.0
 var ended := false
 var won := false
+## Fúria: o tempo do DPS check acabou e os biscoitos estão caindo.
+var fury := false
 var log_lines: Array[String] = []
 var auto_t := 0.0
 var target: Unit
@@ -206,6 +209,9 @@ func _ready() -> void:
 	steps = boss_def["steps"]
 	boss_max = boss_def["hp"]
 	enrage = boss_def["enrage"]
+	for a in args:
+		if a.begins_with("--enrage="):
+			enrage = float(a.trim_prefix("--enrage="))
 	boss_hp = boss_max
 
 	_build_world()
@@ -350,16 +356,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		if k == KEY_ENTER or k == KEY_KP_ENTER:
 			retry()
 		return
+	if fury:
+		return
 	if prep:
 		if k == KEY_ENTER or k == KEY_KP_ENTER:
 			start_fight()
 		return
 	match k:
 		KEY_TAB: _cycle_ctrl()
-		KEY_1: select_target(0)
-		KEY_2: select_target(1)
-		KEY_3: select_target(2)
-		KEY_4: select_target(3)
+		KEY_1: pick_hero(0)
+		KEY_2: pick_hero(1)
+		KEY_3: pick_hero(2)
+		KEY_4: pick_hero(3)
+		KEY_F1: select_target(0)
+		KEY_F2: select_target(1)
+		KEY_F3: select_target(2)
+		KEY_F4: select_target(3)
 		KEY_Q: give_order("gather")
 		KEY_E: give_order("spread")
 		KEY_R: give_order("hold")
@@ -431,13 +443,16 @@ func set_ctrl(i: int) -> void:
 
 
 ## Tab: assume o herói focado (card ou teclas 1-4). Sem foco, vai pro próximo vivo.
+## Clique no card ou teclas 1-4: assume o herói na hora.
+## Quem está morto (ou você mesmo) não dá pra assumir, então vira alvo (ex.: Reviver).
+func pick_hero(i: int) -> void:
+	if i != ctrl and units[i].alive:
+		set_ctrl(i)
+	else:
+		select_target(i)
+
+
 func _cycle_ctrl() -> void:
-	if sel >= 0 and sel != ctrl and units[sel].alive:
-		var want := sel
-		set_ctrl(want)
-		if ctrl == want:
-			select_target(want)  # trocou: o foco já cumpriu o papel
-		return
 	for n in range(1, 4):
 		var i := (ctrl + n) % 4
 		if units[i].alive:
@@ -494,7 +509,7 @@ func _process(delta: float) -> void:
 			_print_report()
 			get_tree().quit()
 			return
-	if prep or ended:
+	if prep or ended or fury:
 		return
 	if intro_left > 0.0:
 		intro_left -= delta
@@ -533,9 +548,7 @@ func _process(delta: float) -> void:
 
 	# DPS check: acabou o tempo, acabou a luta
 	if fight_time >= enrage and not ended:
-		hud.flash(Color(1.0, 0.2, 0.35))
-		for u in units:
-			kill(u, "Fúria: o tempo acabou", true)
+		_start_fury()
 		return
 
 	# arco no chão = até onde o personagem controlado alcança o boss
@@ -1528,7 +1541,11 @@ func kill(u: Unit, reason: String, force := false) -> void:
 		if o.alive:
 			any_alive = true
 	if not any_alive:
-		_end(false)
+		if fury:
+			# deixa o último biscoito aparecer antes da tela de wipe
+			get_tree().create_timer(1.0).timeout.connect(_end.bind(false))
+		else:
+			_end(false)
 	elif u.controlled:
 		u.controlled = false
 		for n in range(1, 4):
@@ -1770,6 +1787,73 @@ func _resolve_cataclysm() -> void:
 		shelter_node.queue_free()
 		shelter_node = null
 	shelter_pos = null
+
+
+## Fim do DPS check: o boss chama os biscoitos e cada um cai em cima de alguém.
+func _start_fury() -> void:
+	fury = true
+	boss.casting = true
+	boss.six_seven = false
+	hud.flash(Color(1.0, 0.2, 0.35) * Color(1, 1, 1, 0.45))
+	var say := Fx.label(fx_root, "BORA BISCOITAR!", Vector3(0, 6.4, -9.5), 120)
+	say.modulate = COOKIE_COL.lightened(0.45)
+	say.outline_modulate = Color(0.16, 0.08, 0.04)
+	say.outline_size = 28
+	say.scale = Vector3.ONE * 0.3
+	var st := say.create_tween()
+	st.tween_property(say, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	st.tween_interval(2.6)
+	st.tween_property(say, "modulate:a", 0.0, 0.4)
+	st.tween_callback(say.queue_free)
+
+	# um biscoito mirado em cada herói vivo, um depois do outro
+	var delay := 0.9
+	for u in units:
+		if u.alive:
+			_drop_cookie(u.position, delay, 1.25, u)
+			delay += 0.32
+	# e uma chuva pelo resto da arena
+	for n in 16:
+		var a := randf() * TAU
+		var r := sqrt(randf()) * ARENA_R
+		_drop_cookie(Vector3(cos(a) * r, 0, sin(a) * r), randf_range(0.7, delay + 0.6), randf_range(0.7, 1.1), null)
+
+
+func _drop_cookie(at: Vector3, delay: float, size: float, victim: Unit) -> void:
+	var ground := Vector3(at.x, 0.0, at.z)
+	# aviso no chão: fecha junto com a queda
+	var warn_mat := Fx.mat(Color(1.0, 0.25, 0.3, 0.0), 1.2, true)
+	var warn := Fx.inst(fx_root, Fx.disc(size * 1.25), warn_mat, ground + Vector3(0, 0.04, 0))
+	var cookie := Node3D.new()
+	fx_root.add_child(cookie)
+	Fx.inst(cookie, Fx.cyl(size, size * 0.92, size * 0.32), Fx.mat(COOKIE_COL, 0.25))
+	var chip := Fx.mat(Color(0.25, 0.13, 0.07), 0.0)
+	for n in 7:
+		var a := n * TAU / 7.0 + randf() * 0.5
+		var r := size * randf_range(0.2, 0.75)
+		for side in [1.0, -1.0]:
+			Fx.inst(cookie, Fx.sphere(size * 0.13), chip, Vector3(cos(a) * r, size * 0.16 * side, sin(a + side) * r))
+	var from := ground + Vector3(randf_range(-4.0, 4.0), 22.0, -11.0)
+	cookie.position = from
+	cookie.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
+	cookie.visible = false
+	var fall := 0.55
+	var tw := cookie.create_tween()
+	tw.tween_interval(delay)
+	tw.tween_callback(func() -> void: cookie.visible = true)
+	tw.set_parallel(true)
+	tw.tween_property(cookie, "position", ground + Vector3(0, size * 0.3, 0), fall).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(cookie, "rotation", cookie.rotation + Vector3(7.0, 2.0, 5.0), fall)
+	tw.tween_property(warn_mat, "albedo_color:a", 0.5, fall)
+	tw.set_parallel(false)
+	tw.tween_callback(func() -> void:
+		warn.queue_free()
+		cookie.queue_free()
+		_burst(ground, COOKIE_COL.lightened(0.2), size * 2.6)
+		if victim != null and victim.alive:
+			_popup(9999, Color(1.0, 0.3, 0.35), 90, victim.position + Vector3(0, 2.4, 0))
+			victim.hp = 0.0
+			kill(victim, "Fúria: o tempo acabou", true))
 
 
 func _burst(p: Vector3, col: Color, radius: float) -> void:
