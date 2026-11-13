@@ -191,13 +191,13 @@ var pips: Control
 var demo_tag: Control
 var talk_box: Control
 var talk_text: Label
-var talk_next: Label
+var talk_next: PanelContainer
 var keys_hint: Label
 var card_pop: Control
 var cards: CardsScreen
 var blocker: Control
 var black: ColorRect
-var black_hint: Label
+var black_hint: PanelContainer
 var pause_menu: PauseMenu
 var options: OptionsScreen
 var guides: Array[Node3D] = []
@@ -759,7 +759,8 @@ func _process(delta: float) -> void:
 		if card.dead != (not u.alive):
 			card.dead = not u.alive
 	if talk_next.visible:
-		talk_next.modulate.a = 0.55 + 0.45 * sin(_t * 5.0)
+		# a placa fica sólida (papel não pisca): só balança um pouco pra chamar o olho
+		talk_next.position.y = 106.0 + 2.5 * sin(_t * 5.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1014,10 +1015,11 @@ func _build_ui() -> void:
 	talk_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	talk_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	talk_box.add_child(talk_text)
-	talk_next = Ink.title("ENTER  ▶", 15, Ink.COIN)
-	talk_next.position = Vector2(770, 96)
-	talk_next.size = Vector2(110, 22)
-	talk_next.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	# "ENTER" numa placa de papel inclinada, como na tela de fim da luta (regra 1 do UiStyle:
+	# texto nunca fica solto, sempre em cima de uma placa INK ou PAPER)
+	talk_next = UiStyle.slab(UiStyle.PAPER, UiStyle.SKEW, 20, 3)
+	talk_next.add_child(UiStyle.text("ENTER  ▶", 15, UiStyle.INK))
+	talk_next.position = Vector2(756, 106)
 	talk_box.add_child(talk_next)
 	talk_box.visible = false
 
@@ -1047,13 +1049,11 @@ func _build_ui() -> void:
 	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	black.visible = false
 	ui.add_child(black)
-	black_hint = Ink.text("ENTER", 14, UiStyle.DIM)
-	black_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	black_hint.offset_left = -100
-	black_hint.offset_right = 100
-	black_hint.offset_top = -60
-	black_hint.offset_bottom = -36
-	black_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	black_hint = UiStyle.slab(UiStyle.PAPER, UiStyle.SKEW, 20, 3)
+	black_hint.add_child(UiStyle.text("ENTER", 15, UiStyle.INK))
+	black_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE)
+	black_hint.offset_top -= 44
+	black_hint.offset_bottom -= 44
 	black_hint.visible = false
 	black.add_child(black_hint)
 
