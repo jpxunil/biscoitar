@@ -55,14 +55,18 @@ const START_POS := [
 	Vector3(1.3, 0, -5.2), Vector3(3.0, 0, 1.5),
 	Vector3(-1.9, 0, -5.0), Vector3(-3.0, 0, 1.5),
 ]
+## A party é livre (quaisquer 4 heróis), então o lugar de atacar depende de quem ocupa o lugar:
+## quem luta de perto usa MELEE_POS e quem luta de longe usa RANGED_POS, pelo índice na party.
+const MELEE_POS := [Vector3(1.3, 0, -6.2), Vector3(3.1, 0, -6.3), Vector3(-1.9, 0, -6.0), Vector3(-3.2, 0, -6.3)]
+const RANGED_POS := [Vector3(1.6, 0, 1.2), Vector3(3.6, 0, 0.6), Vector3(-1.6, 0, 1.4), Vector3(-3.6, 0, 0.2)]
 
 const UNIT_DEFS := [
 	{"name": "Paladino", "range": MELEE_RANGE, "key": "tank", "color": Color(0.3, 0.5, 1.0), "hp": 160.0, "melee": true, "ai_dps": 6.0, "hit": 8.0, "tank": true},
-	{"name": "Healer", "range": RANGED_RANGE, "key": "healer", "color": Color(0.4, 0.95, 0.55), "hp": 90.0, "melee": false, "ai_dps": 3.0, "hit": 6.0},
+	{"name": "Soulflame", "range": RANGED_RANGE, "key": "healer", "color": Color(0.4, 0.95, 0.55), "hp": 90.0, "melee": false, "ai_dps": 3.0, "hit": 6.0},
 	{"name": "Assassina", "range": MELEE_RANGE, "key": "assassina", "color": Color(0.78, 0.38, 1.0), "hp": 100.0, "melee": true, "ai_dps": 10.0, "hit": 17.0},
 	{"name": "Maga", "range": RANGED_RANGE, "key": "maga", "color": Color(1.0, 0.72, 0.25), "hp": 90.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
-	# segunda tank: ocupa o lugar 0 da party quando Knowledge.tank_pick aponta pra ela
-	{"name": "Gothic Nurse", "range": MELEE_RANGE, "key": "nurse", "color": Color(0.36, 0.4, 0.95), "hp": 112.0, "melee": true, "ai_dps": 6.0, "hit": 8.0, "tank": true},
+	# os quatro da luta vêm de Knowledge.fight_party(): qualquer combinação destes heróis
+	{"name": "Malpractice", "range": MELEE_RANGE, "key": "nurse", "color": Color(0.36, 0.4, 0.95), "hp": 80.0, "melee": true, "ai_dps": 6.0, "hit": 8.0, "tank": true},
 ]
 
 ## Cada passo: t = tipo, dur = quanto dura até o próximo. Ataques de desvio:
@@ -161,20 +165,37 @@ const STEPS_ELEMENT := [
 const PROVOKE := {"name": "Bora Biscoitar", "cd": 20.0}
 ## Uma lista por herói, na ordem dos slots da barra (até Binds.SKILL_SLOTS). null = slot sem habilidade.
 ## As teclas de cada slot são do jogador (scripts/binds.gd); o padrão é J, K, L, U, O, P.
-## O slot 4 do Tank é o Bora Biscoitar: é ele quem puxa o boss pra si.
+## Provocar (Provocação do Paladino, Emergency Response da Malpractice) é o "Bora Biscoitar":
+## quem usa puxa o boss pra si.
 const SKILLS := {
-	"tank": [{"name": "Golpe", "cd": 1.0, "dmg": 22.0},
-		{"name": "Mitigação", "cd": 10.0}, null, PROVOKE],
-	# Gothic Nurse (tank de sangue): J estoca fraco e rouba vida, K é o parry, L rouba vida fixa e
-	# junta acúmulos, U avança e provoca, O é o ultimate (não tem recarga: gasta PARTY_NEED acúmulos).
+	# Paladino: o mais simples do jogo. Sem recurso nem combo: bate, provoca e aperta a defesa.
+	"tank": [{"name": "Golpe de Juramento", "cd": 1.5, "dmg": 30.0},
+		{"name": "Baque do Escudo", "cd": 8.0, "dmg": 55.0},
+		{"name": "Provocação", "cd": 15.0},
+		{"name": "Solo Consagrado", "cd": 18.0},
+		{"name": "Égide", "cd": 25.0},
+		{"name": "Muralha da Fé", "cd": 60.0}],
+	# Malpractice (tank de sangue, "de papel"): cada golpe custa vida dela (SELF_COST). O slot 1 estoca
+	# e rouba um fio de vida, o 2 é o parry, o 3 rouba vida fixa e junta acúmulos, o 4 avança e provoca,
+	# o 5 é o ultimate (não tem recarga: gasta PARTY_NEED acúmulos). Quanto menos vida, mais dano.
 	"nurse": [{"name": "Syringe Poke", "cd": 1.0, "dmg": 8.0},
 		{"name": "Blood Taste", "cd": 20.0}, {"name": "Blood Consumed", "cd": 5.0, "dmg": 40.0},
 		{"name": "Emergency Response", "cd": 8.0}, {"name": "Blood Party", "cd": 0.0, "stacks": 20}],
-	"healer": [{"name": "Faísca", "cd": 1.0, "dmg": 14.0, "cast": 0.5},
-		{"name": "Cura", "cd": 4.0, "cast": 0.5}, {"name": "Reviver", "cd": 25.0, "cast": 1.5},
-		{"name": "Cura em Área", "cd": 8.0, "cast": 1.0}, {"name": "Escudo", "cd": 20.0, "cast": 1.0}],
-	"assassina": [{"name": "Corte", "cd": 1.0, "dmg": 46.0},
-		{"name": "Execução", "cd": 7.0, "dmg": 70.0}, {"name": "Lâmina Final", "cd": 20.0, "dmg": 260.0, "cast": 2.0}, null],
+	# Soulflame: healer direta, sem recurso. "ai_cd" é a recarga quando quem usa é a IA.
+	"healer": [{"name": "Fagulha Espiritual", "cd": 1.0, "dmg": 12.0},
+		{"name": "Toque de Brasa", "cd": 1.0, "cast": 1.5, "ai_cd": 3.5},
+		{"name": "Lareira Celestial", "cd": 18.0},
+		{"name": "Manto de Cinzas", "cd": 20.0},
+		{"name": "Asa da Fênix", "cd": 30.0},
+		{"name": "Renascimento", "cd": 60.0}],
+	# Assassina: velocidade pura. O Talho (slot 1) bate MUITO mais forte do lado certo da boss:
+	# três de um lado, três do outro (unit.side_need / side_left), pra sempre.
+	"assassina": [{"name": "Talho Relâmpago", "cd": 0.6, "dmg": 10.0},
+		{"name": "Passo Rasante", "cd": 5.0, "dmg": 35.0},
+		{"name": "Garras Cruzadas", "cd": 6.0, "dmg": 18.0},
+		{"name": "Dança Carmesim", "cd": 12.0, "dmg": 65.0},
+		{"name": "Golpe de Misericórdia", "cd": 15.0, "dmg": 120.0},
+		{"name": "Frenesi da Fera", "cd": 60.0}],
 	"maga": [{"name": "Raio", "cd": 1.0, "dmg": 34.0, "cast": 0.5},
 		{"name": "Meteoro", "cd": 7.0, "dmg": 55.0, "cast": 0.5}, {"name": "Ruína", "cd": 20.0, "dmg": 240.0, "cast": 2.0}, null],
 }
@@ -198,15 +219,57 @@ const COOKIE_COL := Color(0.86, 0.6, 0.3)
 const AUTO_EVERY := 2.0
 const AUTO_DMG := 6.0
 const GUARD_TIME := 4.0
-## Kit da Gothic Nurse.
+## Kit do Paladino.
+const AEGIS_TIME := 6.0        # Égide: mitigação de 60% (MITIGATION) ...
+const AEGIS_REGEN := 5.0       # ... e essa vida por segundo enquanto dura
+const WALL_TIME := 8.0         # Muralha da Fé: a party toda ...
+const WALL_MULT := 0.8         # ... toma 20% menos dano
+const WALL_SHOW := 3.0         # ... e a cruz dourada fica esse tempo no ar
+const HOLY_TIME := 6.0         # Solo Consagrado: quanto a área dura
+const HOLY_R := 4.6
+const HOLY_TICK := 1.0
+const HOLY_DMG := 9.0          # ... por batida, se a boss estiver ao alcance da área
+const GOLD := Color(1.0, 0.82, 0.3)
+## Kit da Assassina.
+const SIDE_HITS := 3           # Talho Relâmpago: golpes fortalecidos de cada lado da boss
+const SIDE_MULT := 2.5         # ... +150% de dano no Talho dado do lado certo
+const SIDE_MIN := 0.6          # ... quão pra fora do meio (em x) já conta como um lado
+const CLAW_HITS := 3           # Garras Cruzadas: três cortes ...
+const CLAW_GAP := 0.1          # ... com esse intervalo
+const MERCY_WINDOW := 0.35     # Golpe de Misericórdia: janela de parry antes do corte sair
+const FRENZY_TIME := 8.0       # Frenesi da Fera
+const FRENZY_DMG := 1.15       # ... +15% de dano
+const FRENZY_HASTE := 0.5      # ... e o Talho recarrega na metade do tempo
+const SIDE_COL := Color(0.3, 1.0, 0.55)
+## Kit da Soulflame.
+const FLAME := Color(0.3, 0.95, 0.8)
+const HEARTH_TIME := 8.0       # Lareira Celestial: quanto dura ...
+const HEARTH_R := 4.5
+const HEARTH_HPS := 7.0        # ... e quanto cura por segundo quem está dentro
+const PHOENIX_HEAL := 110.0    # Asa da Fênix
+const REBIRTH_HEAL := 70.0     # Renascimento: cura em todos ...
+const REBIRTH_DMG := 90.0      # ... dano médio na boss ...
+const REBIRTH_DOT := 6.0       # ... e um DoT leve por segundo ...
+const REBIRTH_DOT_TIME := 12.0 # ... durante esse tempo
+## Em que slot fica o golpe forte que a IA com a carta Rotação solta, e que a carta Golpe Lapidado melhora.
+const BIG_SLOT := {"assassina": 4, "maga": 2}
+## Em que slot cada tank guarda a defesa e a provocação (as cartas Guarda e Biscoiteiro usam isso).
+const DEF_SLOT := {"tank": 4, "nurse": 1}
+const PROVOKE_SLOT := {"tank": 2, "nurse": 3}
+## Kit da Malpractice. Ela é "de papel": pouca vida e cada golpe custa sangue (SELF_COST).
+## Quem erra o parry ou segura mal as recargas morre do próprio dano; quem joga bem vive no fio
+## e bate mais forte por isso (LOW_HP_BONUS).
+const SELF_COST := {"Syringe Poke": 4.0, "Blood Consumed": 8.0, "Emergency Response": 6.0}
+const LOW_HP_BONUS := 0.6      # +60% de dano com a vida em LOW_HP_FLOOR ou menos; some com a vida cheia
+const LOW_HP_FLOOR := 0.25
 const BLOOD := Color(0.86, 0.08, 0.2)
 const POKE_STEAL := 0.0001     # Syringe Poke: rouba 0,01% da vida ATUAL da boss por estocada
 const TASTE_TIME := 0.5        # Blood Taste: janela do parry
-const TASTE_HP := 1.6          # ... vida (e vida máxima) vão a 160% da máxima normal
-const TASTE_KEEP := 0.5        # ... parry perfeito guarda metade da vida ganha
+const TASTE_HP := 2.3          # ... vida (e vida máxima) vão a 230% da máxima normal: com 80 de vida, é o que aguenta o Esmagar
+const TASTE_KEEP := 0.3        # ... parry perfeito guarda 30% da vida ganha
 const TASTE_CD_PARRY := 10.0   # ... e a recarga cai de 20 s pra 10 s
 const TASTE_STACKS := 5
-const CONSUMED_STEAL := 14.0   # Blood Consumed: vida fixa roubada por acerto
+const CONSUMED_STEAL := 18.0   # Blood Consumed: vida fixa roubada por acerto (custa 8: saldo de +10)
 const CONSUMED_STACKS := 2
 const RUSH_DIST := 20.0        # Emergency Response: alcance do avanço
 const RUSH_DMG := 12.0
@@ -319,6 +382,12 @@ var volley_done := false
 var cast_name := ""
 
 var hazards: Array = []
+var holy: Array = []  # áreas de Solo Consagrado ativas
+var hearths: Array = []  # Lareiras Celestiais acesas
+var boss_dots: Array = []  # efeitos de dano por segundo na boss (ver add_dot)
+var side_mark: Node3D  # Assassina: marca do lado da boss que está valendo
+var side_pips: Array = []
+var side_label: Label3D
 var stacks: Array = []  # círculos laranjas ativos
 var enrage_k := 0.0
 var haste := 1.0
@@ -400,8 +469,7 @@ func _ready() -> void:
 	for a in args:
 		if a.begins_with("--hero="):
 			Knowledge.start_hero = clampi(int(a.trim_prefix("--hero=")), 0, Knowledge.HEROES.size() - 1)
-			if Knowledge.is_tank(Knowledge.start_hero):
-				Knowledge.tank_pick = Knowledge.start_hero
+			Knowledge.ensure_in_party(Knowledge.start_hero)
 		if a.begins_with("--enrage="):
 			enrage = float(a.trim_prefix("--enrage="))
 	boss_hp = boss_max
@@ -526,6 +594,17 @@ func _build_world() -> void:
 	fx_root = Node3D.new()
 	add_child(fx_root)
 
+	# Assassina: marca do lado da boss em que o Talho Relâmpago está valendo
+	side_mark = Node3D.new()
+	add_child(side_mark)
+	Fx.inst(side_mark, Fx.torus(1.05, 1.25), Fx.mat(SIDE_COL, 3.5, true), Vector3(0, 0.06, 0))
+	Fx.inst(side_mark, Fx.disc(1.05), Fx.mat(Color(SIDE_COL.r, SIDE_COL.g, SIDE_COL.b, 0.2), 0.0, true), Vector3(0, 0.05, 0))
+	for n in SIDE_HITS:
+		side_pips.append(Fx.inst(side_mark, Fx.sphere(0.2), Fx.mat(SIDE_COL, 4.0, true), Vector3(cos(n * TAU / SIDE_HITS) * 0.6, 1.7, sin(n * TAU / SIDE_HITS) * 0.6)))
+	side_label = Fx.label(side_mark, "", Vector3(0, 2.5, 0), 40)
+	side_label.modulate = SIDE_COL
+	side_mark.visible = false
+
 
 func _build_units() -> void:
 	for i in 4:
@@ -533,10 +612,10 @@ func _build_units() -> void:
 		add_child(u)
 		u.setup(i, UNIT_DEFS[Knowledge.hero_at(i)])
 		u.hero = Knowledge.hero_at(i)
-		u.position = START_POS[i]
+		u.position = _atk_pos(u) + Vector3(0, 0, 0.6 if u.melee else 0.9)
 		u.face(BOSS_POINT - u.position)
 		units.append(u)
-	ctrl = Knowledge.slot_of(Knowledge.start_hero)
+	ctrl = maxi(0, Knowledge.slot_of(Knowledge.start_hero))
 	units[ctrl].set_controlled(true)
 
 
@@ -666,22 +745,21 @@ func _test_decks() -> void:
 			Knowledge.equip(i, "mark")
 
 
-## `i` é o herói (índice em Knowledge.HEROES). Se for uma tank diferente da que está montada,
-## a cena precisa recarregar pra trocar o boneco e o HUD: devolve false e a luta começa sozinha depois.
+## Onde este herói fica pra atacar: perto da boss se luta de perto, mais atrás se luta de longe.
+func _atk_pos(u: Unit) -> Vector3:
+	return MELEE_POS[u.idx] if u.melee else RANGED_POS[u.idx]
+
+
+## `i` é o herói (índice em Knowledge.HEROES) que o jogador vai controlar no começo da luta.
+## Devolve false se ele não está na party.
 func select_hero(i: int) -> bool:
-	Knowledge.start_hero = i
-	if Knowledge.is_tank(i):
-		Knowledge.tank_pick = i
-	if units[0].hero != Knowledge.tank_pick:
-		Knowledge.autostart = true
-		Knowledge.screen = "cards"
-		Knowledge.save()
-		get_tree().reload_current_scene()
+	var at := Knowledge.slot_of(i)
+	if at < 0:
 		return false
-	var slot := Knowledge.slot_of(i)
+	Knowledge.start_hero = i
 	units[ctrl].set_controlled(false)
-	ctrl = slot
-	units[slot].set_controlled(true)
+	ctrl = at
+	units[at].set_controlled(true)
 	return true
 
 
@@ -831,6 +909,9 @@ func _process(delta: float) -> void:
 	_tick_towers(delta)
 	_tick_buster(delta)
 	_tick_pairs(delta)
+	_tick_holy(delta)
+	_tick_hearths(delta)
+	_tick_dots(delta)
 	for u in units:
 		if ended:
 			return
@@ -838,6 +919,15 @@ func _process(delta: float) -> void:
 			continue
 		u.invuln = maxf(0.0, u.invuln - delta)
 		u.guard_t = maxf(0.0, u.guard_t - delta)
+		u.wall_t = maxf(0.0, u.wall_t - delta)
+		u.frenzy_t = maxf(0.0, u.frenzy_t - delta)
+		if u.parry_t > 0.0:
+			u.parry_t -= delta
+			if u.parry_t <= 0.0 and not u.parry_hit:
+				_mercy_hit(u)
+		if u.regen_t > 0.0:
+			u.regen_t -= delta
+			u.hp = minf(u.max_hp, u.hp + AEGIS_REGEN * delta)
 		_tick_blood(u, delta)
 		if ended:
 			return
@@ -881,6 +971,7 @@ func _process(delta: float) -> void:
 	floor_mat.set_shader_parameter("melee_r", me.atk_range)
 	floor_mat.set_shader_parameter("melee_on", 1.0 if me.alive else 0.0)
 	floor_mat.set_shader_parameter("melee_in", 1.0 if _in_range(me) else 0.0)
+	_tick_side_mark()
 
 
 func _print_report() -> void:
@@ -1007,7 +1098,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	var rot_card: bool = Knowledge.has(u.hero, "dps") and (u.key == "assassina" or u.key == "maga")
 	if careful and u.channel_t > 0.0 and u.channel_slot >= 0:
 		# o golpe forte da Rotação também é largado se uma mecânica de juntar começar
-		var must_move: bool = rot_card and u.channel_slot == 2 and not stacks.is_empty()
+		var must_move: bool = rot_card and u.channel_slot == BIG_SLOT.get(u.key, -1) and not stacks.is_empty()
 		if must_move or _danger_at(u.position, u, true, 0.1):
 			u.skill_cd[u.channel_slot] = 0.0
 			u.channel_t = 0.0
@@ -1035,7 +1126,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		goal = TOWER_POS[i] if (void_on or void_warn) else SPREAD_POS[i]
 		text = "Espalhando"
 	else:
-		goal = ATK_POS[i]
+		goal = _atk_pos(u)
 		# Sem carta pra isso: o personagem recebe a mecânica e não sabe o que fazer.
 		if (zones_active or phase == "cata") and u.element >= 0:
 			text = "???"
@@ -1099,17 +1190,16 @@ func _tick_ai(u: Unit, delta: float) -> void:
 
 	if u.key == "healer" and not (careful and in_danger):
 		# Escudo de Emergência: só no cast do ESMAGAR, e a tempo de sair antes do golpe
-		if Knowledge.has(u.hero, "eshield") and buster != null and u.skill_cd[4] <= 0.0 and buster["t"] > 1.15 \
+		if Knowledge.has(u.hero, "eshield") and buster != null and u.skill_cd[3] <= 0.0 and buster["t"] > 0.3 \
 				and buster["target"].alive and buster["target"].shield_hp <= 0.0:
-			if use_skill(u, 4, true, buster["target"]):
+			if use_skill(u, 3, true, buster["target"]):
 				u.set_action("Escudo no " + buster["target"].unit_name, 1)
 				return
-		# Reviver Automático: só quando parar 1,5 s não coloca ela em risco
-		if Knowledge.has(u.hero, "revive") and u.skill_cd[2] <= 0.0 and stacks.is_empty() and spreads.is_empty() \
-				and buster == null and not mechanic_active() and hazards.is_empty() and not void_on:
+		# Reviver Automático: o Renascimento (slot 6) levanta quem caiu
+		if Knowledge.has(u.hero, "revive") and u.skill_cd[5] <= 0.0:
 			for o in units:
 				if not o.alive:
-					if use_skill(u, 2, true):
+					if use_skill(u, 5, true):
 						u.set_action("Revivendo " + o.unit_name, 1)
 						return
 					break
@@ -1122,7 +1212,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		# primeiro ele mesmo: healer morto não cura ninguém
 		var ht: Unit = u if u.hp / u.max_hp < Knowledge.LOW_HP else _heal_target()
 		# o Tank é socorrido mais cedo: ele precisa de folga pra aguentar o Esmagar
-		if ht != null and ht.hp / ht.max_hp < low + (0.3 if ht.idx == 0 and not topping else 0.0):
+		if ht != null and ht.hp / ht.max_hp < low + (0.3 if ht.tank and not topping else 0.0):
 			heal_focus = ht
 		# começou a socorrer alguém, termina o serviço antes de parar
 		if heal_focus != null and (not heal_focus.alive or heal_focus.hp / heal_focus.max_hp >= (0.97 if topping else 0.9)):
@@ -1134,18 +1224,20 @@ func _tick_ai(u: Unit, delta: float) -> void:
 				hurt_near += 1
 		if careful and in_danger:
 			pass  # Cautela: primeiro sai do vermelho, depois cura
-		elif hurt_near >= (2 if topping else 3) and u.skill_cd[3] <= 0.0:
-			use_skill(u, 3, true)
+		elif hurt_near >= (2 if topping else 3) and u.skill_cd[2] <= 0.0:
+			use_skill(u, 2, true)  # Lareira Celestial
+		elif heal_focus != null and heal_focus.hp / heal_focus.max_hp < 0.35 and u.skill_cd[4] <= 0.0:
+			use_skill(u, 4, true, heal_focus)  # Asa da Fênix: socorro grande e na hora
 		elif heal_focus != null and u.skill_cd[1] <= 0.0:
-			use_skill(u, 1, true, heal_focus)
+			use_skill(u, 1, true, heal_focus)  # Toque de Brasa
 
-	if u.tank and Knowledge.has(u.hero, "provoke") and target != null and target != u and u.skill_cd[3] <= 0.0:
-		use_skill(u, 3, true)
+	if u.tank and Knowledge.has(u.hero, "provoke") and target != null and target != u and u.skill_cd[PROVOKE_SLOT[u.key]] <= 0.0:
+		use_skill(u, PROVOKE_SLOT[u.key], true)
 
 	# Rotação: o golpe forte sai quando não tem nada pra resolver e ele já está no lugar
-	if rot_card and u.skill_cd[2] <= 0.0 and _in_range(u) and not in_danger and stacks.is_empty() \
+	if rot_card and u.skill_cd[BIG_SLOT[u.key]] <= 0.0 and _in_range(u) and not in_danger and stacks.is_empty() \
 			and (goal == null or u.position.distance_to(goal) < 0.3):
-		if use_skill(u, 2, true):
+		if use_skill(u, BIG_SLOT[u.key], true):
 			u.set_action("Conjurando", 1)
 			return
 
@@ -1190,10 +1282,10 @@ func _shield_fx(u: Unit) -> void:
 ## Cada carta é uma ação única; sem a carta, o herói não sabe resolver aquela mecânica.
 func _card_plan(u: Unit):
 	var i := u.idx
-	# Guarda: aperta a defesa no Esmagar, como você faria. O Paladino solta a Mitigação no fim do cast;
-	# a Gothic Nurse espera o último instante, porque a janela do Blood Taste é de meio segundo.
+	# Guarda: aperta a defesa no Esmagar, como você faria. O Paladino solta a Égide no fim do cast;
+	# a Malpractice espera o último instante, porque a janela do Blood Taste é de meio segundo.
 	if u.tank and Knowledge.has(u.hero, "mitigate") and buster != null and buster["target"] == u and buster["t"] <= (0.35 if u.key == "nurse" else 1.2):
-		use_skill(u, 1, true)
+		use_skill(u, DEF_SLOT[u.key], true)
 	# Quebra-Elo: os dois presos correm em sentidos opostos até a corrente arrebentar
 	if link != null and (link["a"] == u or link["b"] == u) and Knowledge.has(u.hero, "link"):
 		var first: bool = link["a"] == u
@@ -1334,7 +1426,7 @@ func _heal_target() -> Unit:
 	for u in units:
 		if not u.alive or u.hp >= u.max_hp:
 			continue
-		var score := u.hp / u.max_hp - (0.2 if u.idx == 0 else 0.0)
+		var score := u.hp / u.max_hp - (0.2 if u.tank else 0.0)
 		if score < best_score:
 			best_score = score
 			best = u
@@ -1361,7 +1453,7 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 		"Blood Party":
 			if u.stacks < PARTY_NEED or u.party_t > 0.0 or u.taste_t > 0.0:
 				return false
-		"Cura":
+		"Toque de Brasa", "Asa da Fênix":
 			var ht := _heal_target()
 			# na sua mão, o alvo escolhido no card tem prioridade
 			if not by_ai and sel >= 0 and units[sel].alive and units[sel].hp < units[sel].max_hp:
@@ -1371,7 +1463,7 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 			if ht == null:
 				return false
 			u.cast_target = ht
-		"Escudo":
+		"Manto de Cinzas":
 			# no alvo focado; sem foco, em quem o boss está batendo
 			var st: Unit = target if target != null else u
 			if not by_ai and sel >= 0 and units[sel].alive:
@@ -1379,21 +1471,11 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 			if forced != null:
 				st = forced
 			u.cast_target = st
-		"Reviver":
-			var dead: Unit = null
-			for o in units:
-				if not o.alive and (dead == null or o.idx == 0):
-					dead = o
-			if not by_ai and sel >= 0 and not units[sel].alive:
-				dead = units[sel]
-			if dead == null:
-				return false
-			u.cast_target = dead
 
 	if sk.has("cast"):
 		var cast: float = sk["cast"]
 		# Golpe Lapidado: a Maga conjura o golpe forte mais rápido
-		if slot == 2 and u.key == "maga" and Knowledge.has(u.hero, "burst"):
+		if u.key == "maga" and slot == BIG_SLOT["maga"] and Knowledge.has(u.hero, "burst"):
 			cast -= 0.7
 		u.channel_t = cast
 		u.channel_total = cast
@@ -1416,13 +1498,30 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 	var sk: Dictionary = SKILLS[u.key][slot]
 	if not (sk.has("cast") and sk["cast"] < LOCKED_CAST):
-		u.skill_cd[slot] = sk["cd"] * (1.15 if by_ai else 1.0)
+		u.skill_cd[slot] = sk.get("ai_cd", sk["cd"] * 1.15) if by_ai else sk["cd"]
+	if slot == 0 and u.frenzy_t > 0.0:
+		u.skill_cd[slot] *= FRENZY_HASTE
 	match sk["name"]:
-		"Mitigação":
-			u.guard_t = GUARD_TIME
-			_burst(u.position, Color(0.3, 0.9, 1.0), 2.2)
+		"Égide":
+			# ergue o escudo: barreira dourada na frente do corpo (unit.gd), 60% menos dano e regeneração
+			u.guard_t = AEGIS_TIME
+			u.regen_t = AEGIS_TIME
+			u.punch()
+			_burst(u.position, GOLD, 2.8)
+		"Muralha da Fé":
+			for o in units:
+				if o.alive:
+					o.wall_t = WALL_TIME
+					_burst(o.position, GOLD, 2.0)
+			_faith_cross()
+			hud.flash(Color(GOLD.r, GOLD.g, GOLD.b, 0.3))
+			hud.toast("MURALHA DA FÉ", 1.6)
+		"Solo Consagrado":
+			_start_holy(u)
+		"Provocação":
+			_provoke(u, by_ai)
 		"Blood Taste":
-			# a vida vai a 160% por meio segundo; quando acaba, volta ao que era (ver _end_taste)
+			# a vida vai a TASTE_HP por meio segundo; quando acaba, volta ao que era (ver _end_taste)
 			u.taste_prev = u.hp
 			u.max_hp = u.base_hp * TASTE_HP
 			u.hp = u.max_hp
@@ -1455,7 +1554,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			hud.flash(Color(BLOOD.r, BLOOD.g, BLOOD.b, 0.45))
 			_burst(u.position, BLOOD, 6.0)
 			hud.toast("BLOOD PARTY", 1.6)
-		"Escudo":
+		"Manto de Cinzas":
 			var st: Unit = u.cast_target
 			if st == null or not st.alive:
 				st = u
@@ -1464,24 +1563,50 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			u.enmity += st.shield_hp * HEAL_ENMITY * 0.5
 			_beam(u.position, st.position, Color(0.45, 0.9, 1.0, 0.95), 0.3)
 			_burst(st.position, Color(0.45, 0.9, 1.0), 2.2)
-		"Cura em Área":
-			var each := (HEAL_AI if by_ai else HEAL_PLAYER) * 0.5
-			_burst(u.position, Color(0.4, 1.0, 0.6), AOE_HEAL_R)
-			for o in units:
-				if o.alive and o.position.distance_to(u.position) <= AOE_HEAL_R and o.hp < o.max_hp:
-					o.hp = minf(o.max_hp, o.hp + each)
-					u.enmity += each * HEAL_ENMITY
-					_burst(o.position, Color(0.4, 1.0, 0.6), 1.4)
-					_popup(int(each), Color(0.5, 1.0, 0.65), 56, o.position + Vector3(0, 2.6, 0), "+")
+		"Lareira Celestial":
+			_start_hearth(u)
+		"Renascimento":
+			_rebirth(u)
+		"Passo Rasante":
+			_dash_cut(u, sk["dmg"])
+		"Garras Cruzadas":
+			# três cortes seguidos, cada um com a silhueta dela num lugar
+			for n in CLAW_HITS:
+				get_tree().create_timer(n * CLAW_GAP, false).timeout.connect(_claw.bind(u, n, sk["dmg"]))
+		"Dança Carmesim":
+			u.punch()
+			for n in 6:
+				var a := n * TAU / 6.0
+				_afterimage(u, Vector3(cos(a), 0, sin(a)) * 1.3, Color(0.9, 0.1, 0.25))
+			_burst(u.position, Color(0.9, 0.1, 0.25), 3.4)
+			if _in_range(u):
+				_damage_boss(u, sk["dmg"], true, true)
+		"Golpe de Misericórdia":
+			u.face(BOSS_POINT - u.position)
+			if by_ai:
+				_mercy_hit(u)
+			else:
+				# o corte sai no fim da janela; se um golpe chegar antes, vira parry e não dá dano
+				u.parry_t = MERCY_WINDOW
+				u.parry_hit = false
+				_burst(u.position, Color(1, 1, 1), 1.6)
+		"Frenesi da Fera":
+			u.frenzy_t = FRENZY_TIME
+			u.skill_cd[0] = 0.0
+			_burst(u.position, Color(0.75, 0.2, 1.0), 4.0)
+			hud.toast("FRENESI DA FERA", 1.4)
 		"Bora Biscoitar":
 			_provoke(u, by_ai)
-		"Cura":
+		"Toque de Brasa", "Asa da Fênix":
 			var ht: Unit = u.cast_target
 			if ht == null or not ht.alive:
 				ht = _heal_target()
 			if ht == null:
 				return
 			var amount := HEAL_AI if by_ai else HEAL_PLAYER
+			if sk["name"] == "Asa da Fênix":
+				amount = PHOENIX_HEAL
+				_burst(ht.position + Vector3(0, 1.0, 0), Color(1.0, 0.6, 0.2), 3.2)
 			# socorreu na mão alguém com pouca vida: conta pra maestria do Instinto
 			if not by_ai and ht.hp / ht.max_hp < Knowledge.LOW_HP:
 				_master("heal")
@@ -1490,16 +1615,6 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_beam(u.position, ht.position, Color(0.5, 1.0, 0.65, 0.95), 0.3)
 			_burst(ht.position, Color(0.4, 1.0, 0.6), 1.8)
 			_popup(int(amount), Color(0.5, 1.0, 0.65), 64, ht.position + Vector3(0, 2.6, 0), "+")
-		"Reviver":
-			var dead: Unit = u.cast_target
-			if dead == null or dead.alive:
-				return
-			dead.revive(0.5)
-			dead.weak_t = WEAK_TIME  # voltou no susto: metade do dano por um tempo
-			_spawn_cards(dead)
-			_beam(u.position, dead.position, Color(1.0, 0.95, 0.6, 0.95), 0.4)
-			_burst(dead.position, Color(1.0, 0.95, 0.6), 3.0)
-			hud.toast(dead.unit_name + " voltou", 2.0)
 		_:
 			# habilidades de dano (incluindo o ataque básico)
 			if not _in_range(u):
@@ -1512,8 +1627,25 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			if sk.has("cast") and sk["cast"] >= LOCKED_CAST:
 				_burst(Vector3(0, 4, -11.5), u.color.lightened(0.3), 6.0)
 			var amount: float = sk["dmg"]
-			if slot == 2 and Knowledge.has(u.hero, "burst"):
+			if slot == BIG_SLOT.get(u.key, -1) and Knowledge.has(u.hero, "burst"):
 				amount *= 1.3 if u.key == "assassina" else 1.15
+			if sk["name"] == "Talho Relâmpago":
+				big = false
+				if u.frenzy_t > 0.0:
+					_afterimage(u, Vector3(randf_range(-0.8, 0.8), 0, randf_range(-0.5, 0.5)), Color(0.75, 0.2, 1.0))
+				# do lado certo da boss: gasta um dos três golpes fortalecidos; acabou, troca de lado
+				if not by_ai and _side_of(u) == u.side_need:
+					amount *= SIDE_MULT
+					big = true
+					u.side_left -= 1
+					if u.side_left <= 0:
+						u.side_need = -u.side_need
+						u.side_left = SIDE_HITS
+						_burst(_side_pos(u.side_need), SIDE_COL, 2.4)
+			if sk["name"] == "Baque do Escudo":
+				# golpe de escudo: mais pesado na tela. (Interromper fica pra quando existir cast interrompível.)
+				_burst(BOSS_POINT + Vector3(0, 1.2, 2.0), Color(1.0, 0.95, 0.8), 2.6)
+				boss.hit_flash()
 			if sk["name"] == "Syringe Poke":
 				# o roubo é em cima da vida ATUAL da boss: vai rendendo menos conforme a luta anda
 				var steal := boss_hp * POKE_STEAL
@@ -1524,6 +1656,301 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				_lifesteal(u, CONSUMED_STEAL)
 				_add_stacks(u, CONSUMED_STACKS)
 			_damage_boss(u, amount, true, big)
+	# Malpractice: o golpe saiu, o sangue foi. Só na mão do jogador: a IA joga uma versão segura dela.
+	if not by_ai and SELF_COST.has(sk["name"]):
+		_bleed(u, SELF_COST[sk["name"]])
+
+
+# ---------------------------------------------------------------- Assassina
+
+## De que lado da boss o herói está: 1 = direita (x positivo), -1 = esquerda, 0 = no meio.
+func _side_of(u: Unit) -> int:
+	if u.position.x > SIDE_MIN:
+		return 1
+	if u.position.x < -SIDE_MIN:
+		return -1
+	return 0
+
+
+## Onde fica, no chão, a marca do lado pedido.
+func _side_pos(side: int) -> Vector3:
+	return Vector3(side * 2.9, 0.0, -6.4)
+
+
+## Sombra da personagem que fica pra trás e some (Garras, Dança, Frenesi).
+func _afterimage(u: Unit, offset: Vector3, col: Color) -> void:
+	var m := Fx.mat(Color(col.r, col.g, col.b, 0.55), 1.5, true)
+	var mi := Fx.inst(fx_root, Fx.capsule(0.38, 1.3), m, u.position + offset + Vector3(0, 0.7, 0))
+	var tw := mi.create_tween()
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.32)
+	tw.tween_callback(mi.queue_free)
+
+
+## Passo Rasante: atravessa a boss pro outro lado com um corte, deixando um rastro verde.
+func _dash_cut(u: Unit, dmg: float) -> void:
+	var from := u.position
+	var to := Vector3(-from.x, 0, from.z)
+	if absf(from.x) < SIDE_MIN + 0.4:
+		to.x = u.side_need * 2.6  # estava no meio: vai pro lado que está valendo
+	var flat := Vector2(to.x, to.z)
+	if flat.length() > ARENA_R:
+		flat = flat.normalized() * ARENA_R
+		to = Vector3(flat.x, 0, flat.y)
+	u.face(to - from)
+	u.dash_fx()
+	u.invuln = maxf(u.invuln, 0.2)
+	_beam(from, to, SIDE_COL, 0.5)
+	_afterimage(u, Vector3.ZERO, SIDE_COL)
+	var tw := u.create_tween()
+	tw.tween_property(u, "position", to, 0.1)
+	tw.tween_callback(func():
+		u.face(BOSS_POINT - u.position)
+		if u.alive:
+			_damage_boss(u, dmg, true, true))
+
+
+func _claw(u: Unit, n: int, dmg: float) -> void:
+	if not u.alive or ended:
+		return
+	_afterimage(u, Vector3((n - 1) * 0.9, 0, -0.4), u.color.lightened(0.3))
+	u.punch()
+	if _in_range(u):
+		_attack_fx(u, false)
+		_damage_boss(u, dmg, true, n == CLAW_HITS - 1)
+
+
+## O corte do Golpe de Misericórdia de fato (quando a janela passa sem ninguém bater nela).
+func _mercy_hit(u: Unit) -> void:
+	if not u.alive or not _in_range(u):
+		return
+	var amount: float = SKILLS["assassina"][BIG_SLOT["assassina"]]["dmg"]
+	if Knowledge.has(u.hero, "burst"):
+		amount *= 1.3
+	u.punch()
+	_attack_fx(u, true)
+	_burst(BOSS_POINT + Vector3(0, 1.4, 1.8), Color(1.0, 0.95, 0.9), 3.0)
+	_damage_boss(u, amount, true, true)
+
+
+## Marca no chão do lado em que o Talho está valendo, com os golpes que faltam. Só pra quem
+## está jogando de Assassina.
+func _tick_side_mark() -> void:
+	var me := units[ctrl]
+	var on: bool = me.key == "assassina" and me.alive and not prep and not ended
+	side_mark.visible = on
+	if not on:
+		return
+	side_mark.position = _side_pos(me.side_need)
+	side_mark.rotation.y += get_process_delta_time() * 1.5
+	for n in side_pips.size():
+		side_pips[n].visible = n < me.side_left
+	side_label.text = "DIREITA" if me.side_need > 0 else "ESQUERDA"
+
+
+# ---------------------------------------------------------------- Soulflame
+
+## Lareira Celestial: fogueira espiritual no chão, onde a Soulflame está. Cura quem fica dentro.
+func _start_hearth(u: Unit) -> void:
+	var node := Node3D.new()
+	fx_root.add_child(node)
+	node.position = Vector3(u.position.x, 0.05, u.position.z)
+	Fx.inst(node, Fx.disc(HEARTH_R), Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.14), 0.0, true))
+	Fx.inst(node, Fx.torus(HEARTH_R - 0.1, HEARTH_R), Fx.mat(FLAME, 3.0, true))
+	# a chama: três línguas de fogo azul-esverdeado
+	for n in 3:
+		var tongue := Fx.inst(node, Fx.cyl(0.02, 0.34 - n * 0.08, 1.5 - n * 0.3), Fx.mat(FLAME.lightened(n * 0.25), 4.0, true), Vector3((n - 1) * 0.22, 0.75 - n * 0.1, 0))
+		tongue.set_meta("flame", n)
+	hearths.append({"node": node, "owner": u, "t": HEARTH_TIME, "tick": 0.0})
+	_burst(u.position, FLAME, HEARTH_R)
+
+
+func _tick_hearths(delta: float) -> void:
+	for h in hearths.duplicate():
+		h["t"] -= delta
+		h["tick"] -= delta
+		var node: Node3D = h["node"]
+		for c in node.get_children():
+			if c.has_meta("flame"):
+				c.scale.y = 1.0 + 0.25 * sin(Time.get_ticks_msec() * 0.012 + int(c.get_meta("flame")) * 2.0)
+		if h["tick"] <= 0.0:
+			h["tick"] = 1.0
+			var owner: Unit = h["owner"]
+			for o in units:
+				if o.alive and o.position.distance_to(node.position) <= HEARTH_R:
+					# fagulhas subindo em volta de quem está na fogueira
+					_burst(o.position + Vector3(0, 0.6, 0), FLAME, 1.1)
+					if o.hp < o.max_hp:
+						o.hp = minf(o.max_hp, o.hp + HEARTH_HPS)
+						owner.enmity += HEARTH_HPS * HEAL_ENMITY
+						_popup(int(HEARTH_HPS), Color(0.5, 1.0, 0.85), 40, o.position + Vector3(0, 2.6, 0), "+")
+		if h["t"] <= 0.0:
+			node.queue_free()
+			hearths.erase(h)
+
+
+## Renascimento: uma fênix enorme atravessa o campo. Cura todos, levanta quem caiu, queima a boss
+## e deixa um DoT leve nela. Se houver uma Lareira acesa, é dela que a fênix nasce.
+func _rebirth(u: Unit) -> void:
+	var from := u.position
+	if not hearths.is_empty():
+		var h: Dictionary = hearths[hearths.size() - 1]
+		from = h["node"].position
+		h["node"].queue_free()
+		hearths.erase(h)
+	var bird := Node3D.new()
+	fx_root.add_child(bird)
+	bird.position = from + Vector3(0, 1.5, 0)
+	var fire := Fx.mat(Color(1.0, 0.55, 0.15, 0.9), 4.0, true)
+	Fx.inst(bird, Fx.sphere(0.9), fire)
+	for side in [-1, 1]:
+		var wing := BoxMesh.new()
+		wing.size = Vector3(3.6, 0.16, 1.5)
+		var w := Fx.inst(bird, wing, Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.85), 4.0, true), Vector3(side * 2.0, 0.3, 0.2))
+		w.rotation.z = side * 0.35
+	var tw := bird.create_tween()
+	tw.tween_property(bird, "position", Vector3(0, 3.0, 0), 0.35)
+	tw.tween_property(bird, "position", Vector3(0, 5.0, -11.5), 0.4)
+	tw.tween_callback(bird.queue_free)
+	hud.flash(Color(1.0, 0.6, 0.2, 0.3))
+	hud.toast("RENASCIMENTO", 1.6)
+	for o in units:
+		if not o.alive:
+			o.revive(0.5)
+			o.weak_t = WEAK_TIME
+			_spawn_cards(o)
+			_burst(o.position, Color(1.0, 0.95, 0.6), 3.0)
+			hud.toast(o.unit_name + " voltou", 2.0)
+		else:
+			o.hp = minf(o.max_hp, o.hp + REBIRTH_HEAL)
+			_burst(o.position, FLAME, 1.8)
+			_popup(int(REBIRTH_HEAL), Color(0.5, 1.0, 0.85), 56, o.position + Vector3(0, 2.6, 0), "+")
+		u.enmity += REBIRTH_HEAL * HEAL_ENMITY * 0.5
+	_damage_boss(u, REBIRTH_DMG, true, true)
+	add_dot("brasa", "Brasa da Fênix", Color(1.0, 0.55, 0.15), REBIRTH_DOT_TIME, REBIRTH_DOT, u)
+
+
+# ---------------------------------------------------------------- DoTs na boss
+
+## Põe (ou renova) um efeito de dano por segundo na boss. Aparece embaixo da vida dela, com o tempo.
+func add_dot(id: String, dot_name: String, col: Color, time: float, dps: float, owner: Unit) -> void:
+	for d in boss_dots:
+		if d["id"] == id:
+			d["t"] = time
+			d["total"] = time
+			d["dps"] = dps
+			d["owner"] = owner
+			return
+	boss_dots.append({"id": id, "name": dot_name, "col": col, "t": time, "total": time, "dps": dps, "owner": owner, "acc": 0.0})
+
+
+## O DoT com esse id, ou {} se a boss não está com ele.
+func get_dot(id: String) -> Dictionary:
+	for d in boss_dots:
+		if d["id"] == id:
+			return d
+	return {}
+
+
+func remove_dot(id: String) -> void:
+	for d in boss_dots.duplicate():
+		if d["id"] == id:
+			boss_dots.erase(d)
+
+
+func _tick_dots(delta: float) -> void:
+	for d in boss_dots.duplicate():
+		d["t"] -= delta
+		d["acc"] += delta
+		if d["acc"] >= 1.0:
+			d["acc"] -= 1.0
+			_damage_boss(d["owner"], d["dps"], false, false)
+			_popup(int(d["dps"]), (d["col"] as Color).lightened(0.2), 30)
+			if ended:
+				return
+		if d["t"] <= 0.0:
+			boss_dots.erase(d)
+
+
+## Malpractice paga os próprios golpes com vida. Não é golpe da boss: não conta como parry nem
+## passa por mitigação ou escudo. Pode matar.
+func _bleed(u: Unit, cost: float) -> void:
+	if not u.alive or u.party_t > 0.0 or u.immortal_t > 0.0:
+		return
+	u.hp -= cost
+	_popup(int(cost), BLOOD, 40, u.position + Vector3(0, 2.2, 0), "-")
+	if u.hp <= 0.0:
+		kill(u, "sangrou até morrer com os próprios golpes")
+
+
+## Multiplicador de dano da Malpractice: cresce conforme a vida cai (1.0 com a vida cheia).
+func low_hp_mult(u: Unit) -> float:
+	if u.key != "nurse":
+		return 1.0
+	var ratio := clampf(u.hp / u.base_hp, 0.0, 1.0)
+	return 1.0 + LOW_HP_BONUS * clampf((1.0 - ratio) / (1.0 - LOW_HP_FLOOR), 0.0, 1.0)
+
+
+## Solo Consagrado: área sagrada no chão, onde o Paladino está. Bate na boss enquanto ela
+## estiver ao alcance da área.
+func _start_holy(u: Unit) -> void:
+	var node := Node3D.new()
+	fx_root.add_child(node)
+	node.position = Vector3(u.position.x, 0.05, u.position.z)
+	Fx.inst(node, Fx.disc(HOLY_R), Fx.mat(Color(GOLD.r, GOLD.g, GOLD.b, 0.16), 0.0, true))
+	Fx.inst(node, Fx.torus(HOLY_R - 0.12, HOLY_R), Fx.mat(GOLD, 3.0, true))
+	Fx.inst(node, Fx.torus(HOLY_R * 0.5 - 0.06, HOLY_R * 0.5), Fx.mat(GOLD, 2.0, true), Vector3(0, 0.01, 0))
+	holy.append({"node": node, "owner": u, "t": HOLY_TIME, "tick": 0.0})
+	_burst(u.position, GOLD, HOLY_R)
+
+
+func _tick_holy(delta: float) -> void:
+	for h in holy.duplicate():
+		h["t"] -= delta
+		h["tick"] -= delta
+		var node: Node3D = h["node"]
+		node.rotate_y(delta * 0.6)
+		if h["tick"] <= 0.0:
+			h["tick"] = HOLY_TICK
+			var owner: Unit = h["owner"]
+			if owner.alive and node.position.distance_to(BOSS_POINT) <= HOLY_R + 1.4:
+				_burst(BOSS_POINT + Vector3(0, 0.6, 1.6), GOLD, 1.8)
+				_damage_boss(owner, HOLY_DMG, true, false)
+		if h["t"] <= 0.0:
+			node.queue_free()
+			holy.erase(h)
+
+
+## Muralha da Fé: uma cruz dourada gigante sobre o grupo por WALL_SHOW segundos, com um facho
+## de luz descendo em cada herói.
+func _faith_cross() -> void:
+	var center := Vector3.ZERO
+	var n := 0
+	for o in units:
+		if o.alive:
+			center += o.position
+			n += 1
+	center = center / maxf(1.0, n) + Vector3(0, 7.0, 0)
+	var node := Node3D.new()
+	fx_root.add_child(node)
+	node.position = center
+	var m := Fx.mat(Color(GOLD.r, GOLD.g, GOLD.b, 0.85), 4.0, true)
+	var up := BoxMesh.new()
+	up.size = Vector3(1.1, 7.0, 0.5)
+	Fx.inst(node, up, m)
+	var arm := BoxMesh.new()
+	arm.size = Vector3(4.4, 1.1, 0.5)
+	Fx.inst(node, arm, m, Vector3(0, 1.2, 0))
+	var soft := Fx.mat(Color(GOLD.r, GOLD.g, GOLD.b, 0.28), 2.0, true)
+	for o in units:
+		if o.alive:
+			Fx.inst(node, Fx.cyl(0.9, 1.2, 7.0), soft, o.position - center + Vector3(0, 3.5, 0))
+	node.scale = Vector3.ONE * 0.2
+	var tw := node.create_tween()
+	tw.tween_property(node, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(WALL_SHOW - 0.75)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.5)
+	tw.parallel().tween_property(soft, "albedo_color:a", 0.0, 0.5)
+	tw.tween_callback(node.queue_free)
 
 
 ## Provocar: quem usa pula pro topo da lista de enmity na hora, com folga.
@@ -2108,7 +2535,7 @@ func _spawn_grid(total: float) -> void:
 
 # ---------------------------------------------------------------- Esmagar (tank buster)
 
-## Golpe pesado só no alvo 1. Não dá pra desviar: é a defesa da tank (Mitigação ou Blood Taste) que salva.
+## Golpe pesado só no alvo 1. Não dá pra desviar: é a defesa da tank (Égide ou Blood Taste) que salva.
 func _start_buster(total: float) -> void:
 	var t := _aggro_target()
 	if t == null:
@@ -2427,7 +2854,9 @@ func _dmg_mult() -> float:
 func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 	if ended:
 		return
-	var dmg := amount * _dmg_mult()
+	var dmg := amount * _dmg_mult() * low_hp_mult(u)
+	if u.frenzy_t > 0.0:
+		dmg *= FRENZY_DMG
 	if u.weak_t > 0.0:
 		dmg *= 0.5
 	if Knowledge.has(u.hero, "sharpen"):
@@ -2485,10 +2914,22 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 	if u.immortal_t > 0.0:
 		_burst(u.position, Color(1.0, 0.9, 0.5), 1.4)
 		return
+	if u.parry_t > 0.0 and dmg > 0.0:
+		# Golpe de Misericórdia usado como parry: o golpe da boss não entra e o corte não sai.
+		# (Mecânica que mata na hora passa por kill(), não por aqui: essa o parry não salva.)
+		u.parry_hit = true
+		u.parry_t = 0.0
+		_burst(u.position, Color(1, 1, 1), 2.6)
+		if u.controlled:
+			hud.toast("PARRY", 0.9)
+			hud.flash(Color(1.0, 1.0, 1.0, 0.25))
+		return
 	if u.taste_t > 0.0 and dmg > 0.0:
 		u.taste_hit = true  # golpe durante o Blood Taste = parry perfeito
 	if u.guard_t > 0.0:
 		dmg *= MITIGATION
+	if u.wall_t > 0.0:
+		dmg *= WALL_MULT
 	if Knowledge.has(u.hero, "plate"):
 		dmg *= 0.9
 	if Knowledge.has(u.hero, "overdrive"):

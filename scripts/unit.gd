@@ -34,11 +34,23 @@ var dmg_bucket := 0.0
 var dmg_buckets: Array[float] = []
 var dps := 0.0
 var key := ""
-var skill_cd := [0.0, 0.0, 0.0, 0.0, 0.0]
+var skill_cd := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # um por slot da barra (Binds.SKILL_SLOTS)
 var atk_range := 4.8
 var cast_target: Unit
 var cast_ai := false
 var guard_t := 0.0
+var regen_t := 0.0     # Égide (Paladino): regenerando vida
+var wall_t := 0.0      # Muralha da Fé (Paladino): a party toda toma menos dano
+var aegis: MeshInstance3D
+# Assassina
+var side_need := 1     # Talho Relâmpago: lado da boss que está valendo (1 = direita, -1 = esquerda)
+var side_left := 3     # ... e quantos golpes fortalecidos faltam desse lado
+var frenzy_t := 0.0    # Frenesi da Fera
+var parry_t := 0.0     # Golpe de Misericórdia: janela em que o golpe vira parry
+var parry_hit := false
+var frenzy_ring: MeshInstance3D
+var frenzy_was := false
+var wall_ring: MeshInstance3D
 ## Índice do herói em Knowledge.HEROES (baralho dele) e se é quem segura a boss.
 var hero := 0
 var tank := false
@@ -134,6 +146,17 @@ func setup(i: int, d: Dictionary) -> void:
 	immortal_ring.visible = false
 	guard_ring = Fx.inst(self, Fx.torus(0.7, 0.8), Fx.mat(Color(0.3, 0.9, 1.0), 3.0, true), Vector3(0, 0.9, 0))
 	guard_ring.visible = false
+	# Égide: barreira dourada enorme na frente do corpo (gira junto com o boneco)
+	var wall := BoxMesh.new()
+	wall.size = Vector3(2.6, 2.9, 0.14)
+	aegis = Fx.inst(visual, wall, Fx.mat(Color(1.0, 0.82, 0.3, 0.5), 2.6, true), Vector3(0, 1.45, -0.95))
+	aegis.visible = false
+	# Muralha da Fé: anel dourado nos pés de quem está protegido
+	wall_ring = Fx.inst(self, Fx.torus(0.95, 1.08), Fx.mat(Color(1.0, 0.85, 0.35), 3.5, true), Vector3(0, 0.07, 0))
+	wall_ring.visible = false
+	# Frenesi da Fera: aura roxa em volta do corpo
+	frenzy_ring = Fx.inst(self, Fx.torus(0.7, 0.92), Fx.mat(Color(0.75, 0.2, 1.0), 4.0, true), Vector3(0, 0.9, 0))
+	frenzy_ring.visible = false
 
 	orb_mat = Fx.mat(Color.WHITE, 3.0, true)
 	orb = Fx.inst(self, Fx.sphere(0.24), orb_mat, Vector3(0, 2.3, 0))
@@ -171,6 +194,21 @@ func _process(delta: float) -> void:
 		# o anel fecha conforme a habilidade carrega
 		channel_ring.scale = Vector3.ONE * (1.0 + 1.6 * channel_t / channel_total)
 	guard_ring.visible = (guard_t > 0.0 or taste_t > 0.0) and alive
+	aegis.visible = guard_t > 0.0 and alive and key == "tank"
+	if aegis.visible:
+		aegis.scale = Vector3.ONE * (1.0 + 0.04 * sin(Time.get_ticks_msec() * 0.012))
+	wall_ring.visible = wall_t > 0.0 and alive
+	frenzy_ring.visible = frenzy_t > 0.0 and alive
+	if frenzy_ring.visible:
+		# o boneco fica roxo e a aura gira rápido
+		frenzy_ring.rotate_y(delta * 14.0)
+		frenzy_ring.position.y = 0.9 + sin(Time.get_ticks_msec() * 0.02) * 0.35
+		body_mat.albedo_color = Color(0.62, 0.12, 0.95)
+	elif frenzy_was:
+		body_mat.albedo_color = color
+	frenzy_was = frenzy_ring.visible
+	if wall_ring.visible:
+		wall_ring.rotate_y(delta * 3.0)
 	if guard_ring.visible:
 		guard_ring.rotate_y(delta * 5.0)
 	if shake_t > 0.0:
@@ -267,6 +305,10 @@ func die() -> void:
 	immortal_t = 0.0
 	enmity = 0.0  # morrer zera a enmity, como no FFXIV
 	guard_t = 0.0
+	frenzy_t = 0.0
+	parry_t = 0.0
+	regen_t = 0.0
+	wall_t = 0.0
 	taste_t = 0.0
 	party_t = 0.0
 	stacks = 0

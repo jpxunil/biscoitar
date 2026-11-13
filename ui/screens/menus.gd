@@ -1,6 +1,7 @@
 extends Control
 ## Liga as telas de menu entre si e com a luta:
-##   título -> bosses -> cartas -> luta      título -> gear (cartas, sem o botão de luta)
+##   título -> PLAY -> saves -> cafeteria (cena lobby.tscn: monta a party) -> bosses -> cartas -> luta
+##   título -> gear (cartas do save ativo, sem o botão de luta)
 ##   vitória -> loja -> título
 ##   título -> tutoriais -> (cena do tutorial) -> tutoriais
 ##   título -> opções (a tela de opções é do hud.gd: é a mesma que o pause abre)
@@ -12,6 +13,7 @@ var bosses: BossScreen
 var cards: CardsScreen
 var shop: ShopScreen
 var tutorials: TutorialsScreen
+var saves: SavesScreen
 var _gear := false
 
 
@@ -23,14 +25,23 @@ func setup(game) -> void:
 	cards = preload("res://ui/screens/cards_screen.tscn").instantiate()
 	shop = preload("res://ui/screens/shop_screen.tscn").instantiate()
 	tutorials = TutorialsScreen.new()
-	for s in [title, bosses, cards, shop, tutorials]:
+	saves = SavesScreen.new()
+	for s in [title, bosses, cards, shop, tutorials, saves]:
 		add_child(s)
 		s.visible = false
-	title.bosses_pressed.connect(show_screen.bind("bosses"))
+	title.play_pressed.connect(show_screen.bind("saves"))
+	saves.back_pressed.connect(show_screen.bind("title"))
+	saves.slot_chosen.connect(func(n: int):
+		# carrega (ou cria) o save e vai pra cafeteria montar a party; os bosses só abrem depois dela
+		Knowledge.select_slot(n)
+		get_tree().change_scene_to_file("res://lobby.tscn"))
 	title.gear_pressed.connect(func():
+		if Knowledge.slot <= 0 and Knowledge.persist:
+			show_screen("saves")  # as cartas são de um save: sem save escolhido, primeiro escolhe um
+			return
 		_gear = true
 		show_screen("cards"))
-	title.shop_pressed.connect(show_screen.bind("shop"))
+	title.shop_pressed.connect(func(): show_screen("saves" if (Knowledge.slot <= 0 and Knowledge.persist) else "shop"))
 	title.options_pressed.connect(func(): g.hud.open_options(false))
 	title.tutorial_pressed.connect(show_screen.bind("tutorials"))
 	tutorials.back_pressed.connect(show_screen.bind("title"))
@@ -38,7 +49,10 @@ func setup(game) -> void:
 		# cada tutorial é uma cena própria (o 1 é scripts/tutorial.gd); ele volta pra esta lista quando acaba
 		Knowledge.save()
 		get_tree().change_scene_to_file(scene))
-	bosses.back_pressed.connect(show_screen.bind("title"))
+	bosses.back_pressed.connect(func():
+		# voltar dos bosses é voltar pra cafeteria (a party pode ser trocada lá)
+		Knowledge.save()
+		get_tree().change_scene_to_file("res://lobby.tscn"))
 	bosses.boss_chosen.connect(func(i: int):
 		_gear = false
 		if i != Knowledge.boss:
@@ -47,7 +61,6 @@ func setup(game) -> void:
 			show_screen("cards"))
 	cards.back_pressed.connect(func(): show_screen("title" if _gear else "bosses"))
 	cards.ready_pressed.connect(func():
-		# trocar de tank recarrega a cena; aí a luta começa sozinha
 		if g.select_hero(cards.hero):
 			g.start_fight())
 	shop.back_pressed.connect(show_screen.bind("title"))
@@ -64,7 +77,10 @@ func show_screen(id: String) -> void:
 	if id == "shop" and not Knowledge.shop_unlocked:
 		id = "title"
 	Knowledge.screen = id
-	for s in [title, bosses, cards, shop, tutorials]:
+	# os bosses e as cartas de luta só existem com um save e uma party de quatro
+	if id == "bosses" and Knowledge.persist and (Knowledge.slot <= 0 or not Knowledge.party_ready()):
+		id = "saves"
+	for s in [title, bosses, cards, shop, tutorials, saves]:
 		s.visible = false
 	match id:
 		"bosses":
@@ -79,6 +95,9 @@ func show_screen(id: String) -> void:
 		"tutorials":
 			tutorials.visible = true
 			tutorials.open()
+		"saves":
+			saves.visible = true
+			saves.open()
 		_:
 			_gear = false
 			title.visible = true

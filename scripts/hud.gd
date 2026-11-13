@@ -8,6 +8,8 @@ extends CanvasLayer
 var g
 var boss_bar: Control
 var boss_pct: Label
+var dot_row: HBoxContainer
+var dot_ui := {}  # id do DoT -> {"box": Control, "time": Label}
 var end_stats: VBoxContainer
 var skill_row: HBoxContainer
 var skill_ui: Array = []
@@ -188,6 +190,11 @@ func _build_boss() -> void:
 	cast_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cast_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cast_row.add_child(cast_bar)
+	# efeitos na boss (DoTs): um ícone por efeito, com o tempo que falta embaixo
+	dot_row = HBoxContainer.new()
+	dot_row.add_theme_constant_override("separation", 14)
+	dot_row.custom_minimum_size.y = 34
+	v.add_child(dot_row)
 
 
 # ---------------------------------------------------------------- party / legenda / toast
@@ -354,8 +361,8 @@ func _show_skills(i: int) -> void:
 	for n in list.size():
 		if list[n] == null:
 			continue
-		var slab := UiStyle.slab(UiStyle.INK, UiStyle.SKEW, 20, 7)
-		slab.custom_minimum_size.x = 186 if list.size() <= 4 else 168
+		var slab := UiStyle.slab(UiStyle.INK, UiStyle.SKEW, 20 if list.size() <= 5 else 14, 7)
+		slab.custom_minimum_size.x = 186 if list.size() <= 4 else (168 if list.size() == 5 else 150)
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 5)
 		slab.add_child(v)
@@ -365,7 +372,13 @@ func _show_skills(i: int) -> void:
 		var key := UiStyle.slab(UiStyle.PAPER, 0.0, 7, 0)
 		key.add_child(UiStyle.text(Binds.label("skill_%d" % (n + 1)), 14, UiStyle.INK))
 		row.add_child(key)
-		var name_l := UiStyle.text(String(list[n]["name"]).to_upper(), 15, UiStyle.PAPER)
+		var name_l := UiStyle.text(String(list[n]["name"]).to_upper(), 15 if list.size() <= 5 else 10, UiStyle.PAPER)
+		if list.size() > 5:
+			# seis slots: o nome quebra em duas linhas pequenas, como na prancha de habilidade do design
+			name_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			name_l.custom_minimum_size = Vector2(80, 26)
+			name_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			name_l.add_theme_constant_override("line_spacing", -4)
 		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(name_l)
 		var cd := UiStyle.text("", 15, UiStyle.DIM)
@@ -502,6 +515,7 @@ func _process(delta: float) -> void:
 		cast_label.text = "%s  %.1f" % [g.cast_name.to_upper(), maxf(0.0, g.phase_dur - g.phase_t)]
 		UiStyle.set_bar(cast_bar, g.phase_t / g.phase_dur)
 
+	_tick_dots()
 	for i in 4:
 		var u: Unit = g.units[i]
 		var card: CharacterCard = cards[i]
@@ -538,6 +552,34 @@ func _process(delta: float) -> void:
 		if toast_t <= 0.0:
 			toast_slab.visible = false
 	flash_rect.color.a = maxf(0.0, flash_rect.color.a - delta * 1.6)
+
+
+## Ícones dos DoTs embaixo da vida da boss: cor do efeito, nome curto e os segundos que faltam.
+func _tick_dots() -> void:
+	var alive := {}
+	for d in g.boss_dots:
+		var id: String = d["id"]
+		alive[id] = true
+		if not dot_ui.has(id):
+			var box := VBoxContainer.new()
+			box.add_theme_constant_override("separation", 0)
+			box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var top := HBoxContainer.new()
+			top.add_theme_constant_override("separation", 5)
+			top.add_child(UiStyle.chip(d["col"], 12))
+			top.add_child(UiStyle.text(String(d["name"]).to_upper(), 11, UiStyle.PAPER))
+			box.add_child(top)
+			var time := UiStyle.text("", 12, UiStyle.YELLOW)
+			box.add_child(time)
+			dot_row.add_child(box)
+			dot_ui[id] = {"box": box, "time": time}
+		dot_ui[id]["time"].text = "%d s" % ceili(d["t"])
+		# quase acabando: o tempo fica vermelho
+		dot_ui[id]["time"].add_theme_color_override("font_color", UiStyle.DANGER if d["t"] <= 2.0 else UiStyle.YELLOW)
+	for id in dot_ui.keys():
+		if not alive.has(id):
+			dot_ui[id]["box"].queue_free()
+			dot_ui.erase(id)
 
 
 func toast(text: String, time := 2.5) -> void:

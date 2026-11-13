@@ -55,7 +55,7 @@ scene("ui/screens/title_screen.tscn","res://ui/screens/title_screen.gd",[
   lab("Logo2","LogoPanel",(40,118,600,110),"BISCOITAR",100,"COIN"),
   pan("TagPanel",".",(110,380,360,50),"OUT",5,rotation=-0.03),
   txt("Tag","TagPanel",(18,10,330,30),"um jogador, quatro heróis, uma boss",17,"CREAM"),
-  btn("BtnBosses",".",(820,210,380,92),"BOSSES","COIN","OUT",40,5),
+  btn("BtnPlay",".",(820,210,380,92),"PLAY","COIN","OUT",40,5),
   btn("BtnGear",".",(840,324,380,92),"GEAR","CREAM","OUT",40,9),
   btn("BtnShop",".",(820,438,380,92),"LOJA","GRAPE","CREAM",40,13),
   btn("BtnTutorial",".",(440,612,480,60),"TUTORIAL DO JOGO","CREAM","OUT",26,19),

@@ -277,13 +277,18 @@ func _ready() -> void:
 func open(hero_idx: int, show_ready := true) -> void:
 	hero = clampi(hero_idx, 0, Knowledge.HEROES.size() - 1)
 	_show_ready = show_ready
+	# com a party montada, o seletor mostra só os quatro dela (na aula do tutorial, todos)
+	var team: Array = Knowledge.party if (Knowledge.party_ready() and tutor.is_empty()) else ORDER
+	if not team.has(hero):
+		hero = team[0]
 	# fila do seletor: o herói atual na frente, os outros na ordem padrão
 	_row = [hero]
 	for id in ORDER:
-		if id != hero:
+		if id != hero and team.has(id):
 			_row.append(id)
 	for id in _tiles:
 		_tiles[id].slot = -1
+		_tiles[id].visible = _row.has(id)
 	refresh(true)
 
 
@@ -315,9 +320,6 @@ func _go(to: int, dir: int) -> void:
 func refresh(animate := false, dir := 0) -> void:
 	var h: Dictionary = Knowledge.HEROES[hero]
 	_th = Paper.THEMES.get(h["key"], Paper.THEMES["tank"])
-	# abrir uma tank põe ela na party; a outra fica de fora (rosto mais apagado no seletor)
-	if Knowledge.is_tank(hero):
-		Knowledge.tank_pick = hero
 	_cancel_drag()
 	_sel = -1
 	# cenário e painéis no tema do herói
@@ -766,7 +768,7 @@ func _layout_tiles(animate: bool) -> void:
 		var t: HeroTile = _tiles[id]
 		var was := t.slot
 		t.slot = n
-		t.dim = Knowledge.is_tank(id) and id != Knowledge.tank_pick
+		t.dim = false
 		# Trocas em sequência rápida interrompem a animação anterior no meio: a peça pode estar em
 		# qualquer lugar, meio aberta, pequena ou transparente. Por isso cada caminho abaixo parte do
 		# estado em que ela ESTÁ e leva todas as propriedades (posição, giro, escala, alfa, abertura)

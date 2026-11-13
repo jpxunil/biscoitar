@@ -13,16 +13,18 @@ class_name Knowledge
 
 const HEROES := [
 	{"key": "tank", "name": "Paladino", "role": "Tanque", "color": Color(0.3, 0.5, 1.0), "hp": 160, "tank": true,
-		"blurb": "Segura a boss. Mitigação e Bora Biscoitar."},
-	{"key": "healer", "name": "Healer", "role": "Curandeira", "color": Color(0.4, 0.95, 0.55), "hp": 90,
-		"blurb": "Cura, revive e protege com escudo."},
+		"blurb": "O mais fácil de jogar. Escudo enorme, Égide e Muralha da Fé."},
+	# Soulflame (era a Healer; a chave interna continua "healer").
+	{"key": "healer", "name": "Soulflame", "role": "Curandeira", "color": Color(0.4, 0.95, 0.55), "hp": 90,
+		"blurb": "Chama vital: cura direta, fogueira que cura, escudo e a fênix do Renascimento."},
 	{"key": "assassina", "name": "Assassina", "role": "DPS corpo a corpo", "color": Color(0.78, 0.38, 1.0), "hp": 100,
-		"blurb": "O maior dano, colada na boss."},
+		"blurb": "Rápida e simples: três golpes de um lado da boss, três do outro, sem parar."},
 	{"key": "maga", "name": "Maga", "role": "DPS à distância", "color": Color(1.0, 0.72, 0.25), "hp": 90,
 		"blurb": "Dano de longe, com cast."},
 	# Segunda tank: entra na party no lugar do Paladino (ver `tank_pick`).
-	{"key": "nurse", "name": "Gothic Nurse", "role": "Tanque de Sangue", "color": Color(0.36, 0.4, 0.95), "hp": 112, "tank": true,
-		"blurb": "Rouba o sangue da boss. Pouca vida, parry e Blood Party."},
+	# Malpractice (era a Gothic Nurse; a chave interna continua "nurse" por causa do save e da arte).
+	{"key": "nurse", "name": "Malpractice", "role": "Tanque de Sangue", "color": Color(0.36, 0.4, 0.95), "hp": 80, "tank": true,
+		"blurb": "De papel: sangra a cada golpe. Vive de parry e bate mais forte quase morta."},
 ]
 
 ## Mesma ordem de BOSSES em game.gd.
@@ -136,7 +138,22 @@ const LOW_HP := 0.5
 ## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói pra liberar a Rotação.
 const DPS_GOAL := {"tank": 14.0, "nurse": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0}
 const DPS_WINDOW := 20
-const SAVE_PATH := "user://save.json"
+## Saves: SLOT_COUNT arquivos independentes (user://save_1.json ...). Cada um guarda o progresso,
+## as cartas e a party daquele save; nada passa de um pro outro. LEGACY_SAVE é o arquivo único de
+## antes dos slots: na primeira vez ele vira o save 1.
+const SLOT_COUNT := 4
+const LEGACY_SAVE := "save.json"
+const LAST_SLOT_FILE := "last_slot.txt"
+## Party usada quando ainda não existe uma escolhida (testes, cenas abertas sozinhas).
+const DEFAULT_PARTY := [0, 1, 2, 3]
+
+## Pasta dos saves. Os testes apontam pra outra pasta pra nunca tocar no progresso do jogador.
+static var save_dir := "user://"
+## Save ativo (1..SLOT_COUNT). 0 = nenhum escolhido ainda: nada é gravado.
+static var slot := 0
+## A party do save: quatro heróis (índices em HEROES) quaisquer, na ordem em que foram escolhidos
+## na cafeteria. Vazia = ainda não montou. Quem monta é a cena do lobby (scripts/lobby.gd).
+static var party: Array = []
 
 static var owned := {"dodge": true}
 static var decks := {}
@@ -150,9 +167,7 @@ static var dps_known := {}
 static var best_rank := {}
 ## Quem você controla quando a luta começa, e a luta escolhida.
 static var start_hero := 2
-## Qual tank está na party: índice em HEROES (0 = Paladino, 4 = Gothic Nurse). A party tem sempre 4.
-static var tank_pick := 0
-## Trocar de tank recarrega a cena; com isso ligado a luta começa sozinha depois do recarregamento.
+## Com isso ligado a luta começa sozinha depois de recarregar a cena.
 static var autostart := false
 static var boss := 1
 static var attempts := 1
@@ -181,13 +196,49 @@ static func deck(i: int) -> Dictionary:
 	return decks[i]
 
 
-## Lugar do herói na party (0 = tank, seja qual for), e o herói que ocupa um lugar.
+## A party já tem os quatro?
+static func party_ready() -> bool:
+	return party.size() == 4
+
+
+## Os quatro que entram na luta: a party do save, ou a padrão enquanto não houver uma.
+static func fight_party() -> Array:
+	return party if party_ready() else DEFAULT_PARTY
+
+
+## Lugar do herói na party (-1 se ele ficou de fora), e o herói que ocupa um lugar.
 static func slot_of(hero: int) -> int:
-	return 0 if HEROES[hero].get("tank", false) else hero
+	return fight_party().find(hero)
 
 
-static func hero_at(slot: int) -> int:
-	return tank_pick if slot == 0 else slot
+static func hero_at(at: int) -> int:
+	return fight_party()[at]
+
+
+static func in_party(hero: int) -> bool:
+	return fight_party().has(hero)
+
+
+## Fecha a party escolhida na cafeteria. Quem você controla passa a ser um dos quatro.
+static func set_party(list: Array) -> void:
+	party = list.duplicate()
+	if party_ready() and not party.has(start_hero):
+		start_hero = party[0]
+
+
+## Garante que `hero` está na party (argumentos de teste como --hero=N): entra no lugar de alguém
+## da mesma função (tank no lugar de tank), ou do último.
+static func ensure_in_party(hero: int) -> void:
+	if in_party(hero):
+		return
+	var list: Array = fight_party().duplicate()
+	var at := list.size() - 1
+	for n in list.size():
+		if is_tank(list[n]) == is_tank(hero):
+			at = n
+			break
+	list[at] = hero
+	party = list
 
 
 static func is_tank(hero: int) -> bool:
@@ -387,12 +438,13 @@ static var _kept := {}
 static func enter_sandbox() -> void:
 	if sandbox:
 		return
-	_kept = {"owned": owned, "decks": decks, "mastery": mastery, "dps": dps_known, "hero": start_hero, "tank": tank_pick}
+	_kept = {"owned": owned, "decks": decks, "mastery": mastery, "dps": dps_known, "hero": start_hero, "party": party}
 	sandbox = true
 	owned = {}
 	decks = {}
 	mastery = {}
 	dps_known = {}
+	party = []
 
 
 static func leave_sandbox() -> void:
@@ -403,34 +455,113 @@ static func leave_sandbox() -> void:
 	mastery = _kept["mastery"]
 	dps_known = _kept["dps"]
 	start_hero = _kept["hero"]
-	tank_pick = _kept["tank"]
+	party = _kept["party"]
 	_kept = {}
 	sandbox = false
 
 
+static func save_path(n: int) -> String:
+	return save_dir + "save_%d.json" % n
+
+
+static func slot_exists(n: int) -> bool:
+	return FileAccess.file_exists(save_path(n))
+
+
 static func save() -> void:
-	if not persist or sandbox:
+	if not persist or sandbox or slot <= 0:
 		return
 	var data := {
 		"owned": owned.keys(), "decks": {}, "mastery": mastery, "money": money, "tickets": tickets,
-		"shop": shop_unlocked, "dps": dps_known.keys(), "rank": {}, "hero": start_hero, "boss": boss, "tank": tank_pick,
+		"shop": shop_unlocked, "dps": dps_known.keys(), "rank": {}, "hero": start_hero, "boss": boss, "party": party,
 	}
 	for i in decks:
 		data["decks"][str(i)] = decks[i]
 	for b in best_rank:
 		data["rank"][str(b)] = best_rank[b]
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(save_path(slot), FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(data))
 
 
+## Progresso zerado, como um save novo.
+static func reset_progress() -> void:
+	owned = {"dodge": true}
+	decks = {}
+	mastery = {}
+	money = 0
+	tickets = 0
+	shop_unlocked = false
+	dps_known = {}
+	best_rank = {}
+	start_hero = 2
+	boss = 1
+	attempts = 1
+	party = []
+
+
+## Na abertura do jogo: converte o save antigo (arquivo único) no save 1 e reabre o último save usado.
 static func load_save() -> void:
 	if _loaded or not persist:
 		return
 	_loaded = true
-	if not FileAccess.file_exists(SAVE_PATH):
+	var any := false
+	for n in range(1, SLOT_COUNT + 1):
+		if slot_exists(n):
+			any = true
+	if not any and FileAccess.file_exists(save_dir + LEGACY_SAVE):
+		# o arquivo antigo fica onde está, como cópia de segurança
+		DirAccess.copy_absolute(ProjectSettings.globalize_path(save_dir + LEGACY_SAVE), ProjectSettings.globalize_path(save_path(1)))
+	var last := 0
+	if FileAccess.file_exists(save_dir + LAST_SLOT_FILE):
+		last = int(FileAccess.get_file_as_string(save_dir + LAST_SLOT_FILE))
+	if last >= 1 and last <= SLOT_COUNT and slot_exists(last):
+		select_slot(last)
+
+
+## Troca o save ativo: zera o que está na memória e lê o arquivo do slot (se existir).
+## Slot vazio vira um save novo, gravado na hora.
+static func select_slot(n: int) -> void:
+	slot = clampi(n, 1, SLOT_COUNT)
+	reset_progress()
+	if slot_exists(slot):
+		_read(save_path(slot))
+	if not persist:
 		return
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	save()
+	var f := FileAccess.open(save_dir + LAST_SLOT_FILE, FileAccess.WRITE)
+	if f != null:
+		f.store_string(str(slot))
+
+
+## Apaga o save do slot. Se era o ativo, o jogo fica sem save escolhido.
+static func delete_slot(n: int) -> void:
+	if slot_exists(n):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path(n)))
+	if n == slot:
+		slot = 0
+		reset_progress()
+
+
+## Resumo de um slot pra tela de saves, sem carregar o save: {} se está vazio.
+static func slot_info(n: int) -> Dictionary:
+	if not slot_exists(n):
+		return {}
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(save_path(n)))
+	if not (parsed is Dictionary):
+		return {}
+	var ranks := {}
+	for b in parsed.get("rank", {}):
+		ranks[int(b)] = int(parsed["rank"][b])
+	var team: Array = []
+	for h in parsed.get("party", []):
+		if int(h) >= 0 and int(h) < HEROES.size():
+			team.append(int(h))
+	return {"party": team, "money": int(parsed.get("money", 0)), "tickets": int(parsed.get("tickets", 0)), "rank": ranks}
+
+
+static func _read(path: String) -> void:
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if not (parsed is Dictionary):
 		return
 	for id in parsed.get("owned", []):
@@ -445,9 +576,15 @@ static func load_save() -> void:
 	tickets = int(parsed.get("tickets", 0))
 	shop_unlocked = bool(parsed.get("shop", false))
 	start_hero = clampi(int(parsed.get("hero", 2)), 0, HEROES.size() - 1)
-	tank_pick = int(parsed.get("tank", 0))
-	if tank_pick < 0 or tank_pick >= HEROES.size() or not is_tank(tank_pick):
-		tank_pick = 0
+	# party: quatro heróis diferentes que ainda existem. Save de antes da cafeteria tem só a tank
+	# escolhida: ele continua sem party e o jogador monta uma na cafeteria.
+	var team: Array = []
+	for h in parsed.get("party", []):
+		if int(h) >= 0 and int(h) < HEROES.size() and not team.has(int(h)):
+			team.append(int(h))
+	party = team if team.size() == 4 else []
+	if party_ready() and not party.has(start_hero):
+		start_hero = party[0]
 	for b in parsed.get("rank", {}):
 		best_rank[int(b)] = int(parsed["rank"][b])
 	boss = clampi(int(parsed.get("boss", 1)), 0, BOSS_INFO.size() - 1)
