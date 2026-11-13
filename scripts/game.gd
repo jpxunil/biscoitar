@@ -298,6 +298,7 @@ var enrage := 120.0
 var win_test := 0.0   # só pra teste: --win=N vence a luta aos N segundos (pra ver ranking e recompensa)
 var card_test := 0.0  # só pra teste: --cardtest=N mostra o aviso de carta nova aos N segundos
 var swap_test := 0.0  # só pra teste: --swaptest=N troca de herói aos N segundos
+var pause_test := 0.0  # só pra teste: --pausetest=N abre o menu de pause aos N segundos
 var lb_test := 0.0  # só pra teste: --lbtest=N dispara o Limit Break aos N segundos
 var sel := -1  # alvo escolhido no card (cura, reviver); -1 = automático
 var order := "atk"  # atk | gather | spread | hold
@@ -447,6 +448,8 @@ func _ready() -> void:
 			card_test = float(a.trim_prefix("--cardtest="))
 		if a.begins_with("--swaptest="):
 			swap_test = float(a.trim_prefix("--swaptest="))
+		if a.begins_with("--pausetest="):
+			pause_test = float(a.trim_prefix("--pausetest="))
 		if a.begins_with("--lbtest="):
 			lb_test = float(a.trim_prefix("--lbtest="))
 		if a.begins_with("--sel="):
@@ -542,6 +545,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	var k: int = event.physical_keycode
+	if k == KEY_ESCAPE and not prep and not ended:
+		pause()
+		get_viewport().set_input_as_handled()
+		return
 	if ended:
 		if k == KEY_ENTER or k == KEY_KP_ENTER:
 			retry()
@@ -570,7 +577,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_U: use_skill(units[ctrl], 3)
 		KEY_O: use_skill(units[ctrl], 4)
 		KEY_I: use_lb()
-		KEY_ESCAPE: retry()  # desistir e voltar pras cartas
+
+
+## ESC no meio da luta: congela tudo e abre o menu de pause (ui/screens/pause_menu.gd).
+func pause() -> void:
+	get_tree().paused = true
+	hud.pause.open()
+
+
+func resume() -> void:
+	hud.pause.close()
+	get_tree().paused = false
+
+
+## Sai da luta pelo menu de pause. Conta como desistência (mais uma tentativa), igual ao wipe.
+## `screen` é a tela que abre depois: "cards" (seleção de cartas) ou "title" (menu principal).
+func leave_fight(screen: String) -> void:
+	Knowledge.attempts += 1
+	Knowledge.screen = screen
+	_reload()
 
 
 func start_fight() -> void:
@@ -603,6 +628,12 @@ func retry() -> void:
 	else:
 		Knowledge.attempts += 1
 		Knowledge.screen = "cards"
+	_reload()
+
+
+## Recarrega a cena da luta. O pause é da árvore, não da cena: sem desligar, a cena nova nasce congelada.
+func _reload() -> void:
+	get_tree().paused = false
 	Engine.time_scale = 1.0
 	get_tree().reload_current_scene()
 
@@ -735,7 +766,7 @@ func _input_dir() -> Vector3:
 # ---------------------------------------------------------------- loop
 
 func _process(delta: float) -> void:
-	if shot_left >= 0.0:
+	if shot_left >= 0.0 and pause_test <= 0.0:  # com --pausetest a captura sai depois do pause
 		shot_left -= delta
 		if shot_left < 0.0:
 			get_viewport().get_texture().get_image().save_png("user://shot.png")
@@ -766,6 +797,16 @@ func _process(delta: float) -> void:
 	if swap_test > 0.0 and fight_time >= swap_test:
 		swap_test = 0.0
 		_cycle_ctrl()
+	if pause_test > 0.0 and fight_time >= pause_test:
+		pause_test = 0.0
+		pause()
+		if shot_left >= 0.0:
+			# com a árvore congelada este _process para; o timer "process_always" tira a captura
+			await get_tree().create_timer(maxf(shot_left, 0.4), true).timeout
+			get_viewport().get_texture().get_image().save_png("user://shot.png")
+			print("SHOT ", ProjectSettings.globalize_path("user://shot.png"))
+			get_tree().quit()
+		return
 	if lb_test > 0.0 and fight_time >= lb_test:
 		lb_test = 0.0
 		lb = 1.0

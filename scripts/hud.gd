@@ -42,6 +42,7 @@ var my_cast_red: Control
 var flash_rect: ColorRect
 var menu_root: Control
 var menus
+var pause: PauseMenu
 var end_layer: Control
 var end_title_slab: PanelContainer
 var end_title: Label
@@ -97,6 +98,13 @@ func setup(game) -> void:
 	menus.setup(g)
 
 	_build_end(root)
+
+	# por último: fica por cima de tudo, inclusive da tela de fim
+	pause = PauseMenu.new()
+	root.add_child(pause)
+	pause.resume_pressed.connect(g.resume)
+	pause.cards_pressed.connect(g.leave_fight.bind("cards"))
+	pause.title_pressed.connect(g.leave_fight.bind("title"))
 
 
 # ---------------------------------------------------------------- boss
