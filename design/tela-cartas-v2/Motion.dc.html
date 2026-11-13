@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Tela de Cartas: motion</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Bowlby+One&display=swap">
+<style>
+body{margin:0}
+.spoke{transition:transform .5s cubic-bezier(.25,1.35,.45,1)}
+.spoke:hover{z-index:9 !important}
+.hcard{transition:scale .22s cubic-bezier(.3,1.6,.5,1),rotate .22s ease-out,translate .22s ease-out,opacity .15s}
+.deal{animation:deal .42s cubic-bezier(.3,1.5,.5,1) backwards}
+.ghostspoke{pointer-events:none}
+.hcard.ghost{scale:1.15;rotate:7deg;transition:none}
+.lifted{opacity:.25}
+.sel{outline:5px solid #FFCC40;outline-offset:3px;border-radius:12px;scale:1.06}
+.target{outline:4px solid #F7F1DC;outline-offset:4px;border-radius:12px;animation:target .7s ease-in-out infinite}
+.target.over{outline-color:#FFCC40;outline-width:6px;animation:none;scale:1.1}
+.dropped{animation:drop .35s cubic-bezier(.3,1.7,.5,1)}
+.dragging,.dragging *{cursor:grabbing !important}
+@keyframes target{50%{outline-offset:9px}}
+@keyframes drop{from{scale:1.35;rotate:8deg}}
+.hcard:hover{scale:1.09;rotate:-3deg;translate:0 -12px}
+.hcard.alt:hover{rotate:3deg}
+.hcard.is-focus{scale:1.15;translate:0 -14px}
+.hcard.is-focus:hover{scale:1.2;rotate:2deg;translate:0 -18px}
+.hcard:active{scale:1.02}
+.halo{animation:pulse 1.1s ease-in-out infinite}
+.hero-art{animation:heroFloat 3.6s ease-in-out infinite;transform-origin:50% 80%;will-change:transform}
+@keyframes heroFloat{0%,100%{transform:translateY(6px) rotate(-1deg)}50%{transform:translateY(-14px) rotate(1.4deg)}}
+.float2{animation:float2 3.4s ease-in-out infinite}
+.drift{animation:drift 7s ease-in-out infinite alternate}
+.bob{animation:bob 1s ease-in-out infinite}
+.btn{overflow:hidden;transition:scale .14s cubic-bezier(.3,1.8,.5,1),translate .1s,background-color .12s,color .12s}
+.btn::after{content:"";position:absolute;top:-30%;left:-60%;width:28%;height:160%;background:#fff;opacity:.8;transform:skewX(-22deg);pointer-events:none}
+.btn:hover{scale:1.08}
+.btn:hover::after{animation:plin .45s ease-out}
+.btn:active{scale:.94;translate:2px 3px}
+.btn-gold:hover{background:#F7F1DC !important}
+.btn-paper:hover{background:#121429 !important;color:#F7F1DC !important}
+.face:hover img{opacity:1 !important}
+.ready{animation:ready 1.6s ease-in-out infinite}
+.ready::after{animation:plinIdle 3.2s ease-out infinite}
+.ready:hover{animation:none;scale:1.05}
+.ready:hover .ready-face{background:#FFE48A !important}
+.ready:hover .ready-txt{color:#B01818 !important}
+@keyframes deal{from{opacity:0;translate:0 40px;scale:.7}}
+@keyframes pulse{50%{scale:1.05}}
+@keyframes float{50%{translate:0 -10px;rotate:1.2deg}}
+@keyframes float2{50%{translate:0 -5px;rotate:-1.5deg}}
+@keyframes drift{from{translate:-10px 4px}to{translate:12px -5px}}
+@keyframes bob{50%{translate:0 5px}}
+@keyframes ready{50%{scale:1.03;rotate:-.6deg}}
+@keyframes plin{from{left:-60%}to{left:160%}}
+@keyframes plinIdle{0%{left:-60%}14%{left:160%}100%{left:160%}}
+@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important}}
+</style>
+</helmet>
+<div class="{{rootCls}}" onPointerMove="{{onMove}}" onPointerUp="{{onUp}}" onPointerLeave="{{onLeave}}" onPointerCancel="{{onLeave}}" style="width: 1280px; height: 720px; position: relative; overflow: hidden; background: {{bg}}; font-family: 'Baloo 2', sans-serif; color: #F7F1DC; touch-action: none; user-select: none">
+
+<!-- FUNDO -->
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 1280px; height: 720px; background-image: radial-gradient({{bg2}} 30%, transparent 32%); background-size: 20px 20px"></div>
+<div aria-hidden="true" style="position: absolute; left: -40px; top: -40px; width: 760px; height: 420px; background: {{bg2}}; clip-path: polygon(0 0, 100% 0, 62% 46%, 78% 62%, 30% 100%, 0 84%)"></div>
+<div aria-hidden="true" style="position: absolute; left: -30px; top: 300px; width: 420px; height: 220px; background: #F7F1DC; clip-path: polygon(0 30%, 70% 0, 100% 22%, 40% 62%, 0 100%)"></div>
+
+<!-- PALCO DA ARTE: as faixas deslizam devagar -->
+<div aria-hidden="true" style="position: absolute; left: 790px; top: 0; width: 500px; height: 720px; background: #121429; clip-path: polygon(22% 0, 100% 0, 100% 100%, 6% 100%, 18% 56%, 8% 44%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 800px; top: 0; width: 480px; height: 720px; background: {{deep}}; clip-path: polygon(22% 0, 100% 0, 100% 100%, 6% 100%, 18% 56%, 8% 44%)"></div>
+<div aria-hidden="true" class="drift" style="position: absolute; left: 850px; top: 96px; width: 470px; height: 190px; background: {{bg2}}; clip-path: polygon(0 74%, 100% 0, 100% 42%, 5% 100%)"></div>
+<div aria-hidden="true" class="drift" style="position: absolute; left: 866px; top: 214px; width: 450px; height: 150px; background: {{acc}}; clip-path: polygon(0 78%, 100% 0, 100% 30%, 6% 100%); animation-duration: 9s"></div>
+<div aria-hidden="true" class="drift" style="position: absolute; left: 900px; top: 300px; width: 420px; height: 120px; background: #F7F1DC; clip-path: polygon(0 86%, 100% 0, 100% 14%, 4% 100%); animation-duration: 5.5s"></div>
+
+<!-- ROLETA: discos fixos -->
+<div aria-hidden="true" style="position: absolute; left: -222px; top: 428px; width: 1344px; height: 1344px; border-radius: 50%; background: #121429"></div>
+<div aria-hidden="true" style="position: absolute; left: -216px; top: 434px; width: 1332px; height: 1332px; border-radius: 50%; background: #F7F1DC"></div>
+<div aria-hidden="true" style="position: absolute; left: -202px; top: 448px; width: 1304px; height: 1304px; border-radius: 50%; background: #121429"></div>
+<div aria-hidden="true" style="position: absolute; left: -198px; top: 452px; width: 1296px; height: 1296px; border-radius: 50%; background: #6B3F22"></div>
+<!-- marcas do aro: giram junto com as cartas -->
+<sc-for list="{{ticks}}" as="t" hint-placeholder-count="8">
+<div aria-hidden="true" class="spoke" style="position: absolute; left: 450px; top: 1100px; width: 0; height: 0; transform: rotate({{t.deg}}deg)">
+<div style="position: absolute; left: -3px; top: -666px; width: 6px; height: 14px; background: #121429"></div>
+</div>
+</sc-for>
+<div aria-hidden="true" style="position: absolute; left: -20px; top: 630px; width: 940px; height: 940px; border-radius: 50%; background: #121429"></div>
+<div aria-hidden="true" style="position: absolute; left: -14px; top: 636px; width: 928px; height: 928px; border-radius: 50%; background: {{deep}}"></div>
+
+<!-- ponteiro -->
+<div aria-hidden="true" class="bob" style="position: absolute; left: 428px; top: 398px; width: 44px; height: 36px; background: #121429; clip-path: polygon(0 0, 100% 0, 50% 100%); z-index: 8">
+<div style="position: absolute; left: 8px; top: 4px; width: 28px; height: 23px; background: #FFCC40; clip-path: polygon(0 0, 100% 0, 50% 100%)"></div>
+</div>
+
+<!-- cubo da roleta -->
+<button class="btn btn-gold" onClick="{{prev}}" aria-label="Girar para a esquerda" style="position: absolute; left: 296px; top: 668px; width: 44px; height: 44px; border: 3px solid #121429; padding: 0; background: #FFCC40; transform: skewX(-10deg); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 8">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M16 3L7 12L16 21"></path></svg>
+</button>
+<div style="position: absolute; left: 348px; top: 672px; width: 204px; height: 36px; display: flex; align-items: center; justify-content: center; font-family: 'Bowlby One', sans-serif; font-size: 21px; letter-spacing: 0.5px; color: #F7F1DC; transform: skewX(-8deg); z-index: 8">SUAS CARTAS</div>
+<button class="btn btn-gold" onClick="{{next}}" aria-label="Girar para a direita" style="position: absolute; left: 560px; top: 668px; width: 44px; height: 44px; border: 3px solid #121429; padding: 0; background: #FFCC40; transform: skewX(-10deg); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 8">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M8 3L17 12L8 21"></path></svg>
+</button>
+
+<!-- BANDEJA DOS SLOTS -->
+<div aria-hidden="true" style="position: absolute; left: 43px; top: 91px; width: 632px; height: 314px; background: #121429; clip-path: polygon(0 4%, 100% 0, 98% 100%, 2% 96%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 36px; top: 84px; width: 632px; height: 314px; background: #121429; clip-path: polygon(0 4%, 100% 0, 98% 100%, 2% 96%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 41px; top: 89px; width: 622px; height: 304px; background: {{deep}}; clip-path: polygon(0 4%, 100% 0, 98% 100%, 2% 96%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 41px; top: 236px; width: 622px; height: 14px; background: {{deep2}}; transform: rotate(-1deg)"></div>
+
+<!-- BANDEJA DO ITEM -->
+<div aria-hidden="true" style="position: absolute; left: 707px; top: 117px; width: 190px; height: 262px; background: #121429; clip-path: polygon(8% 0, 100% 6%, 94% 100%, 0 92%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 700px; top: 110px; width: 190px; height: 262px; background: #121429; clip-path: polygon(8% 0, 100% 6%, 94% 100%, 0 92%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 705px; top: 115px; width: 180px; height: 252px; background: {{deep2}}; clip-path: polygon(8% 0, 100% 6%, 94% 100%, 0 92%)"></div>
+<div style="position: absolute; left: 716px; top: 134px; width: 158px; height: 34px; background: #4DE6FF; border: 3px solid #121429; box-sizing: border-box; transform: rotate(-4deg) skewX(-10deg); display: flex; align-items: center; justify-content: center; font-family: 'Bowlby One', sans-serif; font-size: 14px; color: #121429">ITEM ON HOLD</div>
+
+<!-- ARTE DA HEROÍNA: flutua -->
+<div class="hero-art" style="position: absolute; left: 860px; top: 50px; width: 430px; height: 500px">
+<img src="/_blob/543bad71b8148f6a07cac30c468c40ff" alt="Ilustração da Maga" style="display: block; width: 430px; height: 500px; object-fit: contain">
+</div>
+
+<!-- frase: balança em outro ritmo -->
+<div class="float2" style="position: absolute; left: 876px; top: 62px; width: 156px; height: 84px">
+<div aria-hidden="true" style="position: absolute; left: 6px; top: 6px; width: 150px; height: 78px; background: #121429; clip-path: polygon(0 10%, 100% 0, 96% 86%, 80% 88%, 84% 100%, 62% 90%, 4% 96%)"></div>
+<div style="position: absolute; left: 0; top: 0; width: 150px; height: 78px; box-sizing: border-box; padding: 16px 12px 0 16px; background: #F7F1DC; clip-path: polygon(0 10%, 100% 0, 96% 86%, 80% 88%, 84% 100%, 62% 90%, 4% 96%); font-weight: 700; font-size: 14px; line-height: 17px; color: #121429">Dano de longe, com cast.</div>
+</div>
+
+<!-- CARTAS: slots e mão. Cada carta fica num "raio" que gira em torno do seu ponto de origem -->
+<sc-for list="{{cards}}" as="c" hint-placeholder-count="21">
+<div class="{{c.scls}}" style="position: absolute; left: {{c.ox}}px; top: {{c.oy}}px; width: 0; height: 0; transform: rotate({{c.deg}}deg); z-index: {{c.z}}; animation-delay: {{c.delay}}ms">
+<button class="{{c.cls}}" onClick="{{c.pick}}" onPointerDown="{{c.down}}" aria-label="{{c.aria}}" style="position: absolute; left: -54px; top: {{c.ty}}px; width: 108px; height: 152px; border: none; padding: 0; background: none; font-family: inherit; cursor: {{c.cur}}; transform: rotate({{c.rot}}deg)">
+<sc-if value="{{c.focus}}" hint-placeholder-val="{{false}}">
+<div class="halo" style="position: absolute; left: -7px; top: -7px; width: 122px; height: 166px; border-radius: 14px; background: #FFCC40; border: 3px solid #121429; box-sizing: border-box"></div>
+</sc-if>
+<sc-if value="{{c.solid}}" hint-placeholder-val="{{true}}">
+<div style="position: absolute; left: 4px; top: 5px; width: 108px; height: 152px; border-radius: 9px; background: #121429"></div>
+</sc-if>
+<sc-if value="{{c.face}}" hint-placeholder-val="{{true}}">
+<div style="position: absolute; left: 0; top: 0; width: 108px; height: 152px; box-sizing: border-box; border: 3px solid #121429; border-radius: 9px; background: {{c.bg}}; overflow: hidden">
+<div style="height: 28px; background: #121429; color: #F7F1DC; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 800; font-size: {{c.fs}}px; line-height: 11px; padding: 0 4px">{{c.name}}</div>
+<div style="position: relative; margin: 6px 6px 0 6px; height: 78px; box-sizing: border-box; border: 2px solid #121429; background: {{c.art}}; overflow: hidden">
+<div style="position: absolute; left: -20px; top: 14px; width: 140px; height: 14px; background: {{c.st}}; transform: rotate(-24deg)"></div>
+<div style="position: absolute; left: -20px; top: 46px; width: 140px; height: 8px; background: {{c.st}}; transform: rotate(-24deg)"></div>
+<svg aria-hidden="true" width="46" height="46" viewBox="0 0 24 24" style="position: absolute; left: 21px; top: 14px"><path d="{{c.glyph}}" fill="#121429"></path></svg>
+</div>
+<div style="height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px">
+<svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24"><path d="{{c.glyph}}" fill="#121429"></path></svg>
+<svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24"><path d="{{c.glyph}}" fill="#121429"></path></svg>
+<svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24"><path d="{{c.glyph}}" fill="#121429"></path></svg>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{c.back}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: 0; top: 0; width: 108px; height: 152px; box-sizing: border-box; border: 3px solid #121429; border-radius: 9px; background: #1E2460; overflow: hidden">
+<div style="position: absolute; left: 6px; top: 6px; width: 90px; height: 134px; box-sizing: border-box; border: 3px solid {{c.bg}}; border-radius: 5px"></div>
+<div style="position: absolute; left: 0; top: 22px; width: 102px; text-align: center; font-family: 'Bowlby One', sans-serif; font-size: 58px; line-height: 64px; color: #F7F1DC">?</div>
+<div style="position: absolute; left: 0; top: 104px; width: 102px; display: flex; justify-content: center; gap: 7px">
+<div style="width: 14px; height: 14px; box-sizing: border-box; border: 3px solid #F7F1DC; transform: rotate(45deg); background: {{c.p1}}"></div>
+<div style="width: 14px; height: 14px; box-sizing: border-box; border: 3px solid #F7F1DC; transform: rotate(45deg); background: {{c.p2}}"></div>
+<div style="width: 14px; height: 14px; box-sizing: border-box; border: 3px solid #F7F1DC; transform: rotate(45deg); background: {{c.p3}}"></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{c.empty}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: 0; top: 0; width: 108px; height: 152px; box-sizing: border-box; border: 3px solid {{c.bg}}; border-radius: 9px; background: {{c.eb}}">
+<svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" style="position: absolute; left: 31px; top: 53px"><path d="M12 1L15 9L23 12L15 15L12 23L9 15L1 12L9 9Z" fill="{{c.eg}}"></path></svg>
+</div>
+</sc-if>
+<sc-if value="{{c.dim}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: 0; top: 0; width: 108px; height: 152px; border-radius: 9px; background: rgba(18,20,41,0.6)"></div>
+</sc-if>
+</button>
+</div>
+</sc-for>
+
+<!-- TOPO: título -->
+<div aria-hidden="true" style="position: absolute; left: 27px; top: 17px; width: 216px; height: 62px; background: #121429; clip-path: polygon(0 0, 100% 8%, 95% 100%, 3% 90%); z-index: 10"></div>
+<div aria-hidden="true" style="position: absolute; left: 20px; top: 10px; width: 216px; height: 62px; background: #121429; clip-path: polygon(0 0, 100% 8%, 95% 100%, 3% 90%); z-index: 10"></div>
+<div style="position: absolute; left: 24px; top: 14px; width: 208px; height: 54px; background: #F7F1DC; clip-path: polygon(0 0, 100% 8%, 95% 100%, 3% 90%); display: flex; align-items: center; justify-content: center; z-index: 10">
+<h1 style="margin: 0; font-family: 'Bowlby One', sans-serif; font-weight: 400; font-size: 38px; line-height: 40px; color: #121429; transform: rotate(-2deg) skewX(-10deg)">CARTAS</h1>
+</div>
+
+<!-- TOPO: boss -->
+<div aria-hidden="true" style="position: absolute; left: 250px; top: 28px; width: 186px; height: 42px; background: #121429; transform: skewX(-14deg); z-index: 10"></div>
+<div style="position: absolute; left: 245px; top: 22px; width: 186px; height: 42px; box-sizing: border-box; border: 3px solid #121429; background: #FF5999; transform: skewX(-14deg); display: flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Bowlby One', sans-serif; color: #121429; z-index: 10">
+<span style="font-size: 12px">VS</span>
+<span style="font-size: 17px">MINI-CHAN</span>
+</div>
+
+<!-- TOPO: seletor de herói -->
+<div aria-hidden="true" style="position: absolute; left: 455px; top: 17px; width: 450px; height: 62px; background: #121429; clip-path: polygon(2% 0, 100% 6%, 98% 100%, 0 92%); z-index: 10"></div>
+<div aria-hidden="true" style="position: absolute; left: 448px; top: 10px; width: 450px; height: 62px; background: #121429; clip-path: polygon(2% 0, 100% 6%, 98% 100%, 0 92%); z-index: 10"></div>
+<div aria-hidden="true" style="position: absolute; left: 452px; top: 14px; width: 442px; height: 54px; background: {{deep2}}; clip-path: polygon(2% 0, 100% 6%, 98% 100%, 0 92%); z-index: 10"></div>
+<button class="btn btn-gold" aria-label="Herói anterior" style="position: absolute; left: 464px; top: 19px; width: 40px; height: 44px; border: 3px solid #121429; padding: 0; background: #FFCC40; transform: skewX(-10deg); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M16 3L7 12L16 21"></path></svg>
+</button>
+<div style="position: absolute; left: 514px; top: 12px; width: 186px; height: 58px; box-sizing: border-box; border: 3px solid #121429; background: #F7F1DC; transform: rotate(-2deg); display: flex; align-items: center; gap: 10px; overflow: hidden; z-index: 10">
+<img src="/_blob/382719856c0482c0dcc7f87834badfd2" alt="Rosto da Maga" style="width: 44px; height: 52px; object-fit: cover; border-right: 3px solid #121429">
+<div style="display: flex; flex-direction: column">
+<div style="font-family: 'Bowlby One', sans-serif; font-size: 20px; line-height: 22px; color: #121429">MAGA</div>
+<div style="font-weight: 700; font-size: 14px; line-height: 16px; color: #3E2413">DPS à distância</div>
+</div>
+</div>
+<button class="btn face" aria-label="Tank" style="position: absolute; left: 708px; top: 17px; width: 40px; height: 48px; border: 3px solid #121429; padding: 0; background: #121429; cursor: pointer; transform: rotate(3deg); z-index: 10">
+<img src="/_blob/f3bb2849c5bd15e7d6a2c8af11c8ab2b" alt="" style="width: 34px; height: 42px; object-fit: cover; display: block; opacity: 0.6">
+</button>
+<button class="btn face" aria-label="Healer" style="position: absolute; left: 755px; top: 17px; width: 40px; height: 48px; border: 3px solid #121429; padding: 0; background: #121429; cursor: pointer; transform: rotate(-3deg); z-index: 10">
+<img src="/_blob/db965a88f1939715a84caaf960a11995" alt="" style="width: 34px; height: 42px; object-fit: cover; display: block; opacity: 0.6">
+</button>
+<button class="btn face" aria-label="Assassina" style="position: absolute; left: 802px; top: 17px; width: 40px; height: 48px; border: 3px solid #121429; padding: 0; background: #121429; cursor: pointer; transform: rotate(2deg); z-index: 10">
+<img src="/_blob/7cb8a3838da66b87655c943b5b81404c" alt="" style="width: 34px; height: 42px; object-fit: cover; display: block; opacity: 0.6">
+</button>
+<button class="btn btn-gold" aria-label="Próximo herói" style="position: absolute; left: 850px; top: 19px; width: 40px; height: 44px; border: 3px solid #121429; padding: 0; background: #FFCC40; transform: skewX(-10deg); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M8 3L17 12L8 21"></path></svg>
+</button>
+
+<!-- VOLTAR -->
+<div aria-hidden="true" style="position: absolute; left: 1141px; top: 21px; width: 120px; height: 40px; background: #121429; transform: skewX(-12deg); z-index: 10"></div>
+<button class="btn btn-paper" style="position: absolute; left: 1136px; top: 16px; width: 120px; height: 40px; box-sizing: border-box; border: 3px solid #121429; padding: 0; background: #F7F1DC; transform: skewX(-12deg); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-family: 'Bowlby One', sans-serif; font-size: 15px; color: #121429; z-index: 10">
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"><path d="M16 3L7 12L16 21"></path></svg>
+VOLTAR
+</button>
+
+<!-- NOME, CLASSE E VIDA -->
+<div class="float2" style="position: absolute; left: 890px; top: 382px; width: 204px; height: 66px; z-index: 10; animation-duration: 5.2s">
+<div aria-hidden="true" style="position: absolute; left: 8px; top: 8px; width: 196px; height: 58px; background: #121429; clip-path: polygon(0 8%, 100% 0, 96% 100%, 3% 92%)"></div>
+<div style="position: absolute; left: 0; top: 0; width: 196px; height: 58px; background: #121429; clip-path: polygon(0 8%, 100% 0, 96% 100%, 3% 92%)">
+<div style="position: absolute; left: 4px; top: 4px; width: 188px; height: 50px; background: #F7F1DC; clip-path: polygon(0 8%, 100% 0, 96% 100%, 3% 92%); display: flex; align-items: center; justify-content: center">
+<div style="font-family: 'Bowlby One', sans-serif; font-size: 40px; line-height: 42px; color: #121429; transform: rotate(-2deg) skewX(-10deg)">MAGA</div>
+</div>
+</div>
+</div>
+<div style="position: absolute; left: 902px; top: 446px; display: flex; align-items: center; gap: 12px; z-index: 10">
+<div style="padding: 2px 12px; background: {{acc}}; border: 3px solid #121429; transform: skewX(-12deg); font-family: 'Bowlby One', sans-serif; font-size: 12px; line-height: 18px; color: {{accT}}">DPS À DISTÂNCIA</div>
+<div style="padding: 2px 12px; background: #121429; border: 3px solid #121429; transform: skewX(-12deg); display: flex; align-items: center; gap: 8px; font-family: 'Bowlby One', sans-serif; color: #F7F1DC">
+<span style="font-size: 12px; line-height: 18px">HP</span>
+<div style="width: 56px; height: 10px; background: #54DE85"></div>
+<span style="font-size: 15px; line-height: 18px">90</span>
+</div>
+</div>
+
+<!-- DETALHES DA CARTA EM FOCO: troca conforme a roleta gira -->
+<div aria-hidden="true" style="position: absolute; left: 924px; top: 488px; width: 348px; height: 124px; background: #121429; clip-path: polygon(2% 0, 100% 5%, 97% 100%, 0 94%); z-index: 10"></div>
+<div aria-hidden="true" style="position: absolute; left: 916px; top: 480px; width: 348px; height: 124px; background: #121429; clip-path: polygon(2% 0, 100% 5%, 97% 100%, 0 94%); z-index: 10"></div>
+<div aria-hidden="true" style="position: absolute; left: 921px; top: 485px; width: 338px; height: 114px; background: #F7F1DC; clip-path: polygon(2% 0, 100% 5%, 97% 100%, 0 94%); z-index: 10"></div>
+<div style="position: absolute; left: 936px; top: 496px; width: 44px; height: 44px; box-sizing: border-box; border: 3px solid #121429; background: {{d.bg}}; transform: rotate(-6deg); display: flex; align-items: center; justify-content: center; z-index: 10">
+<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24"><path d="{{d.glyph}}" fill="#121429"></path></svg>
+</div>
+<div style="position: absolute; left: 992px; top: 492px; font-family: 'Bowlby One', sans-serif; font-size: 22px; line-height: 26px; color: #121429; transform: skewX(-8deg); white-space: nowrap; z-index: 10">{{d.name}}</div>
+<div style="position: absolute; left: 992px; top: 521px; display: flex; gap: 6px; font-family: 'Bowlby One', sans-serif; font-size: 11px; line-height: 16px; z-index: 10">
+<div style="padding: 2px 8px; background: {{d.chipBg}}; color: {{d.chipT}}; transform: skewX(-12deg)">{{d.kind}}</div>
+<div style="padding: 2px 8px; background: #121429; color: #F7F1DC; transform: skewX(-12deg)">{{d.cat}}</div>
+</div>
+<div style="position: absolute; left: 938px; top: 550px; width: 306px; font-weight: 700; font-size: 16px; line-height: 20px; color: #121429; z-index: 10">{{d.desc}}</div>
+
+<!-- READY FOR BATTLE: pulsa parado, brilha e muda de cor no hover -->
+<div aria-hidden="true" style="position: absolute; left: 942px; top: 628px; width: 330px; height: 84px; background: #121429; clip-path: polygon(3% 6%, 100% 0, 97% 92%, 0 100%); z-index: 10"></div>
+<button class="btn ready" style="position: absolute; left: 932px; top: 618px; width: 330px; height: 84px; border: none; padding: 0; background: #121429; clip-path: polygon(3% 6%, 100% 0, 97% 92%, 0 100%); cursor: pointer; z-index: 10">
+<div class="ready-face" style="position: absolute; left: 6px; top: 6px; width: 318px; height: 72px; background: #FFCC40; clip-path: polygon(3% 6%, 100% 0, 97% 92%, 0 100%); display: flex; align-items: center; justify-content: center; transition: background-color 0.12s">
+<span class="ready-txt" style="position: relative; font-family: 'Bowlby One', sans-serif; font-size: 25px; line-height: 28px; color: #121429; transform: rotate(-3deg) skewX(-10deg); transition: color 0.12s">READY FOR BATTLE</span>
+</div>
+</button>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["Maga","Tank","Healer","Assassina"],"default":"Maga","section":"Tema do herói"},"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+// ponto do ponteiro em coordenadas da tela 1280x720, qualquer que seja o zoom
+pt(e) {
+var r = e.currentTarget.getBoundingClientRect();
+var k = r.width / 1280;
+return { x: (e.clientX - r.left) / k, y: (e.clientY - r.top) / k };
+}
+slotAt(x, y) {
+var s = this._v.slots;
+for (var i = 0; i < s.length; i++) {
+if (x >= s[i].x - 8 && x <= s[i].x + 116 && y >= s[i].y - 8 && y <= s[i].y + 160) return i;
+}
+return -1;
+}
+onDown(e, info) {
+if (e.button) return;
+this._pend = { info: info, sx: e.clientX, sy: e.clientY };
+}
+onMove(e) {
+var p = this._pend;
+if (!p) return;
+var st = this.state || {};
+if (!st.drag) {
+var dx = e.clientX - p.sx, dy = e.clientY - p.sy;
+if (dx * dx + dy * dy < 36) return;
+}
+var pt = this.pt(e), si = this.slotAt(pt.x, pt.y);
+var ok = si >= 0 && this._v.slots[si].kind === p.info.card.kind && !(p.info.src === 'slot' && p.info.idx === si);
+this.setState({ drag: { src: p.info.src, idx: p.info.idx, card: p.info.card, x: pt.x, y: pt.y }, over: ok ? si : -1 });
+}
+onUp(e) {
+var p = this._pend;
+this._pend = null;
+var drag = (this.state || {}).drag;
+if (!p || !drag) return;
+var v = this._v, pt = this.pt(e), si = this.slotAt(pt.x, pt.y);
+var eq = v.EQ.slice(), hand = v.HAND.slice(), f = v.f;
+var next = { drag: null, over: -1, sel: null };
+if (si >= 0 && v.slots[si].kind === drag.card.kind) {
+if (drag.src === 'hand') {
+// mão -> slot: equipa; se o slot estava ocupado, a carta antiga volta pro mesmo lugar da mão
+var old = eq[si];
+eq[si] = drag.card;
+if (old) hand[drag.idx] = old; else hand.splice(drag.idx, 1);
+next.focus = Math.max(0, Math.min(hand.length - 1, old ? drag.idx : (f > drag.idx ? f - 1 : f)));
+} else if (si !== drag.idx) {
+// slot -> slot da mesma raridade: troca
+var o = eq[si];
+eq[si] = drag.card;
+eq[drag.idx] = o || null;
+}
+next.eq = eq; next.hand = hand; next.drop = 's' + si;
+} else if (drag.src === 'slot') {
+// slot -> roleta: desequipa e a carta entra na mão já em foco
+var dx = pt.x - 450, dy = pt.y - 1100;
+if (dx * dx + dy * dy < 672 * 672) {
+eq[drag.idx] = null;
+hand.splice(f, 0, drag.card);
+next.eq = eq; next.hand = hand; next.focus = f; next.drop = 'h' + f;
+}
+}
+this.setState(next);
+}
+onLeave() {
+this._pend = null;
+if (this.state && this.state.drag) this.setState({ drag: null, over: -1 });
+}
+renderVals() {
+var self = this;
+var T = {
+Maga: { bg: '#E08A14', bg2: '#FFC233', deep: '#2B1509', deep2: '#4A2612', acc: '#C4201C', accT: '#F7F1DC' },
+Tank: { bg: '#2B4FBF', bg2: '#4D80FF', deep: '#121A4A', deep2: '#1E2A6E', acc: '#FFCC40', accT: '#121429' },
+Healer: { bg: '#1F8A4C', bg2: '#3FB86B', deep: '#0E3320', deep2: '#175030', acc: '#FFCC40', accT: '#121429' },
+Assassina: { bg: '#5B2BB8', bg2: '#7A3FE0', deep: '#1E2460', deep2: '#2B3384', acc: '#FF5999', accT: '#121429' }
+};
+var th = T[this.props.tema] || T.Maga;
+var K = {
+purple: { bg: '#9E5CFF', art: '#7A3FE0', st: '#5B2BB8', eb: '#2E1766', eg: '#5B2BB8', label: 'ÉPICA', chipBg: '#5B2BB8', chipT: '#F7F1DC' },
+gold: { bg: '#FFCC40', art: '#F2A91E', st: '#C9871A', eb: '#4A2E12', eg: '#8A5A1E', label: 'RARA', chipBg: '#FFCC40', chipT: '#121429' },
+white: { bg: '#F7F1DC', art: '#E6D9B4', st: '#CDBB8A', eb: '#4D4636', eg: '#8C7F5C', label: 'COMUM', chipBg: '#4D4636', chipT: '#F7F1DC' },
+item: { bg: '#4DE6FF', art: '#35C4E6', st: '#1E9FC0', eb: '#123A4A', eg: '#1E9FC0', label: 'ITEM', chipBg: '#4DE6FF', chipT: '#121429' }
+};
+var G = {
+attack: 'M12 1L16 7V15H20V18H14V23H10V18H4V15H8V7Z',
+defense: 'M3 3H21V12C21 18 16 21.5 12 23C8 21.5 3 18 3 12Z',
+utility: 'M12 2A10 10 0 1 1 12 22A10 10 0 1 1 12 2ZM12 8A4 4 0 1 0 12 16A4 4 0 1 0 12 8Z',
+special: 'M12 1L15 9L23 12L15 15L12 23L9 15L1 12L9 9Z'
+};
+var CAT = { attack: 'ATAQUE', defense: 'DEFESA', utility: 'UTILIDADE', special: 'ESPECIAL' };
+function mk(o) {
+var k = K[o.kind];
+var m = o.pips || 0;
+var hover = o.state !== 'empty';
+return {
+ox: o.ox, oy: o.oy, ty: o.ty, deg: o.deg || 0, rot: o.rot || 0, z: o.z || 1,
+cls: (o.ghost ? 'hcard ghost' : (hover ? 'hcard' : 'slot')) + (o.focus ? ' is-focus' : '') + (o.alt ? ' alt' : '') + (o.extra || ''),
+scls: o.ghost ? 'ghostspoke' : 'spoke deal',
+cur: o.cur || 'default',
+delay: o.delay || 0,
+pick: o.pick || function () {},
+down: o.down || function () {},
+aria: o.name || (o.state === 'back' ? 'Carta não conquistada' : 'Slot vazio'),
+face: o.state === 'face' || o.state === 'dim',
+back: o.state === 'back',
+empty: o.state === 'empty',
+dim: o.state === 'dim',
+solid: o.state !== 'empty',
+focus: !!o.focus,
+name: o.name || '', fs: (o.name || '').length > 13 ? 10 : 12,
+bg: k.bg, art: k.art, st: k.st, eb: k.eb, eg: k.eg,
+glyph: G[o.cat || 'special'],
+p1: m > 0 ? '#FFCC40' : '#1E2460', p2: m > 1 ? '#FFCC40' : '#1E2460', p3: m > 2 ? '#FFCC40' : '#1E2460'
+};
+}
+var cards = [];
+// slots equipados (Maga): origem do raio = centro da carta, sem giro
+var slots = [
+{ x: 60, y: 96, kind: 'purple', state: 'face', name: 'Rotação', cat: 'attack' },
+{ x: 176, y: 96, kind: 'purple', state: 'empty' },
+{ x: 308, y: 96, kind: 'gold', state: 'face', name: 'Golpe Lapidado', cat: 'attack' },
+{ x: 424, y: 96, kind: 'gold', state: 'face', name: 'Carrasco', cat: 'attack' },
+{ x: 540, y: 96, kind: 'gold', state: 'empty' },
+{ x: 118, y: 240, kind: 'white', state: 'face', name: 'Desvio', cat: 'defense' },
+{ x: 234, y: 240, kind: 'white', state: 'face', name: 'Cautela', cat: 'defense' },
+{ x: 350, y: 240, kind: 'white', state: 'face', name: 'Dispersão', cat: 'utility' },
+{ x: 466, y: 240, kind: 'white', state: 'empty' },
+{ x: 741, y: 184, kind: 'item', state: 'face', name: 'Biscoito da Sorte', cat: 'special', rot: 3 }
+];
+var DESC = {
+'Rotação': 'Bate mais forte. Assassina e Maga soltam o golpe de 20 s sempre que dá.',
+'Golpe Lapidado': 'Golpe forte melhor. Maga: conjura 0,7 s mais rápido e +15%.',
+'Carrasco': '+25% de dano com a boss abaixo de 30% de vida.',
+'Desvio': 'Sai dos ataques vermelhos.',
+'Cautela': 'Não conjura em cima de ataque vermelho.',
+'Dispersão': 'No círculo roxo, corre pro próprio canto da arena.',
+'Biscoito da Sorte': 'O Limit Break começa a luta com 25% de carga.'
+};
+var st = this.state || {};
+var EQ = st.eq || slots.map(function (s) {
+return s.state === 'face' ? { kind: s.kind, state: 'face', name: s.name, cat: s.cat, desc: DESC[s.name] || '' } : null;
+});
+var drag = st.drag || null, over = st.over == null ? -1 : st.over, drop = st.drop || '';
+// carta equipada selecionada por clique: os detalhes mostram ela em vez da carta em foco na roleta
+var sel = st.sel != null && EQ[st.sel] ? st.sel : -1;
+slots.forEach(function (s, i) {
+var c = EQ[i];
+var lifted = !!drag && drag.src === 'slot' && drag.idx === i;
+var v = c ? { kind: c.kind, state: 'face', name: c.name, cat: c.cat } : { kind: s.kind, state: 'empty' };
+v.ox = s.x + 54; v.oy = s.y + 76; v.ty = -76; v.rot = s.rot || 0; v.alt = i % 2 === 1; v.delay = i * 45;
+v.extra = (lifted ? ' lifted' : '') + (drag && drag.card.kind === s.kind && !lifted ? ' target' : '') + (over === i ? ' over' : '') + (drop === 's' + i ? ' dropped' : '') + (sel === i && !drag ? ' sel' : '');
+v.cur = c ? 'grab' : 'default';
+if (c) v.down = function (e) { self.onDown(e, { src: 'slot', idx: i, card: c }); };
+if (c) v.pick = function () { self.setState({ sel: i }); };
+cards.push(mk(v));
+});
+// mão na roleta: origem do raio = centro da roleta (450, 1100); a carta fica a 560 do centro
+var hand = [
+{ kind: 'white', state: 'back', pips: 0 },
+{ kind: 'white', state: 'face', name: 'Laranja Junto', cat: 'utility', desc: 'Corre pro círculo laranja pra dividir o dano com a party.' },
+{ kind: 'white', state: 'face', name: 'Dupla Laranja', cat: 'utility', desc: 'Com dois círculos laranjas, forma dupla: dois em cada.' },
+{ kind: 'gold', state: 'face', name: 'Faísca de Limite', cat: 'utility', desc: 'O dano dele enche o Limit Break 50% mais rápido.' },
+{ kind: 'white', state: 'face', name: 'Lâmina Afiada', cat: 'attack', desc: '+8% de dano.' },
+{ kind: 'purple', state: 'face', name: 'Fênix', cat: 'special', desc: 'Uma vez por luta, em vez de morrer, volta com metade da vida.' },
+{ kind: 'gold', state: 'dim', name: 'Guarda', cat: 'defense', desc: 'Usa Mitigação quando a boss prepara o Esmagar.' },
+{ kind: 'gold', state: 'back', pips: 2 },
+{ kind: 'gold', state: 'face', name: 'Segunda Pele', cat: 'defense', desc: 'Começa a luta, e volta de um reviver, com um escudo de 30.' },
+{ kind: 'item', state: 'face', name: 'Poção', cat: 'utility', desc: 'Uma vez por luta, cura 50 quando a vida cai abaixo de 30%.' },
+{ kind: 'white', state: 'back', pips: 1 },
+{ kind: 'purple', state: 'face', name: 'Sobrecarga', cat: 'attack', desc: '+20% de dano, mas recebe 15% a mais.' }
+];
+var HAND = st.hand || hand;
+var STEP = 13, last = Math.max(0, HAND.length - 1);
+var f = Math.min(last, st.focus != null ? st.focus : 5);
+HAND.forEach(function (h, i) {
+var can = h.state === 'face';
+var lifted = !!drag && drag.src === 'hand' && drag.idx === i;
+var v = { kind: h.kind, state: h.state, name: h.name, cat: h.cat, pips: h.pips };
+v.ox = 450; v.oy = 1100; v.ty = -636; v.deg = (i - f) * STEP;
+v.focus = i === f && sel < 0; v.z = i === f ? 5 : 2; v.alt = i % 2 === 1; v.delay = 350 + i * 40;
+v.extra = (lifted ? ' lifted' : '') + (drop === 'h' + i ? ' dropped' : '');
+v.cur = can ? 'grab' : 'not-allowed';
+v.pick = function () { self.setState({ focus: i, sel: null }); };
+if (can) v.down = function (e) { self.onDown(e, { src: 'hand', idx: i, card: h }); };
+cards.push(mk(v));
+});
+// carta fantasma que segue o ponteiro durante o arrasto
+if (drag) cards.push(mk({ kind: drag.card.kind, state: 'face', name: drag.card.name, cat: drag.card.cat, ox: Math.round(drag.x), oy: Math.round(drag.y), ty: -76, z: 60, ghost: true, cur: 'grabbing' }));
+this._v = { slots: slots, EQ: EQ, HAND: HAND, f: f };
+var ticks = [];
+for (var k = -9; k < 26; k++) ticks.push({ deg: (k + 0.5 - f) * STEP });
+var cur = (sel >= 0 ? EQ[sel] : null) || HAND[f] || { kind: 'white', state: 'face', name: '—', cat: 'special', desc: '' }, ck = K[cur.kind];
+var d = {
+name: cur.state === 'back' ? '???' : cur.name.toUpperCase(),
+kind: ck.label, chipBg: ck.chipBg, chipT: ck.chipT, bg: ck.bg,
+cat: cur.state === 'back' ? 'MAESTRIA ' + (cur.pips || 0) + '/3' : CAT[cur.cat],
+glyph: G[cur.cat || 'special'],
+desc: cur.desc || ''
+};
+return {
+cards: cards, ticks: ticks, d: d,
+rootCls: drag ? 'dragging' : '',
+onMove: function (e) { self.onMove(e); },
+onUp: function (e) { self.onUp(e); },
+onLeave: function () { self.onLeave(); },
+prev: function () { self.setState({ focus: Math.max(0, f - 1), sel: null }); },
+next: function () { self.setState({ focus: Math.min(last, f + 1), sel: null }); },
+bg: th.bg, bg2: th.bg2, deep: th.deep, deep2: th.deep2, acc: th.acc, accT: th.accT
+};
+}
+}
+</script>
+</body>
+</html>

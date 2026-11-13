@@ -1,7 +1,8 @@
 class_name CardView
 extends Control
 ## Uma carta em pé, desenhada a partir do id em Knowledge.CARDS.
-## Layout: faixa do nome em cima, janela da ilustração (por enquanto a inicial) e naipes embaixo.
+## Layout (design/tela-cartas-v2, prancha "Carta"): faixa do nome em cima, janela da ilustração
+## (sem arte ainda: duas faixas diagonais e o naipe da categoria) e rodapé com naipes ou preço.
 ## Use CardView.make(id) e depois mude `state`, `price_tag` ou `progress` se precisar.
 ##
 ## state: "face"  carta normal, virada pra cima
@@ -20,6 +21,13 @@ var price_tag := "": set = _set_price
 ## Maestria: quantas de quantas (só aparece em carta de verso). -1 = não mostra.
 var progress := -1: set = _set_progress
 var selected := false: set = _set_selected
+## Moldura dourada da carta em foco. `halo_grow` faz ela pulsar (0 = parada).
+var halo := false: set = _set_halo
+var halo_grow := 0.0: set = _set_halo_grow
+## Contorno solto em volta da carta (slot válido no arrasto, carta selecionada). Alfa 0 = sem contorno.
+var ring := Color(0, 0, 0, 0): set = _set_ring
+var ring_gap := 4.0: set = _set_ring_gap
+var ring_w := 4.0
 
 
 static func make(card_id: String, card_state := "face") -> CardView:
@@ -74,9 +82,32 @@ func _set_selected(v: bool) -> void:
 	queue_redraw()
 
 
-func _rr(rect: Rect2, col: Color, radius: float, border := Color(0, 0, 0, 0), bw := 0) -> void:
+func _set_halo(v: bool) -> void:
+	halo = v
+	queue_redraw()
+
+
+func _set_halo_grow(v: float) -> void:
+	halo_grow = v
+	if halo:
+		queue_redraw()
+
+
+func _set_ring(v: Color) -> void:
+	ring = v
+	queue_redraw()
+
+
+func _set_ring_gap(v: float) -> void:
+	ring_gap = v
+	if ring.a > 0.0:
+		queue_redraw()
+
+
+func _rr(rect: Rect2, col: Color, radius: float, border := Color(0, 0, 0, 0), bw := 0, center := true) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = col
+	sb.draw_center = center
 	sb.set_corner_radius_all(int(radius))
 	sb.anti_aliasing = true
 	if bw > 0:
@@ -85,68 +116,88 @@ func _rr(rect: Rect2, col: Color, radius: float, border := Color(0, 0, 0, 0), bw
 	draw_style_box(sb, rect)
 
 
+func _diamond(c: Vector2, r: float, col: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]), col)
+
+
+## Faixa diagonal do placeholder: um retângulo girado -24 graus, recortado na janela.
+func _stripe(win: Rect2, top: float, thick: float, col: Color) -> void:
+	var c := win.position + Vector2(50, top + thick * 0.5)
+	var band := PackedVector2Array()
+	for p in [Vector2(-70, -thick * 0.5), Vector2(70, -thick * 0.5), Vector2(70, thick * 0.5), Vector2(-70, thick * 0.5)]:
+		band.append(c + p.rotated(deg_to_rad(-24.0)))
+	var box := PackedVector2Array([win.position, Vector2(win.end.x, win.position.y), win.end, Vector2(win.position.x, win.end.y)])
+	for piece in Geometry2D.intersect_polygons(band, box):
+		draw_colored_polygon(piece, col)
+
+
 func _draw() -> void:
-	var col: Color = Knowledge.KIND_COLOR.get(kind, Color.WHITE)
+	var k: Dictionary = Paper.KIND.get(kind, Paper.KIND["white"])
+	var ink := Paper.INK
 	var full := Rect2(Vector2.ZERO, Vector2(W, H))
+	if ring.a > 0.0:
+		_rr(full.grow(ring_gap + ring_w), Color(0, 0, 0, 0), 12, ring, int(ring_w), false)
 	if state == "empty":
-		_rr(full, Color(0, 0, 0, 0.28), 9, Color(col.r, col.g, col.b, 0.55), 2)
-		var c := full.get_center()
-		var d := 9.0
-		draw_colored_polygon(PackedVector2Array([c + Vector2(0, -d), c + Vector2(d, 0), c + Vector2(0, d), c + Vector2(-d, 0)]), Color(col.r, col.g, col.b, 0.3))
+		_rr(full, k["eb"], 9, k["bg"], 3)
+		Paper.draw_suit(self, "special", Vector2(34, 56), 40, k["eg"])
 		return
+	if halo or selected:
+		_rr(full.grow(7.0 + halo_grow), Paper.GOLD, 14, ink, 3)
 	# sombra dura, como carta apoiada
-	_rr(Rect2(Vector2(3, 5), Vector2(W, H)), Color(0, 0, 0, 0.45), 9)
-	if selected:
-		_rr(full.grow(4), Color(1, 1, 1, 0.95), 12)
-	var f := ThemeDB.fallback_font
+	_rr(Rect2(Vector2(4, 5), Vector2(W, H)), ink, 9)
 	if state == "back":
-		_rr(full, Ink.NAVY, 9, col.darkened(0.25), 3)
-		var x := -H
-		while x < W:
-			draw_line(Vector2(maxf(x, 6), 6 + maxf(0.0, 6 - x)), Vector2(minf(x + H, W - 6), minf(H - 6, H - 6 - maxf(0.0, x + H - W + 6))), Color(col.r, col.g, col.b, 0.16), 1.0)
-			x += 14.0
-		draw_string(Ink.font(0.0, 1.0), Vector2(0, H * 0.5 + 14), "?", HORIZONTAL_ALIGNMENT_CENTER, W, 44, col.lightened(0.25))
+		_rr(full, Paper.NAVY, 9, ink, 3)
+		_rr(Rect2(9, 9, 90, 134), Color(0, 0, 0, 0), 5, k["bg"], 3, false)
+		draw_string(Paper.display(0.0), Vector2(3, 78), "?", HORIZONTAL_ALIGNMENT_CENTER, 102, 58, Paper.CREAM)
 		if progress >= 0:
-			# maestria: um losango por acerto que falta
-			for k in Knowledge.MASTERY_NEED:
-				var pc := Vector2(W * 0.5 + (k - (Knowledge.MASTERY_NEED - 1) * 0.5) * 20.0, H - 22)
-				var on := k < progress
-				var r := 6.0
-				var dia := PackedVector2Array([pc + Vector2(0, -r), pc + Vector2(r, 0), pc + Vector2(0, r), pc + Vector2(-r, 0)])
-				if on:
-					draw_colored_polygon(dia, col.lightened(0.2))
-				else:
-					dia.append(dia[0])
-					draw_polyline(dia, Color(col.r, col.g, col.b, 0.7), 2.0, true)
+			# maestria: um losango por acerto, cheio quando já foi feito
+			for n in Knowledge.MASTERY_NEED:
+				var pc := Vector2(W * 0.5 + (n - (Knowledge.MASTERY_NEED - 1) * 0.5) * 21.0, 114)
+				_diamond(pc, 10.0, Paper.CREAM)
+				_diamond(pc, 5.8, Paper.GOLD if n < progress else Paper.NAVY)
 		return
 
-	var dim := state == "dim"
-	var paper := Ink.CREAM if not dim else Ink.CREAM.darkened(0.45)
-	var ink := Ink.OUT
-	_rr(full, paper, 9, col if not dim else col.darkened(0.4), 4)
-	_rr(full.grow(-6), Color(0, 0, 0, 0), 5, Color(ink.r, ink.g, ink.b, 0.25), 1)
+	_rr(full, k["bg"], 9, ink, 3)
 	# faixa do nome
-	_rr(Rect2(8, 8, W - 16, 38), ink if not dim else ink.lightened(0.12), 5)
+	var band := StyleBoxFlat.new()
+	band.bg_color = ink
+	band.corner_radius_top_left = 6
+	band.corner_radius_top_right = 6
+	draw_style_box(band, Rect2(3, 3, W - 6, 28))
 	var nm: String = Knowledge.CARDS[id]["name"] if Knowledge.CARDS.has(id) else ""
-	var name_col := Ink.CREAM if not dim else Ink.CREAM.darkened(0.3)
-	var lines := _wrap(nm, f, 12, W - 22)
-	var ty := 8 + 19 - (lines.size() - 1) * 6.5 + 4.5
+	var f := Paper.body(800)
+	var px := 10 if nm.length() > 13 else 12
+	var lines := _wrap(nm, f, px, W - 14)
+	var ty := 17.0 - (lines.size() - 1) * 5.5 + px * 0.36
 	for line in lines:
-		draw_string(f, Vector2(8, ty), line, HORIZONTAL_ALIGNMENT_CENTER, W - 16, 12, name_col)
-		ty += 13.0
-	# janela da ilustração: sem arte ainda, vai a inicial
-	var art := Rect2(11, 52, W - 22, 64)
-	_rr(art, col if not dim else col.darkened(0.5), 6, ink, 2)
-	draw_string(Ink.font(0.0, 1.0), Vector2(art.position.x, art.position.y + 46), nm.substr(0, 1).to_upper(), HORIZONTAL_ALIGNMENT_CENTER, art.size.x, 40, ink if not dim else ink.lightened(0.2))
-	# rodapé: preço ou naipes
+		draw_string(f, Vector2(3, ty), line, HORIZONTAL_ALIGNMENT_CENTER, W - 6, px, Paper.CREAM)
+		ty += 11.0
+	# janela da ilustração: faixas diagonais no tom da raridade + naipe da categoria
+	var win := Rect2(9, 37, 90, 78)
+	draw_rect(win, k["art"])
+	var inner := win.grow(-2)
+	_stripe(inner, 14, 14, k["st"])
+	_stripe(inner, 46, 8, k["st"])
+	var cat: String = Knowledge.CARDS[id]["cat"] if Knowledge.CARDS.has(id) else "special"
+	Paper.draw_suit(self, cat, Vector2(32, 53), 46, ink)
+	draw_rect(win.grow(-1), ink, false, 2.0)
+	# rodapé: preço ou três naipes
 	if price_tag != "":
-		_rr(Rect2(10, H - 31, W - 20, 22), ink, 5)
-		draw_string(f, Vector2(10, H - 15), price_tag, HORIZONTAL_ALIGNMENT_CENTER, W - 20, 12, Ink.CREAM)
+		var fd := Paper.display(0.0)
+		var tw := fd.get_string_size(price_tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		var coin := price_tag.is_valid_int()
+		var x := (W - tw - (18.0 if coin else 0.0)) * 0.5
+		if coin:
+			draw_circle(Vector2(x + 6.5, 131), 6.5, ink)
+			draw_circle(Vector2(x + 6.5, 131), 3.5, Paper.CREAM)
+			x += 18.0
+		draw_string(fd, Vector2(x, 136), price_tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, ink)
 	else:
-		for k in 3:
-			var pc := Vector2(W * 0.5 + (k - 1) * 19.0, H - 20)
-			var r := 5.5
-			draw_colored_polygon(PackedVector2Array([pc + Vector2(0, -r), pc + Vector2(r, 0), pc + Vector2(0, r), pc + Vector2(-r, 0)]), col.darkened(0.15) if not dim else col.darkened(0.5))
+		Paper.draw_suit(self, cat, Vector2(30.5, 126), 10, ink)
+		Paper.draw_suit(self, cat, Vector2(46.5, 123.5), 15, ink)
+		Paper.draw_suit(self, cat, Vector2(67.5, 126), 10, ink)
+	if state == "dim":
+		_rr(full, Color(ink.r, ink.g, ink.b, 0.6), 9)
 
 
 func _wrap(t: String, f: Font, px: int, max_w: float) -> Array:

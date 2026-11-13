@@ -78,44 +78,7 @@ scene("ui/screens/boss_screen.tscn","res://ui/screens/boss_screen.gd",[
 ])
 
 # ---------------- cartas
-scene("ui/screens/cards_screen.tscn","res://ui/screens/cards_screen.gd",[
-  ("Bg",".","bg",None,{}),
-  pan("TitlePanel",".",(34,18,300,92),"NAVY",4,rotation=-0.02),
-  lab("Title","TitlePanel",(22,4,270,60),"CARTAS",46,"CREAM"),
-  txt("BossName","TitlePanel",(24,60,270,24),"MINI-CHAN",15,"COIN"),
-  btn("BtnPrev",".",(372,26,64,76),"<","CREAM","OUT",40,6),
-  box("HeroStrip",".",(446,20,700,88),"HBoxContainer",**{"theme_override_constants/separation":10,"alignment":1}),
-  btn("BtnNext",".",(1156,26,64,76),">","CREAM","OUT",40,11),
-  pan("EquipPanel",".",(34,124,770,384),"NAVY",8),
-  txt("LabPurple","EquipPanel",(24,8,200,20),"ÉPICAS",13,"VIOLET"),
-  txt("LabGold","EquipPanel",(284,8,200,20),"RARAS",13,"COIN"),
-  txt("LabWhite","EquipPanel",(24,196,200,20),"COMUNS",13,"CREAM"),
-  txt("LabItem","EquipPanel",(536,196,200,20),"ITEM ON HOLD",13,"Color(0.3, 0.9, 1, 1)"),
-  box("PurpleRow","EquipPanel",(24,30,226,152),"HBoxContainer",**{"theme_override_constants/separation":10}),
-  box("GoldRow","EquipPanel",(284,30,344,152),"HBoxContainer",**{"theme_override_constants/separation":10}),
-  box("WhiteRow","EquipPanel",(24,218,462,152),"HBoxContainer",**{"theme_override_constants/separation":10}),
-  box("ItemRow","EquipPanel",(536,218,108,152),"HBoxContainer",**{"theme_override_constants/separation":10}),
-  pan("HeroPanel",".",(826,124,420,384),"GRAPE",12),
-  pan("FaceFrame","HeroPanel",(22,22,176,176),"OUT",3),
-  box("Face","HeroPanel/FaceFrame",(8,8,160,160),"TextureRect",expand_mode=1,stretch_mode=6,mouse_filter=2),
-  lab("HeroName","HeroPanel",(214,26,200,56),"TANK",40,"OUT"),
-  txt("HeroRole","HeroPanel",(216,84,196,24),"Tanque",17,"OUT"),
-  pan("HpTag","HeroPanel",(214,124,150,44),"OUT",9),
-  lab("HeroHp","HeroPanel/HpTag",(14,4,130,36),"HP 160",24,"CREAM"),
-  pan("BlurbPanel","HeroPanel",(22,216,376,146),"CREAM",14),
-  txt("HeroBlurb","HeroPanel/BlurbPanel",(18,14,340,120),"...",17,"OUT",autowrap_mode=3),
-  btn("BtnBack",".",(34,646,124,62),"VOLTAR","CREAM","OUT",20,7),
-  pan("HandPanel",".",(172,522,740,188),"BROWN",17),
-  txt("LabHand","HandPanel",(22,6,300,20),"SUAS CARTAS",13,"CREAM"),
-  btn("HandPrev","HandPanel",(8,76,34,60),"<","CREAM","OUT",24,4),
-  box("HandRow","HandPanel",(48,28,644,152),clip_contents=False),
-  btn("HandNext","HandPanel",(698,76,34,60),">","CREAM","OUT",24,5),
-  pan("Details",".",(930,522,316,112),"CREAM",19),
-  lab("CardName","Details",(16,6,290,32),"",21,"OUT"),
-  txt("CardMeta","Details",(18,36,290,18),"",12,"Color(0.36, 0.22, 0.16, 1)"),
-  txt("CardDesc","Details",(18,54,284,54),"",13,"OUT",autowrap_mode=3),
-  btn("BtnReady",".",(930,644,316,66),"READY FOR BATTLE","COIN","OUT",25,5),
-])
+# A tela de cartas é montada em código (ui/screens/cards_screen.gd); a cena só tem a raiz com o script.
 
 # ---------------- loja
 scene("ui/screens/shop_screen.tscn","res://ui/screens/shop_screen.gd",[

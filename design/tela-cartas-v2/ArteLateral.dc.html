@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Tela de Cartas: arte lateral e tema</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Bowlby+One&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1280px; height: 720px; position: relative; overflow: hidden; background: {{bg}}; font-family: 'Baloo 2', sans-serif; color: #F7F1DC">
+
+<!-- FUNDO: recortes de papel, nas cores do tema -->
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 1280px; height: 720px; background-image: radial-gradient({{bg2}} 30%, transparent 32%); background-size: 20px 20px"></div>
+<div aria-hidden="true" style="position: absolute; left: -40px; top: -40px; width: 760px; height: 420px; background: {{bg2}}; clip-path: polygon(0 0, 100% 0, 62% 46%, 78% 62%, 30% 100%, 0 84%)"></div>
+<div aria-hidden="true" style="position: absolute; left: -30px; top: 300px; width: 420px; height: 220px; background: #F7F1DC; clip-path: polygon(0 30%, 70% 0, 100% 22%, 40% 62%, 0 100%)"></div>
+
+<!-- PALCO DA ARTE: bloco escuro + faixas -->
+<div aria-hidden="true" style="position: absolute; left: 790px; top: 0; width: 500px; height: 720px; background: #121429; clip-path: polygon(22% 0, 100% 0, 100% 100%, 6% 100%, 18% 56%, 8% 44%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 800px; top: 0; width: 480px; height: 720px; background: {{deep}}; clip-path: polygon(22% 0, 100% 0, 100% 100%, 6% 100%, 18% 56%, 8% 44%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 850px; top: 96px; width: 450px; height: 190px; background: {{bg2}}; clip-path: polygon(0 74%, 100% 0, 100% 42%, 5% 100%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 866px; top: 214px; width: 430px; height: 150px; background: {{acc}}; clip-path: polygon(0 78%, 100% 0, 100% 30%, 6% 100%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 900px; top: 300px; width: 400px; height: 120px; background: #F7F1DC; clip-path: polygon(0 86%, 100% 0, 100% 14%, 4% 100%)"></div>
+
+<!-- ROLETA -->
+<div aria-hidden="true" style="position: absolute; left: -222px; top: 428px; width: 1344px; height: 1344px; border-radius: 50%; background: #121429"></div>
+<div aria-hidden="true" style="position: absolute; left: -216px; top: 434px; width: 1332px; height: 1332px; border-radius: 50%; background: #F7F1DC"></div>
+<div aria-hidden="true" style="position: absolute; left: -202px; top: 448px; width: 1304px; height: 1304px; border-radius: 50%; background: #121429"></div>
+<div aria-hidden="true" style="position: absolute; left: -198px; top: 452px; width: 1296px; height: 1296px; border-radius: 50%; background: #6B3F22"></div>
+<sc-for list="{{ticks}}" as="t" hint-placeholder-count="8">
+<div aria-hidden="true" style="position: absolute; left: {{t.x}}px; top: {{t.y}}px; width: 6px; height: 14px; background: #121429; transform: rotate({{t.rot}}deg)"></div>
+</sc-for>
+<div aria-hidden="true" style="position: absolute; left: -20px; top: 630px; width: 940px; height: 940px; border-radius: 50%; background: #121429"></div>
+<div aria-hidden="true" style="position: absolute; left: -14px; top: 636px; width: 928px; height: 928px; border-radius: 50%; background: {{deep}}"></div>
+
+<!-- ponteiro da roleta -->
+<div aria-hidden="true" style="position: absolute; left: 428px; top: 402px; width: 44px; height: 36px; background: #121429; clip-path: polygon(0 0, 100% 0, 50% 100%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 436px; top: 406px; width: 28px; height: 23px; background: #FFCC40; clip-path: polygon(0 0, 100% 0, 50% 100%)"></div>
+
+<!-- cubo da roleta -->
+<button aria-label="Girar para a esquerda" style="position: absolute; left: 296px; top: 668px; width: 44px; height: 44px; border: 3px solid #121429; padding: 0; background: #FFCC40; transform: skewX(-10deg); cursor: pointer; display: flex; align-items: center; justify-content: center">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M16 3L7 12L16 21"></path></svg>
+</button>
+<div style="position: absolute; left: 348px; top: 672px; width: 204px; height: 36px; display: flex; align-items: center; justify-content: center; font-family: 'Bowlby One', sans-serif; font-size: 21px; letter-spacing: 0.5px; color: #F7F1DC; transform: skewX(-8deg)">SUAS CARTAS</div>
+<button aria-label="Girar para a direita" style="position: absolute; left: 560px; top: 668px; width: 44px; height: 44px; border: 3px solid #121429; padding: 0; background: #FFCC40; transform: skewX(-10deg); cursor: pointer; display: flex; align-items: center; justify-content: center">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M8 3L17 12L8 21"></path></svg>
+</button>
+
+<!-- BANDEJA DOS SLOTS -->
+<div aria-hidden="true" style="position: absolute; left: 43px; top: 91px; width: 632px; height: 314px; background: #121429; clip-path: polygon(0 4%, 100% 0, 98% 100%, 2% 96%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 36px; top: 84px; width: 632px; height: 314px; background: #121429; clip-path: polygon(0 4%, 100% 0, 98% 100%, 2% 96%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 41px; top: 89px; width: 622px; height: 304px; background: {{deep}}; clip-path: polygon(0 4%, 100% 0, 98% 100%, 2% 96%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 41px; top: 236px; width: 622px; height: 14px; background: {{deep2}}; transform: rotate(-1deg)"></div>
+
+<!-- BANDEJA DO ITEM -->
+<div aria-hidden="true" style="position: absolute; left: 707px; top: 117px; width: 190px; height: 262px; background: #121429; clip-path: polygon(8% 0, 100% 6%, 94% 100%, 0 92%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 700px; top: 110px; width: 190px; height: 262px; background: #121429; clip-path: polygon(8% 0, 100% 6%, 94% 100%, 0 92%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 705px; top: 115px; width: 180px; height: 252px; background: {{deep2}}; clip-path: polygon(8% 0, 100% 6%, 94% 100%, 0 92%)"></div>
+<div style="position: absolute; left: 716px; top: 134px; width: 158px; height: 34px; background: #4DE6FF; border: 3px solid #121429; box-sizing: border-box; transform: rotate(-4deg) skewX(-10deg); display: flex; align-items: center; justify-content: center; font-family: 'Bowlby One', sans-serif; font-size: 14px; color: #121429">ITEM ON HOLD</div>
+
+<!-- ARTE DA HEROÍNA (placeholder enviado) -->
+<img src="/_blob/543bad71b8148f6a07cac30c468c40ff" alt="Ilustração da Maga" style="position: absolute; left: 860px; top: 50px; width: 430px; height: 500px; object-fit: contain">
+
+<!-- frase -->
+<div aria-hidden="true" style="position: absolute; left: 882px; top: 68px; width: 150px; height: 78px; background: #121429; clip-path: polygon(0 10%, 100% 0, 96% 86%, 80% 88%, 84% 100%, 62% 90%, 4% 96%)"></div>
+<div style="position: absolute; left: 876px; top: 62px; width: 150px; height: 78px; box-sizing: border-box; padding: 16px 12px 0 16px; background: #F7F1DC; clip-path: polygon(0 10%, 100% 0, 96% 86%, 80% 88%, 84% 100%, 62% 90%, 4% 96%); font-weight: 700; font-size: 14px; line-height: 17px; color: #121429">Dano de longe, com cast.</div>
+
+<!-- CARTAS: slots + mão na roleta -->
+<sc-for list="{{cards}}" as="c" hint-placeholder-count="17">
+<div style="position: absolute; left: {{c.x}}px; top: {{c.y}}px; width: 108px; height: 152px; transform: rotate({{c.rot}}deg) scale({{c.sc}}); z-index: {{c.z}}">
+<sc-if value="{{c.focus}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: -7px; top: -7px; width: 122px; height: 166px; border-radius: 14px; background: #FFCC40; border: 3px solid #121429; box-sizing: border-box"></div>
+</sc-if>
+<sc-if value="{{c.solid}}" hint-placeholder-val="{{true}}">
+<div style="position: absolute; left: 4px; top: 5px; width: 108px; height: 152px; border-radius: 9px; background: #121429"></div>
+</sc-if>
+<sc-if value="{{c.face}}" hint-placeholder-val="{{true}}">
+<div style="position: absolute; left: 0; top: 0; width: 108px; height: 152px; box-sizing: border-box; border: 3px solid #121429; border-radius: 9px; background: {{c.bg}}; overflow: hidden">
+<div style="height: 28px; background: #121429; color: #F7F1DC; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 800; font-size: {{c.fs}}px; line-height: 11px; padding: 0 4px">{{c.name}}</div>
+<div style="position: relative; margin: 6px 6px 0 6px; height: 78px; box-sizing: border-box; border: 2px solid #121429; background: {{c.art}}; overflow: hidden">
+<div style="position: absolute; left: -20px; top: 14px; width: 140px; height: 14px; background: {{c.st}}; transform: rotate(-24deg)"></div>
+<div style="position: absolute; left: -20px; top: 46px; width: 140px; height: 8px; background: {{c.st}}; transform: rotate(-24deg)"></div>
+<svg aria-hidden="true" width="46" height="46" viewBox="0 0 24 24" style="position: absolute; left: 21px; top: 14px"><path d="{{c.glyph}}" fill="#121429"></path></svg>
+</div>
+<sc-if value="{{c.suits}}" hint-placeholder-val="{{true}}">
+<div style="height: 32px; display: flex; align-items: center; justify-content: center; gap: 6px">
+<svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24"><path d="{{c.glyph}}" fill="#121429"></path></svg>
+<svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24"><path d="{{c.glyph}}" fill="#121429"></path></svg>
+<svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24"><path d="{{c.glyph}}" fill="#121429"></path></svg>
+</div>
+</sc-if>
+<sc-if value="{{c.priced}}" hint-placeholder-val="{{false}}">
+<div style="height: 32px; display: flex; align-items: center; justify-content: center; gap: 5px; font-family: 'Bowlby One', sans-serif; font-size: 13px; color: #121429">
+<div style="width: 13px; height: 13px; border-radius: 50%; background: #F7F1DC; border: 3px solid #121429; box-sizing: border-box"></div>
+<div>{{c.price}}</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+<sc-if value="{{c.back}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: 0; top: 0; width: 108px; height: 152px; box-sizing: border-box; border: 3px solid #121429; border-radius: 9px; background: #1E2460; overflow: hidden">
+<div style="position: absolute; left: 6px; top: 6px; width: 90px; height: 134px; box-sizing: border-box; border: 3px solid {{c.bg}}; border-radius: 5px"></div>
+<div style="position: absolute; left: 0; top: 22px; width: 102px; text-align: center; font-family: 'Bowlby One', sans-serif; font-size: 58px; line-height: 64px; color: #F7F1DC">?</div>
+<div style="position: absolute; left: 0; top: 104px; width: 102px; display: flex; justify-content: center; gap: 7px">
+<div style="width: 14px; height: 14px; box-sizing: border-box; border: 3px solid #F7F1DC; transform: rotate(45deg); background: {{c.p1}}"></div>
+<div style="width: 14px; height: 14px; box-sizing: border-box; border: 3px solid #F7F1DC; transform: rotate(45deg); background: {{c.p2}}"></div>
+<div style="width: 14px; height: 14px; box-sizing: border-box; border: 3px solid #F7F1DC; transform: rotate(45deg); background: {{c.p3}}"></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{c.empty}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: 0; top: 0; width: 108px; height: 152px; box-sizing: border-box; border: 3px solid {{c.bg}}; border-radius: 9px; background: {{c.eb}}">
+<svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" style="position: absolute; left: 31px; top: 53px"><path d="M12 1L15 9L23 12L15 15L12 23L9 15L1 12L9 9Z" fill="{{c.eg}}"></path></svg>
+</div>
+</sc-if>
+<sc-if value="{{c.dim}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: 0; top: 0; width: 108px; height: 152px; border-radius: 9px; background: rgba(18,20,41,0.6)"></div>
+</sc-if>
+</div>
+</sc-for>
+
+<!-- TOPO: título -->
+<div aria-hidden="true" style="position: absolute; left: 27px; top: 17px; width: 216px; height: 62px; background: #121429; clip-path: polygon(0 0, 100% 8%, 95% 100%, 3% 90%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 20px; top: 10px; width: 216px; height: 62px; background: #121429; clip-path: polygon(0 0, 100% 8%, 95% 100%, 3% 90%)"></div>
+<div style="position: absolute; left: 24px; top: 14px; width: 208px; height: 54px; background: #F7F1DC; clip-path: polygon(0 0, 100% 8%, 95% 100%, 3% 90%); display: flex; align-items: center; justify-content: center">
+<h1 style="margin: 0; font-family: 'Bowlby One', sans-serif; font-weight: 400; font-size: 38px; line-height: 40px; color: #121429; transform: rotate(-2deg) skewX(-10deg)">CARTAS</h1>
+</div>
+
+<!-- TOPO: boss -->
+<div aria-hidden="true" style="position: absolute; left: 250px; top: 28px; width: 186px; height: 42px; background: #121429; transform: skewX(-14deg)"></div>
+<div style="position: absolute; left: 245px; top: 22px; width: 186px; height: 42px; box-sizing: border-box; border: 3px solid #121429; background: #FF5999; transform: skewX(-14deg); display: flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Bowlby One', sans-serif; color: #121429">
+<span style="font-size: 12px">VS</span>
+<span style="font-size: 17px">MINI-CHAN</span>
+</div>
+
+<!-- TOPO: seletor de herói -->
+<div aria-hidden="true" style="position: absolute; left: 455px; top: 17px; width: 450px; height: 62px; background: #121429; clip-path: polygon(2% 0, 100% 6%, 98% 100%, 0 92%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 448px; top: 10px; width: 450px; height: 62px; background: #121429; clip-path: polygon(2% 0, 100% 6%, 98% 100%, 0 92%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 452px; top: 14px; width: 442px; height: 54px; background: {{deep2}}; clip-path: polygon(2% 0, 100% 6%, 98% 100%, 0 92%)"></div>
+<button aria-label="Herói anterior" style="position: absolute; left: 464px; top: 19px; width: 40px; height: 44px; border: 3px solid #121429; padding: 0; background: #FFCC40; transform: skewX(-10deg); cursor: pointer; display: flex; align-items: center; justify-content: center">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M16 3L7 12L16 21"></path></svg>
+</button>
+<div style="position: absolute; left: 514px; top: 12px; width: 186px; height: 58px; box-sizing: border-box; border: 3px solid #121429; background: #F7F1DC; transform: rotate(-2deg); display: flex; align-items: center; gap: 10px; overflow: hidden">
+<img src="/_blob/382719856c0482c0dcc7f87834badfd2" alt="Rosto da Maga" style="width: 44px; height: 52px; object-fit: cover; border-right: 3px solid #121429">
+<div style="display: flex; flex-direction: column">
+<div style="font-family: 'Bowlby One', sans-serif; font-size: 20px; line-height: 22px; color: #121429">MAGA</div>
+<div style="font-weight: 700; font-size: 14px; line-height: 16px; color: #3E2413">DPS à distância</div>
+</div>
+</div>
+<button aria-label="Tank" style="position: absolute; left: 708px; top: 17px; width: 40px; height: 48px; border: 3px solid #121429; padding: 0; background: #121429; cursor: pointer; transform: rotate(3deg); overflow: hidden">
+<img src="/_blob/f3bb2849c5bd15e7d6a2c8af11c8ab2b" alt="" style="width: 34px; height: 42px; object-fit: cover; display: block; opacity: 0.6">
+</button>
+<button aria-label="Healer" style="position: absolute; left: 755px; top: 17px; width: 40px; height: 48px; border: 3px solid #121429; padding: 0; background: #121429; cursor: pointer; transform: rotate(-3deg); overflow: hidden">
+<img src="/_blob/db965a88f1939715a84caaf960a11995" alt="" style="width: 34px; height: 42px; object-fit: cover; display: block; opacity: 0.6">
+</button>
+<button aria-label="Assassina" style="position: absolute; left: 802px; top: 17px; width: 40px; height: 48px; border: 3px solid #121429; padding: 0; background: #121429; cursor: pointer; transform: rotate(2deg); overflow: hidden">
+<img src="/_blob/7cb8a3838da66b87655c943b5b81404c" alt="" style="width: 34px; height: 42px; object-fit: cover; display: block; opacity: 0.6">
+</button>
+<button aria-label="Próximo herói" style="position: absolute; left: 850px; top: 19px; width: 40px; height: 44px; border: 3px solid #121429; padding: 0; background: #FFCC40; transform: skewX(-10deg); cursor: pointer; display: flex; align-items: center; justify-content: center">
+<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M8 3L17 12L8 21"></path></svg>
+</button>
+
+<!-- VOLTAR (canto superior direito) -->
+<div aria-hidden="true" style="position: absolute; left: 1141px; top: 21px; width: 120px; height: 40px; background: #121429; transform: skewX(-12deg)"></div>
+<button style="position: absolute; left: 1136px; top: 16px; width: 120px; height: 40px; box-sizing: border-box; border: 3px solid #121429; padding: 0; background: #F7F1DC; transform: skewX(-12deg); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-family: 'Bowlby One', sans-serif; font-size: 15px; color: #121429">
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#121429" stroke-width="5" stroke-linecap="square"><path d="M16 3L7 12L16 21"></path></svg>
+VOLTAR
+</button>
+
+<!-- NOME, CLASSE E VIDA: etiquetas coladas sobre a arte -->
+<div aria-hidden="true" style="position: absolute; left: 898px; top: 390px; width: 196px; height: 58px; background: #121429; clip-path: polygon(0 8%, 100% 0, 96% 100%, 3% 92%)"></div>
+<div style="position: absolute; left: 890px; top: 382px; width: 196px; height: 58px; background: #121429; clip-path: polygon(0 8%, 100% 0, 96% 100%, 3% 92%)">
+<div style="position: absolute; left: 4px; top: 4px; width: 188px; height: 50px; background: #F7F1DC; clip-path: polygon(0 8%, 100% 0, 96% 100%, 3% 92%); display: flex; align-items: center; justify-content: center">
+<div style="font-family: 'Bowlby One', sans-serif; font-size: 40px; line-height: 42px; color: #121429; transform: rotate(-2deg) skewX(-10deg)">MAGA</div>
+</div>
+</div>
+<div style="position: absolute; left: 902px; top: 446px; display: flex; align-items: center; gap: 12px">
+<div style="padding: 2px 12px; background: {{acc}}; border: 3px solid #121429; transform: skewX(-12deg); font-family: 'Bowlby One', sans-serif; font-size: 12px; line-height: 18px; color: {{accT}}">DPS À DISTÂNCIA</div>
+<div style="padding: 2px 12px; background: #121429; border: 3px solid #121429; transform: skewX(-12deg); display: flex; align-items: center; gap: 8px; font-family: 'Bowlby One', sans-serif; color: #F7F1DC">
+<span style="font-size: 12px; line-height: 18px">HP</span>
+<div style="width: 56px; height: 10px; background: #54DE85"></div>
+<span style="font-size: 15px; line-height: 18px">90</span>
+</div>
+</div>
+
+<!-- DETALHES DA CARTA EM FOCO (compacto) -->
+<div aria-hidden="true" style="position: absolute; left: 924px; top: 494px; width: 348px; height: 118px; background: #121429; clip-path: polygon(2% 0, 100% 5%, 97% 100%, 0 94%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 916px; top: 486px; width: 348px; height: 118px; background: #121429; clip-path: polygon(2% 0, 100% 5%, 97% 100%, 0 94%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 921px; top: 491px; width: 338px; height: 108px; background: #F7F1DC; clip-path: polygon(2% 0, 100% 5%, 97% 100%, 0 94%)"></div>
+<div style="position: absolute; left: 936px; top: 502px; width: 40px; height: 40px; box-sizing: border-box; border: 3px solid #121429; background: #9E5CFF; transform: rotate(-6deg); display: flex; align-items: center; justify-content: center">
+<svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24"><path d="M12 1L15 9L23 12L15 15L12 23L9 15L1 12L9 9Z" fill="#121429"></path></svg>
+</div>
+<div style="position: absolute; left: 988px; top: 503px; font-family: 'Bowlby One', sans-serif; font-size: 26px; line-height: 30px; color: #121429; transform: skewX(-8deg)">FÊNIX</div>
+<div style="position: absolute; left: 1096px; top: 508px; display: flex; gap: 6px; font-family: 'Bowlby One', sans-serif; font-size: 11px; line-height: 16px">
+<div style="padding: 2px 8px; background: #5B2BB8; color: #F7F1DC; transform: skewX(-12deg)">ÉPICA</div>
+<div style="padding: 2px 8px; background: #121429; color: #F7F1DC; transform: skewX(-12deg)">ESPECIAL</div>
+</div>
+<div style="position: absolute; left: 938px; top: 550px; width: 306px; font-weight: 700; font-size: 16px; line-height: 20px; color: #121429">Uma vez por luta, em vez de morrer, volta com metade da vida.</div>
+
+<!-- READY FOR BATTLE -->
+<div aria-hidden="true" style="position: absolute; left: 942px; top: 628px; width: 330px; height: 84px; background: #121429; clip-path: polygon(3% 6%, 100% 0, 97% 92%, 0 100%)"></div>
+<button style="position: absolute; left: 932px; top: 618px; width: 330px; height: 84px; border: none; padding: 0; background: #121429; clip-path: polygon(3% 6%, 100% 0, 97% 92%, 0 100%); cursor: pointer">
+<div style="position: absolute; left: 6px; top: 6px; width: 318px; height: 72px; background: #FFCC40; clip-path: polygon(3% 6%, 100% 0, 97% 92%, 0 100%); display: flex; align-items: center; justify-content: center">
+<div style="position: absolute; left: 0; top: 52px; width: 318px; height: 30px; background: #F2A91E; transform: rotate(-3deg)"></div>
+<span style="position: relative; font-family: 'Bowlby One', sans-serif; font-size: 25px; line-height: 28px; color: #121429; transform: rotate(-3deg) skewX(-10deg)">READY FOR BATTLE</span>
+</div>
+</button>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["Maga","Tank","Healer","Assassina"],"default":"Maga","section":"Tema do herói"},"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+renderVals() {
+// Tema por herói: só o cenário e os painéis mudam; as cores de raridade ficam fixas.
+var T = {
+Maga: { bg: '#E08A14', bg2: '#FFC233', deep: '#2B1509', deep2: '#4A2612', acc: '#C4201C', accT: '#F7F1DC' },
+Tank: { bg: '#2B4FBF', bg2: '#4D80FF', deep: '#121A4A', deep2: '#1E2A6E', acc: '#FFCC40', accT: '#121429' },
+Healer: { bg: '#1F8A4C', bg2: '#3FB86B', deep: '#0E3320', deep2: '#175030', acc: '#FFCC40', accT: '#121429' },
+Assassina: { bg: '#5B2BB8', bg2: '#7A3FE0', deep: '#1E2460', deep2: '#2B3384', acc: '#FF5999', accT: '#121429' }
+};
+var th = T[this.props.tema] || T.Maga;
+var K = {
+purple: { bg: '#9E5CFF', art: '#7A3FE0', st: '#5B2BB8', eb: '#2E1766', eg: '#5B2BB8' },
+gold: { bg: '#FFCC40', art: '#F2A91E', st: '#C9871A', eb: '#4A2E12', eg: '#8A5A1E' },
+white: { bg: '#F7F1DC', art: '#E6D9B4', st: '#CDBB8A', eb: '#4D4636', eg: '#8C7F5C' },
+item: { bg: '#4DE6FF', art: '#35C4E6', st: '#1E9FC0', eb: '#123A4A', eg: '#1E9FC0' }
+};
+var G = {
+attack: 'M12 1L16 7V15H20V18H14V23H10V18H4V15H8V7Z',
+defense: 'M3 3H21V12C21 18 16 21.5 12 23C8 21.5 3 18 3 12Z',
+utility: 'M12 2A10 10 0 1 1 12 22A10 10 0 1 1 12 2ZM12 8A4 4 0 1 0 12 16A4 4 0 1 0 12 8Z',
+special: 'M12 1L15 9L23 12L15 15L12 23L9 15L1 12L9 9Z'
+};
+function mk(o) {
+var k = K[o.kind];
+var price = o.price || 0;
+var m = o.pips || 0;
+return {
+x: o.x, y: o.y, rot: o.rot || 0, sc: o.sc || 1, z: o.z || 1,
+face: o.state === 'face' || o.state === 'dim',
+back: o.state === 'back',
+empty: o.state === 'empty',
+dim: o.state === 'dim',
+solid: o.state !== 'empty',
+focus: !!o.focus,
+name: o.name || '', fs: (o.name || '').length > 13 ? 10 : 12,
+bg: k.bg, art: k.art, st: k.st, eb: k.eb, eg: k.eg,
+glyph: G[o.cat || 'special'],
+suits: !price, priced: !!price, price: price,
+p1: m > 0 ? '#FFCC40' : '#1E2460', p2: m > 1 ? '#FFCC40' : '#1E2460', p3: m > 2 ? '#FFCC40' : '#1E2460'
+};
+}
+var cards = [];
+// slots equipados (Maga)
+cards.push(mk({ x: 60, y: 96, kind: 'purple', state: 'face', name: 'Rotação', cat: 'attack' }));
+cards.push(mk({ x: 176, y: 96, kind: 'purple', state: 'empty' }));
+cards.push(mk({ x: 308, y: 96, kind: 'gold', state: 'face', name: 'Golpe Lapidado', cat: 'attack' }));
+cards.push(mk({ x: 424, y: 96, kind: 'gold', state: 'face', name: 'Carrasco', cat: 'attack' }));
+cards.push(mk({ x: 540, y: 96, kind: 'gold', state: 'empty' }));
+cards.push(mk({ x: 118, y: 240, kind: 'white', state: 'face', name: 'Desvio', cat: 'defense' }));
+cards.push(mk({ x: 234, y: 240, kind: 'white', state: 'face', name: 'Cautela', cat: 'defense' }));
+cards.push(mk({ x: 350, y: 240, kind: 'white', state: 'face', name: 'Dispersão', cat: 'utility' }));
+cards.push(mk({ x: 466, y: 240, kind: 'white', state: 'empty' }));
+cards.push(mk({ x: 741, y: 184, kind: 'item', state: 'face', name: 'Biscoito da Sorte', cat: 'special', rot: 3 }));
+// mão na roleta: centro (450, 1100), raio 560, passo 13 graus
+var CX = 450, CY = 1100, STEP = 13;
+var hand = [
+{ kind: 'white', state: 'back', pips: 0 },
+{ kind: 'white', state: 'face', name: 'Laranja Junto', cat: 'utility' },
+{ kind: 'gold', state: 'face', name: 'Faísca de Limite', cat: 'utility' },
+{ kind: 'purple', state: 'face', name: 'Fênix', cat: 'special', focus: true },
+{ kind: 'gold', state: 'dim', name: 'Guarda', cat: 'defense' },
+{ kind: 'gold', state: 'back', pips: 2 },
+{ kind: 'white', state: 'back', pips: 1 }
+];
+hand.forEach(function (h, i) {
+var deg = (i - 3) * STEP;
+var a = deg * Math.PI / 180;
+var R = h.focus ? 574 : 560;
+h.x = Math.round(CX + R * Math.sin(a) - 54);
+h.y = Math.round(CY - R * Math.cos(a) - 76);
+h.rot = deg;
+h.sc = h.focus ? 1.15 : 1;
+h.z = h.focus ? 5 : 2;
+cards.push(mk(h));
+});
+var ticks = [];
+for (var k = -4; k < 4; k++) {
+var d = (k + 0.5) * STEP, r = d * Math.PI / 180;
+ticks.push({ x: Math.round(CX + 659 * Math.sin(r) - 3), y: Math.round(CY - 659 * Math.cos(r) - 7), rot: d });
+}
+return { cards: cards, ticks: ticks, bg: th.bg, bg2: th.bg2, deep: th.deep, deep2: th.deep2, acc: th.acc, accT: th.accT };
+}
+}
+</script>
+</body>
+</html>

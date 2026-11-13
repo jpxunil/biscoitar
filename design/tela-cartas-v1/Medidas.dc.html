@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Medidas e cores</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Bowlby+One&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1280px; height: 1080px; position: relative; overflow: hidden; background: #F7F1DC; font-family: 'Baloo 2', sans-serif; color: #121429">
+
+<!-- PLANTA 1280 x 720 -->
+<div style="position: absolute; left: 0; top: 0; width: 1280px; height: 720px; overflow: hidden; background: #121429">
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 1280px; height: 720px; background-image: radial-gradient(#1E2460 22%, transparent 24%); background-size: 40px 40px"></div>
+
+<!-- roleta: aro, trilho e cubo -->
+<div aria-hidden="true" style="position: absolute; left: -222px; top: 428px; width: 1344px; height: 1344px; box-sizing: border-box; border-radius: 50%; border: 2px solid #C9871A; background: #2A1A10"></div>
+<div aria-hidden="true" style="position: absolute; left: -20px; top: 630px; width: 940px; height: 940px; box-sizing: border-box; border-radius: 50%; border: 2px solid #C9871A; background: #121429"></div>
+
+<sc-for list="{{hand}}" as="h" hint-placeholder-count="7">
+<div aria-hidden="true" style="position: absolute; left: {{h.x}}px; top: {{h.y}}px; width: 108px; height: 152px; box-sizing: border-box; border: 2px solid {{h.col}}; border-radius: 9px; transform: rotate({{h.rot}}deg) scale({{h.sc}}); display: flex; align-items: center; justify-content: center; color: {{h.col}}; font-family: 'Bowlby One', sans-serif; font-size: 15px">{{h.deg}}</div>
+</sc-for>
+
+<sc-for list="{{boxes}}" as="b" hint-placeholder-count="24">
+<div aria-hidden="true" style="position: absolute; left: {{b.x}}px; top: {{b.y}}px; width: {{b.w}}px; height: {{b.h}}px; box-sizing: border-box; border: 2px solid {{b.col}}; border-radius: {{b.rad}}px"></div>
+</sc-for>
+
+<sc-for list="{{tags}}" as="t" hint-placeholder-count="14">
+<div style="position: absolute; left: {{t.x}}px; top: {{t.y}}px; padding: 1px 7px; background: {{t.col}}; color: #121429; font-weight: 800; font-size: 12px; line-height: 17px; white-space: nowrap">{{t.text}}</div>
+</sc-for>
+</div>
+
+<!-- CORES -->
+<div style="position: absolute; left: 24px; top: 740px; padding: 2px 14px; background: #121429; color: #F7F1DC; font-family: 'Bowlby One', sans-serif; font-size: 18px; line-height: 28px; transform: skewX(-10deg)">CORES</div>
+<sc-for list="{{swatches}}" as="s" hint-placeholder-count="14">
+<div style="position: absolute; left: {{s.x}}px; top: {{s.y}}px; width: 84px; display: flex; flex-direction: column; gap: 3px">
+<div style="width: 84px; height: 54px; box-sizing: border-box; border: 3px solid #121429; background: {{s.hex}}"></div>
+<div style="font-family: 'Bowlby One', sans-serif; font-size: 11px; line-height: 13px">{{s.name}}</div>
+<div style="font-weight: 800; font-size: 13px; line-height: 14px">{{s.hex}}</div>
+<div style="font-weight: 700; font-size: 11px; line-height: 13px; color: #3E2413">{{s.use}}</div>
+</div>
+</sc-for>
+
+<!-- TIPO E REGRAS -->
+<div style="position: absolute; left: 690px; top: 740px; padding: 2px 14px; background: #121429; color: #F7F1DC; font-family: 'Bowlby One', sans-serif; font-size: 18px; line-height: 28px; transform: skewX(-10deg)">TIPO E REGRAS</div>
+<div style="position: absolute; left: 690px; top: 786px; width: 566px; display: flex; flex-direction: column; gap: 9px; font-weight: 700; font-size: 14px; line-height: 18px">
+<div><span style="font-family: 'Bowlby One', sans-serif; font-size: 20px">Bowlby One</span> · títulos, botões e nomes. Título 38, herói 46, READY 25, roleta 21, chips 12–17. Inclinação: skew −10°.</div>
+<div><span style="font-weight: 800; font-size: 20px">Baloo 2</span> · peso 700/800. Descrição 18, frase do herói 14, nome na carta 12.</div>
+<div><b style="font-weight: 800">Contorno:</b> 3 px em cartas, botões e chips; 4–5 px nos painéis (polígono escuro por baixo).</div>
+<div><b style="font-weight: 800">Sombra dura:</b> cópia #121429 deslocada (7, 7) nos painéis, (4, 5) nas cartas, (10, 10) no READY.</div>
+<div><b style="font-weight: 800">Painéis:</b> polígonos de 4 a 6 pontos com cantos deslocados 3–10% (Polygon2D). Sem gradiente, sem blur.</div>
+<div><b style="font-weight: 800">Roleta:</b> centro (450, 1100), fora da tela. Cartas no raio 560, uma a cada 13°, giradas no próprio ângulo. Carta em foco: 0°, raio 574, escala 1,15, moldura #FFCC40 de 7 px. Aro externo 672, cubo 470.</div>
+<div><b style="font-weight: 800">Pontilhado:</b> textura 20 × 20 em mosaico, um ponto de raio 6.</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1080}}'>
+class Component extends DCLogic {
+renderVals() {
+var CREAM = '#F7F1DC', GOLD = '#FFCC40', PURPLE = '#9E5CFF', CYAN = '#4DE6FF', PINK = '#FF5999', BLUE = '#7FA4FF', GREEN = '#54DE85';
+var boxes = [], tags = [];
+function box(x, y, w, h, col, text, tx, ty, rad) {
+boxes.push({ x: x, y: y, w: w, h: h, col: col, rad: rad || 0 });
+if (text) tags.push({ x: tx === undefined ? x + 6 : tx, y: ty === undefined ? y + 6 : ty, col: col, text: text });
+}
+box(20, 10, 216, 62, CREAM, 'TÍTULO · 20,10 · 216×62', 26, 16);
+box(245, 22, 186, 42, PINK, 'BOSS · 245,22 · 186×42', 249, 70);
+box(448, 10, 450, 62, BLUE, 'SELETOR · 448,10 · 450×62', 454, 16);
+box(464, 19, 40, 44, GOLD);
+box(514, 12, 186, 58, CREAM, 'atual 186×58', 520, 46);
+box(708, 17, 40, 48, CREAM);
+box(755, 17, 40, 48, CREAM);
+box(802, 17, 40, 48, CREAM, 'rostos 40×48', 716, 70);
+box(850, 19, 40, 44, GOLD);
+box(36, 84, 632, 314, BLUE, 'BANDEJA · 36,84 · 632×314', 42, 376);
+[60, 176].forEach(function (x) { box(x, 96, 108, 152, PURPLE, null, 0, 0, 9); });
+[308, 424, 540].forEach(function (x) { box(x, 96, 108, 152, GOLD, null, 0, 0, 9); });
+[118, 234, 350, 466].forEach(function (x) { box(x, 240, 108, 152, CREAM, null, 0, 0, 9); });
+tags.push({ x: 66, y: 102, col: PURPLE, text: '2 ÉPICAS · y 96' });
+tags.push({ x: 314, y: 102, col: GOLD, text: '3 RARAS · passo 116' });
+tags.push({ x: 124, y: 246, col: CREAM, text: '4 COMUNS · y 240' });
+tags.push({ x: 472, y: 306, col: CREAM, text: '108×152' });
+box(700, 110, 190, 262, CYAN, 'ITEM · 700,110 · 190×262', 706, 116);
+box(741, 184, 108, 152, CYAN, 'slot 741,184', 747, 310, 9);
+box(920, 12, 344, 258, GREEN, 'HERÓI · 920,12 · 344×258', 926, 18);
+box(944, 38, 124, 174, GREEN, 'arte 124×174', 950, 190);
+box(1082, 158, 164, 90, GREEN, 'frase 164×90', 1088, 164);
+box(920, 286, 344, 236, CREAM, 'DETALHES · 920,286 · 344×236', 926, 292);
+box(932, 540, 330, 94, GOLD, 'READY · 932,540 · 330×94', 938, 546);
+box(940, 660, 128, 42, CREAM, 'VOLTAR · 940,660 · 128×42', 1076, 672);
+box(296, 668, 44, 44, GOLD);
+box(560, 668, 44, 44, GOLD, 'setas 44×44', 612, 690);
+box(428, 402, 44, 36, GOLD, 'ponteiro 44×36', 480, 404);
+tags.push({ x: 356, y: 682, col: '#C9871A', text: 'CUBO · raio 470' });
+tags.push({ x: 706, y: 470, col: '#C9871A', text: 'ROLETA · centro 450,1100 · aro 672' });
+tags.push({ x: 706, y: 494, col: '#C9871A', text: 'cartas: raio 560 · passo 13°' });
+var hand = [];
+for (var i = -3; i <= 3; i++) {
+var deg = i * 13, a = deg * Math.PI / 180, R = i === 0 ? 574 : 560;
+hand.push({ x: Math.round(450 + R * Math.sin(a) - 54), y: Math.round(1100 - R * Math.cos(a) - 76), rot: deg, sc: i === 0 ? 1.15 : 1, col: i === 0 ? GOLD : CREAM, deg: deg + '°' });
+}
+var list = [
+['INK', '#121429', 'contorno, sombra'],
+['NAVY', '#1E2460', 'bandeja, verso'],
+['NAVY 2', '#2B3384', 'seletor, pontos'],
+['ROXO', '#5B2BB8', 'fundo'],
+['ROXO 2', '#7A3FE0', 'recortes'],
+['ÉPICA', '#9E5CFF', 'carta roxa'],
+['RARA', '#FFCC40', 'carta, botões'],
+['CREME', '#F7F1DC', 'papel, comum'],
+['CREME 2', '#E6D9B4', 'arte comum'],
+['MARROM', '#6B3F22', 'roleta, item'],
+['MARROM 2', '#3E2413', 'cubo'],
+['ITEM', '#4DE6FF', 'item on hold'],
+['BOSS', '#FF5999', 'nome do boss'],
+['HP', '#54DE85', 'barra de vida']
+];
+var swatches = list.map(function (s, i) {
+return { x: 24 + (i % 7) * 92, y: 790 + Math.floor(i / 7) * 138, name: s[0], hex: s[1], use: s[2] };
+});
+return { boxes: boxes, tags: tags, hand: hand, swatches: swatches };
+}
+}
+</script>
+</body>
+</html>
