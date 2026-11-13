@@ -15,11 +15,15 @@ const GREEN := Color(0.329, 0.871, 0.522)
 const RED := Color(0.69, 0.094, 0.094)
 
 ## Tema por herói: bg/bg2 = fundo e recortes · deep/deep2 = painéis · acc = destaque (acc_t = texto em cima).
+## Opcionais: stage = fundo atrás da arte (padrão: deep) · stripe3 = terceira faixa do palco (padrão: creme).
 static var THEMES := {
 	"tank": {"bg": Color("2b4fbf"), "bg2": Color("4d80ff"), "deep": Color("121a4a"), "deep2": Color("1e2a6e"), "acc": Color("ffcc40"), "acc_t": Color("121429")},
 	"healer": {"bg": Color("1f8a4c"), "bg2": Color("3fb86b"), "deep": Color("0e3320"), "deep2": Color("175030"), "acc": Color("ffcc40"), "acc_t": Color("121429")},
 	"assassina": {"bg": Color("5b2bb8"), "bg2": Color("7a3fe0"), "deep": Color("1e2460"), "deep2": Color("2b3384"), "acc": Color("ff5999"), "acc_t": Color("121429")},
 	"maga": {"bg": Color("e08a14"), "bg2": Color("ffc233"), "deep": Color("2b1509"), "deep2": Color("4a2612"), "acc": Color("c4201c"), "acc_t": Color("f7f1dc")},
+	# Gothic Nurse: azul-marinho, preto e branco, com o vermelho do sangue como destaque.
+	# `stage` (fundo atrás da arte) é claro porque a personagem é escura; `stripe3` é a terceira faixa.
+	"nurse": {"bg": Color("3a46b8"), "bg2": Color("5566e0"), "deep": Color("0e1030"), "deep2": Color("1a1e52"), "acc": Color("c0183a"), "acc_t": Color("f7f1dc"), "stage": Color("d9dcf5"), "stripe3": Color("0e1030")},
 }
 
 ## Cores da carta por raridade: bg = corpo · art/st = janela e faixas · eb/eg = slot vazio · chip = etiqueta.

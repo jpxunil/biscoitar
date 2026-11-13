@@ -23,7 +23,13 @@ const SLOT_AT := {
 	"item": [Vector2(741, 184)],
 }
 ## Frase do balão. Quem não tem frase própria usa o `blurb` do herói.
-const QUOTES := {"maga": "Relaxa, eu resolvo. Como sempre."}
+const QUOTES := {"maga": "Relaxa, eu resolvo. Como sempre.", "nurse": "Fica parado. Vai doer."}
+## Ordem dos heróis no seletor: as duas tanks ficam lado a lado.
+const ORDER := [0, 4, 1, 2, 3]
+## Enquadramento da arte por herói: largura na tela e canto de cima. A altura segue a proporção do arquivo;
+## o que passar da parte de baixo fica atrás dos painéis.
+const ART_FRAME := {"nurse": {"w": 540.0, "x": 790.0, "y": 26.0}}
+const ART_DEFAULT := {"w": 430.0, "x": 860.0, "y": 50.0}
 const CARD_HALF := Vector2(CardView.W, CardView.H) * 0.5
 
 
@@ -120,6 +126,7 @@ var _drag = null
 var _ghost: CardView
 var _over := -1
 var _detail_id := ""
+var _art_home := Vector2(860, 50)
 var _mouse_at := Vector2.ZERO
 
 
@@ -138,13 +145,13 @@ func _ready() -> void:
 
 
 func open(hero_idx: int, show_ready := true) -> void:
-	hero = clampi(hero_idx, 0, 3)
+	hero = clampi(hero_idx, 0, Knowledge.HEROES.size() - 1)
 	_show_ready = show_ready
 	refresh(true)
 
 
 func _switch(dir: int) -> void:
-	_go(posmod(hero + dir, 4), dir)
+	_go(ORDER[posmod(ORDER.find(hero) + dir, ORDER.size())], dir)
 
 
 func _go(to: int, dir: int) -> void:
@@ -159,14 +166,18 @@ func _go(to: int, dir: int) -> void:
 func refresh(animate := false, dir := 0) -> void:
 	var h: Dictionary = Knowledge.HEROES[hero]
 	_th = Paper.THEMES.get(h["key"], Paper.THEMES["tank"])
+	# abrir uma tank põe ela na party; a outra fica de fora (rosto mais apagado no seletor)
+	if Knowledge.is_tank(hero):
+		Knowledge.tank_pick = hero
 	_cancel_drag()
 	_sel = -1
 	# cenário e painéis no tema do herói
 	_bg.queue_redraw()
 	_wheel.queue_redraw()
-	_stage_block.fill = _th["deep"]
+	_stage_block.fill = _th.get("stage", _th["deep"])
 	_stripes[0].fill = _th["bg2"]
 	_stripes[1].fill = _th["acc"]
+	_stripes[2].fill = _th.get("stripe3", Paper.CREAM)
 	_tray.fill = _th["deep"]
 	_tray_band.queue_redraw()
 	_item_tray.fill = _th["deep2"]
@@ -184,8 +195,15 @@ func refresh(animate := false, dir := 0) -> void:
 			break
 	_art_tex.visible = art != ""
 	_face_frame.visible = art == ""
+	var frame: Dictionary = ART_FRAME.get(h["key"], ART_DEFAULT) if art != "" else ART_DEFAULT
+	_art_home = Vector2(frame["x"], frame["y"])
+	_art.position = _art_home
 	if art != "":
-		_art_tex.texture = load(art)
+		var tex: Texture2D = load(art)
+		_art_tex.texture = tex
+		var ts := tex.get_size()
+		_art_tex.size = Vector2(frame["w"], frame["w"] * ts.y / ts.x)
+		_art.pivot_offset = Vector2(frame["w"] * 0.5, minf(_art_tex.size.y * 0.8, 400.0))
 	else:
 		_face_tex.texture = load("res://assets/portraits/%s_face.png" % h["key"])
 	_bubble_text.text = QUOTES.get(h["key"], h["blurb"])
@@ -218,9 +236,9 @@ func refresh(animate := false, dir := 0) -> void:
 	if animate:
 		_art.modulate.a = 0.0
 		var from := 60.0 if dir >= 0 else -60.0
-		_art.position.x = 860.0 + from
+		_art.position.x = _art_home.x + from
 		var tw := _art.create_tween().set_parallel(true)
-		tw.tween_property(_art, "position:x", 860.0, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_art, "position:x", _art_home.x, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(_art, "modulate:a", 1.0, 0.18)
 
 
@@ -321,7 +339,7 @@ func _build() -> void:
 	_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_add(_stage, _bubble, Vector2(876, 62), Vector2(156, 84))
 	_bubble.pivot_offset = Vector2(78, 42)
-	_add(_bubble, CutPanel.make(Rect2(0, 0, 150, 78), [[0, .1], [1, 0], [.96, .86], [.8, .88], [.84, 1], [.62, .9], [.04, .96]], Paper.CREAM, 0, Vector2(6, 6)))
+	_add(_bubble, CutPanel.make(Rect2(0, 0, 150, 78), [[0, .1], [1, 0], [.96, .86], [.8, .88], [.84, 1], [.62, .9], [.04, .96]], Paper.CREAM, 3, Vector2(6, 6)))
 	_bubble_text = Paper.label("", 14, Paper.INK, Paper.body(700))
 	_bubble_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_bubble_text.add_theme_constant_override("line_spacing", -4)
@@ -355,9 +373,9 @@ func _build() -> void:
 	_add(_top, hp, Vector2(464, 19), Vector2(40, 44))
 	hp.pressed.connect(func(): _switch(-1))
 	var hn := _arrow(1)
-	_add(_top, hn, Vector2(850, 19), Vector2(40, 44))
+	_add(_top, hn, Vector2(854, 19), Vector2(40, 44))
 	hn.pressed.connect(func(): _switch(1))
-	_chip = _drawer(_top, _draw_chip, Vector2(514, 12), Vector2(186, 58))
+	_chip = _drawer(_top, _draw_chip, Vector2(512, 12), Vector2(164, 58))
 	_chip.pivot_offset = _chip.size * 0.5
 	_chip_face = TextureRect.new()
 	_chip_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -455,7 +473,7 @@ func _draw_bg(d: Draw) -> void:
 			d.draw_circle(Vector2(ix * 20 + 10, iy * 20 + 10), 5.5, dot)
 	d.draw_colored_polygon(Paper.moved(Paper.poly(Vector2(760, 420), [[0, 0], [1, 0], [.62, .46], [.78, .62], [.3, 1], [0, .84]]), Vector2(-40, -40)), dot)
 	d.draw_colored_polygon(Paper.moved(Paper.poly(Vector2(420, 220), [[0, .3], [.7, 0], [1, .22], [.4, .62], [0, 1]]), Vector2(-30, 300)), Paper.CREAM)
-	d.draw_rect(Rect2(1280, -600, 1200, 1920), _th["deep"])
+	d.draw_rect(Rect2(1280, -600, 1200, 1920), _th.get("stage", _th["deep"]))
 
 
 func _disc(d: Draw, r: float, col: Color) -> void:
@@ -512,11 +530,15 @@ func _draw_chip(d: Draw) -> void:
 	d.draw_rect(Rect2(3, 3, d.size.x - 6, d.size.y - 6), Paper.CREAM)
 	d.draw_rect(Rect2(47, 3, 3, 52), Paper.INK)
 	var f := Paper.display(0.0)
-	d.draw_string(f, Vector2(60, 28), String(h["name"]).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 120, 20, Paper.INK)
+	var nm := String(h["name"]).to_upper()
+	var name_px := 20
+	while name_px > 11 and f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px).x > 96.0:
+		name_px -= 1
+	d.draw_string(f, Vector2(58, 28), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px, Paper.INK)
 	var role_px := 14
-	while role_px > 10 and Paper.body(700).get_string_size(h["role"], HORIZONTAL_ALIGNMENT_LEFT, -1, role_px).x > 120.0:
+	while role_px > 9 and Paper.body(700).get_string_size(h["role"], HORIZONTAL_ALIGNMENT_LEFT, -1, role_px).x > 96.0:
 		role_px -= 1
-	d.draw_string(Paper.body(700), Vector2(60, 46), h["role"], HORIZONTAL_ALIGNMENT_LEFT, -1, role_px, Color("3e2413"))
+	d.draw_string(Paper.body(700), Vector2(58, 46), h["role"], HORIZONTAL_ALIGNMENT_LEFT, -1, role_px, Color("3e2413"))
 
 
 func _draw_hp(d: Draw) -> void:
@@ -547,19 +569,20 @@ func _build_faces() -> void:
 		_top.remove_child(b)
 		b.queue_free()
 	_faces.clear()
-	var xs := [708.0, 755.0, 802.0]
-	var rots := [3.0, -3.0, 2.0]
+	var xs := [684.0, 726.0, 768.0, 810.0]
+	var rots := [3.0, -3.0, 2.0, -2.0]
 	var k := 0
-	for i in 4:
+	for i in ORDER:
 		if i == hero:
 			continue
 		var b := ShineButton.new()
 		b.texture = load("res://assets/portraits/%s_face.png" % Knowledge.HEROES[i]["key"])
 		b.skew = 0
 		b.hover_scale = 1.15
-		_add(_top, b, Vector2(xs[k], 17), Vector2(40, 48))
+		b.dim = Knowledge.is_tank(i) and i != Knowledge.tank_pick
+		_add(_top, b, Vector2(xs[k], 17), Vector2(38, 48))
 		b.rotation = deg_to_rad(rots[k])
-		b.pressed.connect(_go.bind(i, 1 if i > hero else -1))
+		b.pressed.connect(_go.bind(i, 1 if ORDER.find(i) > ORDER.find(hero) else -1))
 		_faces.append(b)
 		k += 1
 
@@ -986,7 +1009,7 @@ func _process(delta: float) -> void:
 	_t += delta
 	# arte: sobe e desce 20 px com um balanço leve, girando a partir da base
 	var k := _wave(3.6)
-	_art.position.y = 50.0 + lerpf(6.0, -14.0, k)
+	_art.position.y = _art_home.y + lerpf(6.0, -14.0, k)
 	_art.rotation = deg_to_rad(lerpf(-1.0, 1.4, k))
 	k = _wave(3.4)
 	_bubble.position.y = 62.0 - 5.0 * k

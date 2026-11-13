@@ -172,7 +172,7 @@ func _build_party() -> void:
 		card.index = i + 1
 		card.char_name = u.unit_name
 		card.accent = u.color
-		card.face = load("res://assets/portraits/%s_face.png" % g.UNIT_DEFS[i]["key"])
+		card.face = load("res://assets/portraits/%s_face.png" % g.units[i].key)
 		party.add_child(card)
 		cards.append(card)
 		# clicar foca o herói; quem troca de personagem é o Tab
@@ -342,7 +342,7 @@ func _show_skills(i: int) -> void:
 		var bar := UiStyle.bar(u.color, 5, 0.5)
 		v.add_child(bar)
 		skill_row.add_child(slab)
-		skill_ui.append({"slot": n, "name": name_l, "cd": cd, "bar": bar, "total": list[n]["cd"]})
+		skill_ui.append({"slot": n, "name": name_l, "cd": cd, "bar": bar, "total": list[n]["cd"], "stacks": int(list[n].get("stacks", 0))})
 
 	# a troca de personagem aparece junto, com a própria recarga
 	var sw := UiStyle.slab(UiStyle.INK, UiStyle.SKEW, 18, 7)
@@ -431,6 +431,14 @@ func _process(delta: float) -> void:
 			s["cd"].text = "%.1f" % me.channel_t
 			s["cd"].add_theme_color_override("font_color", UiStyle.YELLOW)
 			s["name"].modulate.a = 1.0
+			continue
+		if s["stacks"] > 0:
+			# habilidade de acúmulos (Blood Party): a barra é o quanto já juntou
+			var full: bool = me.stacks >= s["stacks"]
+			UiStyle.set_bar(s["bar"], 1.0 if me.party_t > 0.0 else float(me.stacks) / s["stacks"])
+			s["cd"].text = ("%.0f" % ceilf(me.party_t)) if me.party_t > 0.0 else ("" if full else str(me.stacks))
+			s["cd"].add_theme_color_override("font_color", UiStyle.DANGER if me.party_t > 0.0 else UiStyle.DIM)
+			s["name"].modulate.a = 1.0 if (full or me.party_t > 0.0) else 0.45
 			continue
 		UiStyle.set_bar(s["bar"], 1.0 - left / maxf(s["total"], 0.1))
 		s["cd"].text = "" if left <= 0.0 else "%.0f" % ceilf(left)

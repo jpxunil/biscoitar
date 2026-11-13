@@ -36,8 +36,9 @@ func setup(game) -> void:
 			show_screen("cards"))
 	cards.back_pressed.connect(func(): show_screen("title" if _gear else "bosses"))
 	cards.ready_pressed.connect(func():
-		g.select_hero(cards.hero)
-		g.start_fight())
+		# trocar de tank recarrega a cena; aí a luta começa sozinha
+		if g.select_hero(cards.hero):
+			g.start_fight())
 	shop.back_pressed.connect(show_screen.bind("title"))
 	visible = false
 

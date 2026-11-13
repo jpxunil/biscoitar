@@ -39,6 +39,17 @@ var atk_range := 4.8
 var cast_target: Unit
 var cast_ai := false
 var guard_t := 0.0
+## Índice do herói em Knowledge.HEROES (baralho dele) e se é quem segura a boss.
+var hero := 0
+var tank := false
+## Enfermeira Gótica: acúmulos do Blood Party, janela do Blood Taste e o Blood Party em si.
+var base_hp := 100.0   # vida máxima normal (max_hp sobe durante o Blood Taste)
+var stacks := 0
+var taste_t := 0.0
+var taste_prev := 0.0
+var taste_hit := false
+var party_t := 0.0
+var party_tick := 0.0
 var targeted := false
 var chosen := false
 ## Pra onde está fugindo de um ataque vermelho. Fica guardado até sair da área,
@@ -89,6 +100,8 @@ func setup(i: int, d: Dictionary) -> void:
 	atk_range = d["range"]
 	color = d["color"]
 	max_hp = d["hp"]
+	base_hp = max_hp
+	tank = d.get("tank", false)
 	hp = max_hp
 	melee = d["melee"]
 	ai_dps = d["ai_dps"]
@@ -157,7 +170,7 @@ func _process(delta: float) -> void:
 	if channel_ring.visible:
 		# o anel fecha conforme a habilidade carrega
 		channel_ring.scale = Vector3.ONE * (1.0 + 1.6 * channel_t / channel_total)
-	guard_ring.visible = guard_t > 0.0 and alive
+	guard_ring.visible = (guard_t > 0.0 or taste_t > 0.0) and alive
 	if guard_ring.visible:
 		guard_ring.rotate_y(delta * 5.0)
 	if shake_t > 0.0:
@@ -254,6 +267,10 @@ func die() -> void:
 	immortal_t = 0.0
 	enmity = 0.0  # morrer zera a enmity, como no FFXIV
 	guard_t = 0.0
+	taste_t = 0.0
+	party_t = 0.0
+	stacks = 0
+	max_hp = base_hp
 	channel_t = 0.0
 	shield_hp = 0.0
 	shield_t = 0.0

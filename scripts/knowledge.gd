@@ -12,7 +12,7 @@ class_name Knowledge
 ## a mecânica certo, na mão, MASTERY_NEED vezes. Aí a carta é liberada e a IA aprende.
 
 const HEROES := [
-	{"key": "tank", "name": "Tank", "role": "Tanque", "color": Color(0.3, 0.5, 1.0), "hp": 160,
+	{"key": "tank", "name": "Paladino", "role": "Tanque", "color": Color(0.3, 0.5, 1.0), "hp": 160, "tank": true,
 		"blurb": "Segura a boss. Mitigação e Bora Biscoitar."},
 	{"key": "healer", "name": "Healer", "role": "Curandeira", "color": Color(0.4, 0.95, 0.55), "hp": 90,
 		"blurb": "Cura, revive e protege com escudo."},
@@ -20,6 +20,9 @@ const HEROES := [
 		"blurb": "O maior dano, colada na boss."},
 	{"key": "maga", "name": "Maga", "role": "DPS à distância", "color": Color(1.0, 0.72, 0.25), "hp": 90,
 		"blurb": "Dano de longe, com cast."},
+	# Segunda tank: entra na party no lugar do Paladino (ver `tank_pick`).
+	{"key": "nurse", "name": "Gothic Nurse", "role": "Tanque de Sangue", "color": Color(0.36, 0.4, 0.95), "hp": 112, "tank": true,
+		"blurb": "Rouba o sangue da boss. Pouca vida, parry e Blood Party."},
 ]
 
 ## Mesma ordem de BOSSES em game.gd.
@@ -72,10 +75,10 @@ const CARDS := {
 	"breath": {"name": "Fôlego", "kind": "white", "cat": "utility", "earn": "Vença o BISCOITO-KUN.",
 		"desc": "Recupera 1 de vida por segundo."},
 	# ---- douradas
-	"mitigate": {"name": "Guarda", "kind": "gold", "cat": "defense", "who": ["tank"], "mastery": "buster",
-		"desc": "Usa Mitigação quando a boss prepara o Esmagar."},
-	"provoke": {"name": "Biscoiteiro", "kind": "gold", "cat": "utility", "who": ["tank"], "mastery": "provoke",
-		"desc": "Usa Bora Biscoitar sempre que a boss larga dele."},
+	"mitigate": {"name": "Guarda", "kind": "gold", "cat": "defense", "who": ["tank", "nurse"], "mastery": "buster",
+		"desc": "Usa a defesa quando a boss solta o Esmagar."},
+	"provoke": {"name": "Biscoiteiro", "kind": "gold", "cat": "utility", "who": ["tank", "nurse"], "mastery": "provoke",
+		"desc": "Provoca sempre que a boss larga do tank."},
 	"instinct": {"name": "Instinto", "kind": "gold", "cat": "utility", "who": ["healer"], "mastery": "heal",
 		"desc": "Cura quem está com pouca vida."},
 	"eshield": {"name": "Escudo de Emergência", "kind": "gold", "cat": "defense", "who": ["healer"], "price": 220,
@@ -131,7 +134,7 @@ const RANK_COINS := [20, 40, 60, 90, 120, 160, 220, 300, 400]
 const MINI_REWARD := 0.4
 const LOW_HP := 0.5
 ## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói pra liberar a Rotação.
-const DPS_GOAL := {"tank": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0}
+const DPS_GOAL := {"tank": 14.0, "nurse": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0}
 const DPS_WINDOW := 20
 const SAVE_PATH := "user://save.json"
 
@@ -147,6 +150,10 @@ static var dps_known := {}
 static var best_rank := {}
 ## Quem você controla quando a luta começa, e a luta escolhida.
 static var start_hero := 2
+## Qual tank está na party: índice em HEROES (0 = Paladino, 4 = Gothic Nurse). A party tem sempre 4.
+static var tank_pick := 0
+## Trocar de tank recarrega a cena; com isso ligado a luta começa sozinha depois do recarregamento.
+static var autostart := false
 static var boss := 1
 static var attempts := 1
 ## Em que tela o menu abre depois de recarregar a cena: "title", "bosses", "cards", "shop".
@@ -172,6 +179,19 @@ static func deck(i: int) -> Dictionary:
 			if CARDS[id].get("start", false):
 				equip(i, id)
 	return decks[i]
+
+
+## Lugar do herói na party (0 = tank, seja qual for), e o herói que ocupa um lugar.
+static func slot_of(hero: int) -> int:
+	return 0 if HEROES[hero].get("tank", false) else hero
+
+
+static func hero_at(slot: int) -> int:
+	return tank_pick if slot == 0 else slot
+
+
+static func is_tank(hero: int) -> bool:
+	return HEROES[hero].get("tank", false)
 
 
 static func kind_of(id: String) -> String:
@@ -341,7 +361,7 @@ static func save() -> void:
 		return
 	var data := {
 		"owned": owned.keys(), "decks": {}, "mastery": mastery, "money": money, "tickets": tickets,
-		"shop": shop_unlocked, "dps": dps_known.keys(), "rank": {}, "hero": start_hero, "boss": boss,
+		"shop": shop_unlocked, "dps": dps_known.keys(), "rank": {}, "hero": start_hero, "boss": boss, "tank": tank_pick,
 	}
 	for i in decks:
 		data["decks"][str(i)] = decks[i]
@@ -372,7 +392,10 @@ static func load_save() -> void:
 	money = int(parsed.get("money", 0))
 	tickets = int(parsed.get("tickets", 0))
 	shop_unlocked = bool(parsed.get("shop", false))
-	start_hero = clampi(int(parsed.get("hero", 2)), 0, 3)
+	start_hero = clampi(int(parsed.get("hero", 2)), 0, HEROES.size() - 1)
+	tank_pick = int(parsed.get("tank", 0))
+	if tank_pick < 0 or tank_pick >= HEROES.size() or not is_tank(tank_pick):
+		tank_pick = 0
 	for b in parsed.get("rank", {}):
 		best_rank[int(b)] = int(parsed["rank"][b])
 	boss = clampi(int(parsed.get("boss", 1)), 0, BOSS_INFO.size() - 1)
@@ -382,7 +405,7 @@ static func load_save() -> void:
 	var saved: Dictionary = parsed.get("decks", {})
 	for si in saved:
 		var i := int(si)
-		if i < 0 or i > 3:
+		if i < 0 or i >= HEROES.size():
 			continue
 		var d := deck(i)
 		for kind in KINDS:

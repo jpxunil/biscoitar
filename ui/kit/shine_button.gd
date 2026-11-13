@@ -19,6 +19,8 @@ var chevron_px := 20.0
 var text_rot := 0.0
 ## Rosto (seletor de herói): a textura ocupa o miolo e acende no hover.
 var texture: Texture2D
+## Rosto mais apagado (tank que não está na party).
+var dim := false
 ## Pulsa parado e solta o brilho sozinho a cada `idle_every` segundos (READY FOR BATTLE).
 var idle := false
 var idle_every := 3.2
@@ -110,7 +112,7 @@ func _draw() -> void:
 	draw_colored_polygon(pts, Paper.INK)
 	if texture != null:
 		var r := Rect2(Vector2(border, border), size - Vector2(border, border) * 2.0)
-		draw_texture_rect(texture, r, false, Color(1, 1, 1, 1.0 if _hot else 0.6))
+		draw_texture_rect(texture, r, false, Color(1, 1, 1, 1.0 if _hot else (0.28 if dim else 0.6)))
 	else:
 		draw_colored_polygon(inner, fill_hover if _hot else fill)
 	var col := fg_hover if _hot else fg
