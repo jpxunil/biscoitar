@@ -47,6 +47,12 @@ func _ready() -> void:
 			if a.begins_with("--tab="):
 				tab = int(a.trim_prefix("--tab="))
 		scene.open(hero, tab)
+		for a in args:
+			# --scroll=N: desce a lista de atalhos N pixels
+			if a.begins_with("--scroll="):
+				await get_tree().process_frame
+				for sc in scene.find_children("*", "ScrollContainer", true, false):
+					sc.scroll_vertical = int(a.trim_prefix("--scroll="))
 		if args.has("--capture"):
 			scene._start_capture("skill_2", 0)
 		if args.has("--conflict"):

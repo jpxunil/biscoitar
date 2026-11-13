@@ -34,6 +34,9 @@ const GUIDE_COL := Color(0.3, 0.9, 1.0)
 const DUMMY_POS := [Vector3(-5.0, 0, -4.0), Vector3(5.0, 0, -4.0)]
 const ART := "res://assets/portraits/shopkeeper_art.webp"
 const BUST := "res://assets/portraits/shopkeeper_bust.webp"
+## Cores do design (artifact "Tela de Cartas") que o kit Paper ainda não nomeia.
+const PURPLE := Color("5B2BB8")
+const NAVY2 := Color("2B3384")
 
 ## Tempo de cada tentativa (a corrente não tem relógio: quem marca o tempo é a queimadura).
 const TIME := {"stack": 7.0, "pair": 11.0, "spread": 6.5, "link": 0.0}
@@ -186,18 +189,18 @@ var ui: Control
 var fight_ui: Control
 var party_cards: Array = []
 var banner_title: Label
-var banner_sub: Label
+var banner_sub: Chip
 var pips: Control
 var demo_tag: Control
 var talk_box: Control
 var talk_text: Label
-var talk_next: Control
-var keys_hint: Label
+var talk_next: Chip
+var keys_hint: Control
 var card_pop: Control
 var cards: CardsScreen
 var blocker: Control
 var black: ColorRect
-var black_hint: PanelContainer
+var black_hint: Control
 var pause_menu: PauseMenu
 var options: OptionsScreen
 var guides: Array[Node3D] = []
@@ -315,7 +318,7 @@ func _npc_test() -> void:
 	_set_ctrl(1 - comp, true)
 	fight_ui.get_node("Banner").visible = true
 	banner_title.text = "A PROVA  ·  A CARTA FUNCIONA?"
-	banner_sub.text = "só olha"
+	banner_sub.text = "SÓ OLHA"
 	pips.visible = false
 	var who := String(units[comp].unit_name).to_upper()
 	await _talk([
@@ -350,7 +353,7 @@ func _to_black() -> void:
 	_black_ready = true
 	black_hint.visible = true
 	black_hint.modulate.a = 0.0
-	black_hint.create_tween().tween_property(black_hint, "modulate:a", 0.5, 1.2)
+	black_hint.create_tween().tween_property(black_hint, "modulate:a", 0.8, 1.2)
 
 
 func _leave() -> void:
@@ -940,55 +943,52 @@ func _build_ui() -> void:
 		party_cards.append(card)
 	party.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT, Control.PRESET_MODE_MINSIZE, 22)
 
+	# Daqui pra baixo, tudo no estilo de papel recortado da tela de cartas (kit Paper: CutPanel,
+	# Bowlby One nos títulos, Baloo 2 no texto, contorno INK grosso e sombra dura).
 	# faixa do exercício: nome, o que fazer e os três acertos
-	var top := _anchored(fight_ui, Vector2(0.5, 0.0), Vector2(560, 84), Vector2(0, 16))
-	var plate := Ink.panel(Ink.NAVY, 13)
-	plate.size = Vector2(560, 84)
-	top.add_child(plate)
-	banner_title = Ink.title("", 26)
-	banner_title.position = Vector2(26, 10)
-	banner_title.size = Vector2(420, 34)
+	var top := _anchored(fight_ui, Vector2(0.5, 0.0), Vector2(640, 86), Vector2(0, 14))
+	top.name = "Banner"
+	top.add_child(CutPanel.make(Rect2(0, 0, 640, 86), [[.02, 0], [1, .06], [.98, 1], [0, .93]], Paper.NAVY, 5, Vector2(7, 7)))
+	banner_title = Paper.label("", 23, Paper.CREAM, Paper.display())
+	banner_title.position = Vector2(28, 9)
+	banner_title.size = Vector2(470, 34)
+	banner_title.rotation = deg_to_rad(-1.0)
 	top.add_child(banner_title)
-	banner_sub = Ink.text("", 17, Ink.COIN)
-	banner_sub.position = Vector2(28, 46)
-	banner_sub.size = Vector2(380, 24)
+	banner_sub = Chip.new()
+	banner_sub.px = 13
+	banner_sub.fill = Paper.GOLD
+	banner_sub.shadow = Vector2.ZERO
+	banner_sub.position = Vector2(30, 47)
 	top.add_child(banner_sub)
 	pips = Control.new()
-	pips.position = Vector2(420, 22)
-	pips.size = Vector2(120, 40)
+	pips.position = Vector2(508, 26)
+	pips.size = Vector2(120, 34)
 	pips.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pips.draw.connect(_draw_pips)
 	top.add_child(pips)
-	top.name = "Banner"
 
-	demo_tag = _anchored(fight_ui, Vector2(0.5, 0.0), Vector2(420, 46), Vector2(0, 108))
-	var dplate := Ink.panel(Ink.COIN, 5)
-	dplate.size = Vector2(420, 46)
-	demo_tag.add_child(dplate)
-	var dtext := Ink.title("DEMONSTRAÇÃO  ·  só olha", 22, Ink.OUT)
-	dtext.size = Vector2(420, 44)
-	dtext.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	dtext.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	demo_tag.add_child(dtext)
+	demo_tag = _anchored(fight_ui, Vector2(0.5, 0.0), Vector2(420, 40), Vector2(0, 114))
+	var dchip := Chip.new()
+	dchip.px = 20
+	dchip.fill = Paper.GOLD
+	dchip.text = "DEMONSTRAÇÃO  ·  SÓ OLHA"
+	dchip.position = Vector2((420.0 - dchip.size.x) * 0.5, 0)
+	demo_tag.add_child(dchip)
 	demo_tag.visible = false
 
 	# caixa de fala: busto da Shopkeeper, nome e texto
-	talk_box = _anchored(fight_ui, Vector2(0.5, 1.0), Vector2(900, 124), Vector2(0, -16))
+	talk_box = _anchored(fight_ui, Vector2(0.5, 1.0), Vector2(900, 124), Vector2(0, -22))
 	talk_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	talk_box.gui_input.connect(func(e: InputEvent):
 		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
 			_confirm())
-	var tplate := Ink.panel(Ink.NAVY, 9)
-	tplate.size = Vector2(900, 124)
-	talk_box.add_child(tplate)
-	var frame := Ink.panel(Ink.GRAPE, 21)
-	frame.position = Vector2(-16, -56)
-	frame.size = Vector2(168, 168)
-	frame.rotation = -0.04
+	talk_box.add_child(CutPanel.make(Rect2(0, 0, 900, 124), [[.01, 0], [1, .05], [.99, 1], [0, .95]], Paper.NAVY, 5, Vector2(8, 8)))
+	var frame := CutPanel.make(Rect2(-18, -58, 168, 168), [[.03, 0], [1, .04], [.97, 1], [0, .96]], PURPLE, 5, Vector2(7, 7))
+	frame.rotation = deg_to_rad(-4.0)
 	talk_box.add_child(frame)
 	var clip := Control.new()
-	clip.position = Vector2(8, 8)
-	clip.size = Vector2(152, 152)
+	clip.position = Vector2(9, 9)
+	clip.size = Vector2(150, 150)
 	clip.clip_contents = true
 	clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(clip)
@@ -1000,49 +1000,42 @@ func _build_ui() -> void:
 	bust.size = Vector2(190, 180)
 	bust.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip.add_child(bust)
-	var name_tag := Ink.panel(Ink.OUT, 7)
-	name_tag.position = Vector2(170, -18)
-	name_tag.size = Vector2(190, 36)
+	var name_tag := Chip.new()
+	name_tag.px = 18
+	name_tag.skew = 10.0
+	name_tag.text = "SHOPKEEPER"
+	name_tag.position = Vector2(164, -22)
+	name_tag.rotation = deg_to_rad(-2.0)
 	talk_box.add_child(name_tag)
-	var name_l := Ink.title("SHOPKEEPER", 19, Ink.COIN)
-	name_l.size = Vector2(190, 34)
-	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_tag.add_child(name_l)
-	talk_text = Ink.text("", 20)
-	talk_text.position = Vector2(176, 20)
+	talk_text = Paper.label("", 20, Paper.CREAM, Paper.body(700))
+	talk_text.position = Vector2(178, 20)
 	talk_text.size = Vector2(700, 84)
 	talk_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	talk_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	talk_text.add_theme_constant_override("line_spacing", -4)
 	talk_box.add_child(talk_text)
-	# "ENTER" numa placa de papel inclinada, como na tela de fim da luta (regra 1 do UiStyle:
-	# texto nunca fica solto, sempre em cima de uma placa INK ou PAPER)
-	# Embaixo dela, uma sombra dura e escura, deslocada pra baixo e pra esquerda (sem desfoque).
-	talk_next = Control.new()
-	talk_next.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	talk_next.position = Vector2(756, 94)
+	# "ENTER": etiqueta creme inclinada com contorno e sombra dura, como as teclas do HUD
+	talk_next = Chip.new()
+	talk_next.px = 14
+	talk_next.arrow = true
+	talk_next.text = "ENTER"
+	talk_next.position = Vector2(764, 94)
 	talk_box.add_child(talk_next)
-	for ply in 2:
-		var slab := UiStyle.slab(Ink.OUT if ply == 0 else UiStyle.PAPER, UiStyle.SKEW, 20, 3)
-		var word := UiStyle.text("ENTER  ▶", 15, UiStyle.INK)
-		word.modulate.a = float(ply)  # a sombra só precisa do tamanho do texto
-		slab.add_child(word)
-		slab.position = Vector2(-6, 8) if ply == 0 else Vector2.ZERO
-		talk_next.add_child(slab)
 	talk_box.visible = false
 
-	keys_hint = Ink.text("", 14, UiStyle.DIM)
-	keys_hint.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	keys_hint.offset_left = -330
-	keys_hint.offset_right = -18
-	keys_hint.offset_top = 16
-	keys_hint.offset_bottom = 90
-	keys_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	fight_ui.add_child(keys_hint)
+	# teclas: chapinhas creme com a letra, em cima de uma placa INK
+	keys_hint = _anchored(fight_ui, Vector2(1.0, 0.0), Vector2(262, 112), Vector2(-18, 14))
+	keys_hint.add_child(CutPanel.make(Rect2(0, 0, 262, 112), [[.03, 0], [1, .05], [.97, 1], [0, .95]], Paper.INK, 0, Vector2.ZERO))
+	var rows := VBoxContainer.new()
+	rows.name = "Rows"
+	rows.position = Vector2(18, 12)
+	rows.add_theme_constant_override("separation", 5)
+	rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	keys_hint.add_child(rows)
 	_refresh_keys()
 
 	# carta ganha: aparece no meio da tela por um instante
-	card_pop = _anchored(ui, Vector2(0.5, 0.5), Vector2(360, 260), Vector2(0, -40))
+	card_pop = _anchored(ui, Vector2(0.5, 0.5), Vector2(360, 264), Vector2(0, -40))
 	card_pop.visible = false
 
 	blocker = Control.new()
@@ -1057,13 +1050,15 @@ func _build_ui() -> void:
 	black.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	black.visible = false
 	ui.add_child(black)
-	black_hint = UiStyle.slab(UiStyle.PAPER, UiStyle.SKEW, 20, 3)
-	black_hint.add_child(UiStyle.text("ENTER", 15, UiStyle.INK))
-	black_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE)
-	black_hint.offset_top -= 44
-	black_hint.offset_bottom -= 44
+	black_hint = _anchored(black, Vector2(0.5, 1.0), Vector2(120, 30), Vector2(0, -44))
+	var bchip := Chip.new()
+	bchip.px = 14
+	bchip.arrow = true
+	bchip.shadow = Vector2.ZERO
+	bchip.text = "ENTER"
+	bchip.position = Vector2((120.0 - bchip.size.x) * 0.5, 0)
+	black_hint.add_child(bchip)
 	black_hint.visible = false
-	black.add_child(black_hint)
 
 	pause_menu = PauseMenu.new()
 	pause_menu.in_tutorial = true
@@ -1096,8 +1091,32 @@ func _anchored(parent: Control, anchor: Vector2, s: Vector2, shift: Vector2) -> 
 	return c
 
 
+## Lembrete das teclas (as que o jogador configurou): uma linha por ação, tecla em chapinha creme.
 func _refresh_keys() -> void:
-	keys_hint.text = _fmt("{move}  andar\n{swap}  trocar de herói\n%s  desvio   ·   %s  pause" % [Binds.label("dash"), Binds.label("pause")])
+	var rows: VBoxContainer = keys_hint.get_node("Rows")
+	for c in rows.get_children():
+		rows.remove_child(c)
+		c.queue_free()
+	for line in [
+		[["move_up", "move_left", "move_down", "move_right"], "andar"],
+		[["swap"], "trocar de herói"],
+		[["dash"], "desvio"],
+	]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		for id in line[0]:
+			var key := Chip.new()
+			key.px = 11
+			key.skew = 0.0
+			key.border = 0.0
+			key.pad = 7.0
+			key.shadow = Vector2.ZERO
+			key.text = Binds.label(id)
+			row.add_child(key)
+		var what := Paper.label("  " + String(line[1]), 15, Paper.CREAM, Paper.body(700))
+		row.add_child(what)
+		rows.add_child(row)
 
 
 func _set_banner(kind: String) -> void:
@@ -1106,38 +1125,39 @@ func _set_banner(kind: String) -> void:
 	if kind == "":
 		return
 	banner_title.text = BANNER[kind][0]
-	banner_sub.text = BANNER[kind][1]
+	banner_sub.text = String(BANNER[kind][1]).to_upper()
 	pips.visible = true
 	pips.queue_redraw()
 
 
 func _draw_pips() -> void:
 	var n: int = wins.get(stage, 0)
+	# três fichas inclinadas: douradas conforme os acertos
 	for i in NEED:
-		var c := Vector2(20 + i * 38, 20)
-		pips.draw_circle(c, 15, Ink.OUT)
-		pips.draw_circle(c, 11, Ink.COIN if i < n else Ink.NIGHT)
+		var pts := Paper.moved(Paper.skew_rect(Vector2(30, 30), 12.0), Vector2(i * 38, 2))
+		pips.draw_colored_polygon(pts, Paper.INK)
+		pips.draw_colored_polygon(Paper.inset(pts, 4.0), Paper.GOLD if i < n else NAVY2)
 
 
 ## "Carta nova": a carta ganha estampa no meio da tela e some.
 func _show_card(id: String) -> void:
 	for c in card_pop.get_children():
 		c.queue_free()
-	var plate := Ink.panel(Ink.GRAPE, 17)
-	plate.size = Vector2(360, 260)
-	card_pop.add_child(plate)
-	var t := Ink.title("CARTA NOVA", 26, Ink.COIN)
-	t.position = Vector2(0, 12)
-	t.size = Vector2(360, 34)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	card_pop.add_child(CutPanel.make(Rect2(0, 0, 360, 264), [[.03, 0], [1, .04], [.97, 1], [0, .96]], PURPLE, 6, Vector2(9, 9)))
+	var t := Chip.new()
+	t.px = 22
+	t.fill = Paper.GOLD
+	t.text = "CARTA NOVA"
+	t.position = Vector2((360.0 - t.size.x) * 0.5, -16)
+	t.rotation = deg_to_rad(-2.0)
 	card_pop.add_child(t)
 	var cv := CardView.make(id)
-	cv.position = Vector2(180 - CardView.W * 0.5, 54)
+	cv.position = Vector2(180 - CardView.W * 0.5, 44)
 	cv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card_pop.add_child(cv)
-	var n := Ink.title(String(Knowledge.CARDS[id]["name"]).to_upper(), 20)
-	n.position = Vector2(0, 216)
-	n.size = Vector2(360, 30)
+	var n := Paper.label(String(Knowledge.CARDS[id]["name"]).to_upper(), 22, Paper.CREAM, Paper.display())
+	n.position = Vector2(0, 212)
+	n.size = Vector2(360, 32)
 	n.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_pop.add_child(n)
 	card_pop.visible = true

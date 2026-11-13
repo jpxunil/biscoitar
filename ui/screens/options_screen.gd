@@ -2,6 +2,7 @@ class_name OptionsScreen
 extends Control
 ## Opções do jogo: SOM e ATALHOS. É a mesma tela no menu principal e no pause (quem abre é o
 ## hud.gd); roda com a árvore congelada porque fica em PROCESS_MODE_ALWAYS.
+## Visual: kit de papel (Paper), seguindo o design "Tela de Cartas".
 ## Volume: scripts/settings.gd (buses de verdade). Atalhos: scripts/binds.gd (InputMap).
 ##   ← → trocam de aba · ESC volta · num atalho: clique troca, botão direito remove.
 
@@ -11,24 +12,30 @@ const BOX := Vector2(1040, 630)
 const PAGE := Vector2(960, 400)
 const ROW_H := 46
 const CHIP := Vector2(176, 36)
+## Cores do design "Tela de Cartas" que o kit Paper ainda não nomeia.
+const NIGHT := Color("160C33")
+const NAVY2 := Color("2B3384")
+const PURPLE := Color("5B2BB8")
+const DIM := Color("A9AEDC")
+const DANGER := Color("FF5559")
 
 var _box: Control
-var _tabs: Array[InkButton] = []
+var _tabs: Array[ShineButton] = []
 var _pages: Array[Control] = []
 var _tab := 0
 var _hint: Label
 
 # som
 var _sliders := {}  # bus -> {"slider": InkSlider, "value": Label}
-var _mute: InkButton
+var _mute: ShineButton
 
 # atalhos
-var _rows := {}  # id -> {"chips": [InkButton, InkButton], "reset": InkButton, "skill": Label}
+var _rows := {}  # id -> {"chips": [ShineButton, ShineButton], "reset": ShineButton, "skill": Label}
 var _hero_note: Label
 var _cap := {}  # {"id", "slot"} enquanto espera a tecla nova
 var _dialog: Control
 var _dialog_text: Label
-var _dialog_yes: InkButton
+var _dialog_yes: ShineButton
 var _on_yes := Callable()
 
 
@@ -43,29 +50,30 @@ func _ready() -> void:
 	Settings.boot()
 	var dim := ColorRect.new()
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(Ink.NIGHT.r, Ink.NIGHT.g, Ink.NIGHT.b, 0.94)
+	dim.color = Color(NIGHT.r, NIGHT.g, NIGHT.b, 0.95)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
 	_box = _centered(BOX)
 	add_child(_box)
-	var panel := Ink.panel(Ink.NAVY, 9)
+	var panel := _panel(Paper.NAVY, [[.012, 0], [1, .02], [.988, 1], [0, .98]], 6.0, Vector2(10, 10))
 	panel.position = Vector2(0, 34)
 	panel.size = BOX - Vector2(0, 34)
 	_box.add_child(panel)
-	var tag := Ink.panel(Ink.GRAPE, 21)
+	var tag := _panel(Paper.CREAM, [[0, 0], [1, .08], [.95, 1], [.03, .9]])
 	tag.position = Vector2(-18, 0)
 	tag.size = Vector2(290, 78)
 	tag.rotation = -0.04
 	_box.add_child(tag)
-	var title := Ink.title("OPÇÕES", 52)
-	title.position = Vector2(24, 5)
-	title.size = Vector2(260, 68)
+	var title := _title("OPÇÕES", 44, Paper.INK)
+	title.size = Vector2(290, 78)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	tag.add_child(title)
 
 	var names := ["SOM", "ATALHOS"]
 	for k in names.size():
-		var b := Ink.button(names[k], Ink.CREAM, Ink.OUT, 26, 5 + k * 4)
+		var b := _button(names[k], Paper.CREAM, Paper.INK, 26)
 		b.position = Vector2(590 + k * 206, 54)
 		b.size = Vector2(194, 54)
 		b.pressed.connect(_show_tab.bind(k))
@@ -81,12 +89,12 @@ func _ready() -> void:
 		_pages.append(page)
 		build.call(page)
 
-	var back := Ink.button("VOLTAR", Ink.COIN, Ink.OUT, 24, 3)
+	var back := _button("VOLTAR", Paper.GOLD, Paper.INK, 24)
 	back.position = Vector2(40, 554)
 	back.size = Vector2(190, 50)
 	back.pressed.connect(close)
 	_box.add_child(back)
-	_hint = Ink.text("", 14, UiStyle.DIM)
+	_hint = _text("", 14, DIM)
 	_hint.position = Vector2(250, 568)
 	_hint.size = Vector2(750, 22)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -114,13 +122,49 @@ func _centered(s: Vector2) -> Control:
 	return c
 
 
+# ---------------------------------------------------------------- peças do kit de papel
+
+## Botão inclinado com contorno, sombra dura e o brilho do ShineButton.
+func _button(text: String, fill: Color, fg: Color, px: int) -> ShineButton:
+	var b := ShineButton.new()
+	b.text = text
+	b.fill = fill
+	b.fg = fg
+	b.font_px = px
+	b.skew = 10.0
+	b.border = 3.0 if px < 20 else 4.0
+	b.shadow = Vector2(3, 4) if px < 20 else Vector2(5, 6)
+	b.auto_hover = true
+	b.hover_scale = 1.04
+	return b
+
+
+func _panel(fill: Color, shape: Array = [[.02, 0], [1, .04], [.98, 1], [0, .96]], border := 5.0, shadow := Vector2(8, 8)) -> CutPanel:
+	var p := CutPanel.new()
+	p.shape = shape
+	p.fill = fill
+	p.border = border
+	p.shadow = shadow
+	return p
+
+
+## Título (Bowlby One).
+func _title(text: String, px: int, col := Paper.CREAM) -> Label:
+	return Paper.label(text, px, col, Paper.display())
+
+
+## Texto corrido (Baloo 2).
+func _text(text: String, px: int, col := Paper.CREAM) -> Label:
+	return Paper.label(text, px, col, Paper.body(700))
+
+
 # ---------------------------------------------------------------- som
 
 func _build_sound(page: Control) -> void:
 	var y := 14.0
 	for c in Settings.CHANNELS:
 		var bus: StringName = c["bus"]
-		var l := Ink.title(String(c["name"]).to_upper(), 24)
+		var l := _title(String(c["name"]).to_upper(), 20)
 		l.position = Vector2(8, y + 4)
 		l.size = Vector2(330, 34)
 		page.add_child(l)
@@ -128,7 +172,7 @@ func _build_sound(page: Control) -> void:
 		s.position = Vector2(350, y)
 		s.size = Vector2(470, 40)
 		page.add_child(s)
-		var v := Ink.title("", 26, Ink.COIN)
+		var v := _title("", 26, Paper.GOLD)
 		v.position = Vector2(840, y + 2)
 		v.size = Vector2(110, 36)
 		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -141,7 +185,7 @@ func _build_sound(page: Control) -> void:
 		y += 76.0
 
 	y += 14.0
-	_mute = Ink.button("", Ink.CREAM, Ink.OUT, 22, 7)
+	_mute = _button("", Paper.CREAM, Paper.INK, 18)
 	_mute.position = Vector2(8, y)
 	_mute.size = Vector2(360, 54)
 	_mute.pressed.connect(func():
@@ -149,7 +193,7 @@ func _build_sound(page: Control) -> void:
 		Settings.save()
 		_refresh_sound())
 	page.add_child(_mute)
-	var reset := Ink.button("RESTAURAR PADRÃO", Ink.CREAM, Ink.OUT, 22, 11)
+	var reset := _button("RESTAURAR PADRÃO", Paper.CREAM, Paper.INK, 18)
 	reset.position = Vector2(388, y)
 	reset.size = Vector2(320, 54)
 	reset.pressed.connect(func():
@@ -158,7 +202,7 @@ func _build_sound(page: Control) -> void:
 		_refresh_sound())
 	page.add_child(reset)
 
-	var note := Ink.text("O jogo hoje só toca efeitos sonoros. Música, vozes e sons de interface ganham um controle aqui quando existirem.", 14, UiStyle.DIM)
+	var note := _text("O jogo hoje só toca efeitos sonoros. Música, vozes e sons de interface ganham um controle aqui quando existirem.", 14, DIM)
 	note.position = Vector2(8, y + 76)
 	note.size = Vector2(900, 44)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -172,23 +216,23 @@ func _refresh_sound() -> void:
 		_sliders[bus]["value"].text = "%d%%" % roundi(v * 100.0)
 		_sliders[bus]["slider"].modulate.a = 0.45 if Settings.mute_all else 1.0
 	_mute.text = "SILENCIAR TUDO: " + ("SIM" if Settings.mute_all else "NÃO")
-	_mute.fill = UiStyle.DANGER if Settings.mute_all else Ink.CREAM
+	_mute.fill = DANGER if Settings.mute_all else Paper.CREAM
 
 
 # ---------------------------------------------------------------- atalhos
 
 func _build_binds(page: Control) -> void:
-	_hero_note = Ink.text("", 15, UiStyle.DIM)
+	_hero_note = _text("", 15, DIM)
 	_hero_note.position = Vector2(8, 10)
 	_hero_note.size = Vector2(440, 24)
 	page.add_child(_hero_note)
 	for k in 2:
-		var h := Ink.text(["PRINCIPAL", "ALTERNATIVO"][k], 13, UiStyle.DIM)
+		var h := _text(["PRINCIPAL", "ALTERNATIVO"][k], 13, DIM)
 		h.position = Vector2(462 + k * (CHIP.x + 10), 26)
 		h.size = Vector2(CHIP.x, 18)
 		h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		page.add_child(h)
-	var all := Ink.button("RESTAURAR TODOS", Ink.CREAM, Ink.OUT, 13, 13)
+	var all := _button("RESTAURAR TODOS", Paper.CREAM, Paper.INK, 11)
 	all.position = Vector2(PAGE.x - 166, 4)
 	all.size = Vector2(160, 36)
 	all.pressed.connect(func():
@@ -214,7 +258,7 @@ func _build_binds(page: Control) -> void:
 			var head := Control.new()
 			head.custom_minimum_size = Vector2(PAGE.x - 20, 34)
 			head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var t := Ink.title(group, 17, Ink.COIN)
+			var t := _title(group, 17, Paper.GOLD)
 			t.position = Vector2(8, 10)
 			t.size = Vector2(500, 22)
 			head.add_child(t)
@@ -228,7 +272,7 @@ func _build_row(a: Dictionary) -> Control:
 	row.custom_minimum_size = Vector2(PAGE.x - 20, ROW_H)
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
 	var plate := ColorRect.new()
-	plate.color = Color(Ink.NIGHT.r, Ink.NIGHT.g, Ink.NIGHT.b, 0.55)
+	plate.color = Color(Paper.INK.r, Paper.INK.g, Paper.INK.b, 0.6)
 	plate.position = Vector2(0, 0)
 	plate.size = Vector2(PAGE.x - 20, ROW_H)
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -242,18 +286,18 @@ func _build_row(a: Dictionary) -> Control:
 		badge.position = Vector2(8, 6)
 		badge.size = Vector2(34, 34)
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		badge.set_meta("col", Ink.GRAPE)
+		badge.set_meta("col", PURPLE)
 		badge.set_meta("on", true)
 		badge.draw.connect(_draw_badge.bind(badge, id.get_slice("_", 1)))
 		row.add_child(badge)
 		info["badge"] = badge
 		x = 54.0
-	var name_l := Ink.text(String(a["name"]).to_upper(), 16)
+	var name_l := _text(String(a["name"]).to_upper(), 16)
 	name_l.position = Vector2(x, 12)
 	name_l.size = Vector2(300, 24)
 	row.add_child(name_l)
 	if id.begins_with("skill_"):
-		var sk := Ink.text("", 15, UiStyle.DIM)
+		var sk := _text("", 15, DIM)
 		sk.position = Vector2(132, 13)
 		sk.size = Vector2(320, 24)
 		sk.clip_text = true
@@ -261,7 +305,7 @@ func _build_row(a: Dictionary) -> Control:
 		info["skill"] = sk
 
 	for s in Binds.SLOTS:
-		var chip := Ink.button("", Ink.CREAM, Ink.OUT, 17, 3 + s * 6)
+		var chip := _button("", Paper.CREAM, Paper.INK, 15)
 		chip.position = Vector2(462 + s * (CHIP.x + 10), 5)
 		chip.size = CHIP
 		chip.pressed.connect(_start_capture.bind(id, s))
@@ -270,7 +314,7 @@ func _build_row(a: Dictionary) -> Control:
 				_clear(id, s))
 		row.add_child(chip)
 		info["chips"].append(chip)
-	var reset := Ink.button("PADRÃO", Ink.NAVY, Ink.CREAM, 12, 9)
+	var reset := _button("PADRÃO", NAVY2, Paper.CREAM, 11)
 	reset.position = Vector2(462 + 2 * (CHIP.x + 10), 7)
 	reset.size = Vector2(80, 32)
 	reset.pressed.connect(_reset_one.bind(id))
@@ -284,37 +328,39 @@ func _draw_badge(badge: Control, number: String) -> void:
 	var col: Color = badge.get_meta("col")
 	if not badge.get_meta("on"):
 		col = col.darkened(0.55)
-	var pts := Ink.blob(badge.size, 6 + int(number), 2.5)
+	var pts := Paper.skew_rect(badge.size, 8.0)
 	draw_badge_poly(badge, pts, col)
-	var f := Ink.font()
-	badge.draw_string(f, Vector2(0, 25), number, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 20, Ink.OUT)
+	var f := Paper.display()
+	badge.draw_string(f, Vector2(0, 25), number, HORIZONTAL_ALIGNMENT_CENTER, badge.size.x, 20, Paper.INK)
 
 
 static func draw_badge_poly(ci: CanvasItem, pts: PackedVector2Array, col: Color) -> void:
 	ci.draw_colored_polygon(pts, col)
 	var loop := pts.duplicate()
 	loop.append(pts[0])
-	ci.draw_polyline(loop, Ink.OUT, 3.0, true)
+	ci.draw_polyline(loop, Paper.INK, 3.0, true)
 
 
 func _refresh_binds() -> void:
 	for id in _rows:
 		var info: Dictionary = _rows[id]
 		for s in Binds.SLOTS:
-			var chip: InkButton = info["chips"][s]
+			var chip: ShineButton = info["chips"][s]
 			var code: int = Binds.keys[id][s]
 			var capturing: bool = not _cap.is_empty() and _cap["id"] == id and _cap["slot"] == s
 			if capturing:
 				chip.text = "APERTE UMA TECLA"
-				chip.font_px = 13
-				chip.fill = Ink.COIN
+				chip.font_px = 11
+				chip.fill = Paper.GOLD
 			else:
 				chip.text = Binds.code_name(code)
-				chip.font_px = 17
-				chip.fill = Ink.CREAM if code != 0 else Ink.NAVY.lightened(0.12)
-			chip.fg = Ink.OUT if (code != 0 or capturing) else UiStyle.DIM
+				chip.font_px = 15
+				chip.fill = Paper.CREAM if code != 0 else NAVY2
+			chip.fg = Paper.INK if (code != 0 or capturing) else DIM
 			chip.tooltip_text = "Clique: trocar · Botão direito: remover" if Binds.can_clear(id, s) else "Clique: trocar"
-		var reset: InkButton = info["reset"]
+		for chip in info["chips"]:
+			chip.queue_redraw()
+		var reset: ShineButton = info["reset"]
 		reset.disabled = Binds.is_default(id)
 		reset.queue_redraw()
 
@@ -412,22 +458,22 @@ func _build_dialog() -> void:
 	_dialog.add_child(dim)
 	var box := _centered(Vector2(560, 270))
 	_dialog.add_child(box)
-	var panel := Ink.panel(Ink.GRAPE, 17)
+	var panel := _panel(PURPLE)
 	panel.size = Vector2(560, 270)
 	box.add_child(panel)
-	_dialog_text = Ink.text("", 19)
+	_dialog_text = _text("", 19)
 	_dialog_text.position = Vector2(30, 24)
 	_dialog_text.size = Vector2(500, 150)
 	_dialog_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_dialog_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_dialog_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_dialog_text)
-	_dialog_yes = Ink.button("SUBSTITUIR", Ink.COIN, Ink.OUT, 22, 5)
+	_dialog_yes = _button("SUBSTITUIR", Paper.GOLD, Paper.INK, 20)
 	_dialog_yes.position = Vector2(40, 196)
 	_dialog_yes.size = Vector2(230, 52)
 	_dialog_yes.pressed.connect(_answer.bind(true))
 	box.add_child(_dialog_yes)
-	var no := Ink.button("CANCELAR", Ink.CREAM, Ink.OUT, 22, 9)
+	var no := _button("CANCELAR", Paper.CREAM, Paper.INK, 20)
 	no.name = "No"
 	no.position = Vector2(290, 196)
 	no.size = Vector2(230, 52)
@@ -440,7 +486,7 @@ func _ask(text: String, yes: String, on_yes: Callable) -> void:
 	_dialog_text.text = text
 	_dialog_yes.visible = yes != ""
 	_dialog_yes.text = yes
-	var no: InkButton = _dialog_yes.get_parent().get_node("No")
+	var no: ShineButton = _dialog_yes.get_parent().get_node("No")
 	no.text = "CANCELAR" if yes != "" else "ENTENDI"
 	no.position.x = 290.0 if yes != "" else 165.0
 	_on_yes = on_yes
@@ -493,7 +539,7 @@ func _show_tab(k: int) -> void:
 	_tab = k
 	for i in _pages.size():
 		_pages[i].visible = i == k
-		_tabs[i].fill = Ink.COIN if i == k else Ink.CREAM.darkened(0.25)
+		_tabs[i].fill = Paper.GOLD if i == k else Paper.CREAM2
 	_set_hint()
 
 

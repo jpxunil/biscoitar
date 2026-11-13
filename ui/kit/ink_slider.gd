@@ -1,18 +1,20 @@
 class_name InkSlider
 extends Control
-## Slider horizontal no estilo de tinta: trilho escuro, preenchimento chapado e um pegador recortado.
+## Slider horizontal no kit de papel: trilho INK inclinado (como as barras do HUD no design),
+## preenchimento chapado e um pegador creme com contorno e sombra dura.
 ## `value` vai de 0 a 1, em passos de 1%. Arrasta com o mouse ou clica em qualquer ponto do trilho.
+## (O nome ficou da primeira versão, feita no kit Ink.)
 
 signal changed(value: float)
 signal released
 
-@export var fill := Color(1.0, 0.8, 0.25)
+@export var fill := Paper.GOLD
 var value := 1.0: set = _set_value
 var _drag := false
 var _hover := false
 
-const KNOB := Vector2(22, 34)
-const TRACK_H := 14.0
+const KNOB := Vector2(20, 34)
+const TRACK_H := 16.0
 
 
 func _init() -> void:
@@ -56,18 +58,14 @@ func _draw() -> void:
 	var y := (size.y - TRACK_H) * 0.5
 	var x0 := KNOB.x * 0.5
 	var span := size.x - KNOB.x
-	draw_rect(Rect2(x0 + 3, y + 4, span, TRACK_H), Color(0, 0, 0, 0.45))
-	draw_rect(Rect2(x0, y, span, TRACK_H), Ink.NIGHT)
-	draw_rect(Rect2(x0, y, span * value, TRACK_H), fill)
-	draw_rect(Rect2(x0, y, span, TRACK_H), Ink.OUT, false, 3.0)
-	var at := Vector2(x0 + span * value - KNOB.x * 0.5, (size.y - KNOB.y) * 0.5)
-	var pts := Ink.blob(KNOB, 4, 2.5)
-	var sh := PackedVector2Array()
-	var body := PackedVector2Array()
-	for p in pts:
-		sh.append(p + at + Vector2(3, 4))
-		body.append(p + at)
-	draw_colored_polygon(sh, Color(0, 0, 0, 0.45))
-	draw_colored_polygon(body, Ink.CREAM.lightened(0.3) if (_hover or _drag) else Ink.CREAM)
-	body.append(body[0])
-	draw_polyline(body, Ink.OUT, 3.0, true)
+	var at := Vector2(x0, y)
+	var track := Paper.moved(Paper.skew_rect(Vector2(span, TRACK_H), 24.0), at)
+	draw_colored_polygon(Paper.moved(track, Vector2(4, 4)), Paper.INK)
+	draw_colored_polygon(track, Paper.INK)
+	if value > 0.01:
+		var bar := Paper.moved(Paper.skew_rect(Vector2(maxf(span * value - 6.0, 2.0), TRACK_H - 6.0), 24.0), at + Vector2(3, 3))
+		draw_colored_polygon(bar, fill)
+	var k := Paper.moved(Paper.skew_rect(KNOB, 8.0), Vector2(x0 + span * value - KNOB.x * 0.5, (size.y - KNOB.y) * 0.5))
+	draw_colored_polygon(Paper.moved(k, Vector2(3, 4)), Paper.INK)
+	draw_colored_polygon(k, Paper.INK)
+	draw_colored_polygon(Paper.inset(k, 3.0), Paper.GOLD_HOVER if (_hover or _drag) else Paper.CREAM)

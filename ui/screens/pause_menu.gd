@@ -4,19 +4,22 @@ extends Control
 ## porque fica em PROCESS_MODE_ALWAYS. Quem decide o que cada opção faz é o game.gd.
 ##   ↑↓ / W S escolhem · ENTER confirma · ESC ou a tecla de pause (ou CONTINUAR) volta pra luta.
 ## OPÇÕES abre a tela de opções por cima (hud.gd), com a luta ainda congelada.
+## Visual: kit de papel (Paper), seguindo o design "Tela de Cartas": painel recortado, etiqueta
+## creme de título, botão principal dourado e os outros em creme inclinado, todos com sombra dura.
 
 signal resume_pressed
 signal options_pressed
 signal cards_pressed
 signal title_pressed
 
-const PANEL := Vector2(460, 512)
+const PANEL := Vector2(460, 500)
+const DIM := Color("A9AEDC")
 
 ## No tutorial não existe seleção de cartas pra voltar: o menu fica com CONTINUAR, OPÇÕES e SAIR
 ## (que emite title_pressed). Defina antes de pôr o nó na árvore.
 var in_tutorial := false
 
-var _btns: Array[InkButton] = []
+var _btns: Array[ShineButton] = []
 var _focus := 0
 var _box: Control
 var _tw: Tween
@@ -37,6 +40,11 @@ func _ready() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
+	var items := [["CONTINUAR", "resume"], ["OPÇÕES", "options"], ["SELEÇÃO DE CARTAS", "cards"], ["MENU PRINCIPAL", "title"]]
+	if in_tutorial:
+		items = [["CONTINUAR", "resume"], ["OPÇÕES", "options"], ["SAIR DO TUTORIAL", "title"]]
+	var box_size := Vector2(PANEL.x, PANEL.y - (4 - items.size()) * 78.0)
+
 	# caixa de tamanho fixo, sempre no centro da tela
 	_box = Control.new()
 	_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -44,41 +52,51 @@ func _ready() -> void:
 	_box.anchor_right = 0.5
 	_box.anchor_top = 0.5
 	_box.anchor_bottom = 0.5
-	_box.offset_left = -PANEL.x * 0.5
-	_box.offset_right = PANEL.x * 0.5
-	_box.offset_top = -PANEL.y * 0.5
-	_box.offset_bottom = PANEL.y * 0.5
-	_box.pivot_offset = PANEL * 0.5
+	_box.offset_left = -box_size.x * 0.5
+	_box.offset_right = box_size.x * 0.5
+	_box.offset_top = -box_size.y * 0.5
+	_box.offset_bottom = box_size.y * 0.5
+	_box.pivot_offset = box_size * 0.5
 	add_child(_box)
 
-	var panel := Ink.panel(Ink.NAVY, 9)
-	panel.position = Vector2(0, 30)
-	panel.size = PANEL - Vector2(0, 30)
-	_box.add_child(panel)
-
-	# etiqueta "PAUSE" torta por cima da borda, como o logo da tela inicial
-	var tag := Ink.panel(Ink.GRAPE, 21)
-	tag.position = Vector2(-18, 0)
-	tag.size = Vector2(250, 76)
-	tag.rotation = -0.05
+	_box.add_child(CutPanel.make(Rect2(0, 30, box_size.x, box_size.y - 30), [[.03, 0], [1, .03], [.97, 1], [0, .97]], Paper.NAVY, 6, Vector2(10, 10)))
+	# etiqueta "PAUSE": papel creme torto por cima da borda, como o título das telas do design
+	var tag := CutPanel.make(Rect2(-14, 0, 232, 72), [[0, 0], [1, .08], [.95, 1], [.03, .9]], Paper.CREAM, 5, Vector2(7, 7))
+	tag.rotation = deg_to_rad(-3.0)
 	_box.add_child(tag)
-	var title := Ink.title("PAUSE", 52)
-	title.position = Vector2(22, 4)
-	title.size = Vector2(220, 68)
+	var title := Paper.label("PAUSE", 44, Paper.INK, Paper.display())
+	title.size = Vector2(232, 72)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	tag.add_child(title)
 
-	var items := [
-		["CONTINUAR", Ink.COIN, 5],
-		["OPÇÕES", Ink.CREAM, 9],
-		["SELEÇÃO DE CARTAS", Ink.CREAM, 7],
-		["MENU PRINCIPAL", Ink.CREAM, 11],
-	]
-	if in_tutorial:
-		items = [["CONTINUAR", Ink.COIN, 5], ["OPÇÕES", Ink.CREAM, 9], ["SAIR DO TUTORIAL", Ink.CREAM, 11]]
+	var y := 104.0
 	for k in items.size():
-		var b := Ink.button(items[k][0], items[k][1], Ink.OUT, 30, items[k][2])
-		b.position = Vector2(40 + (12 if k % 2 == 1 else 0), 112 + k * 92)
-		b.size = Vector2(380, 74)
+		var b := ShineButton.new()
+		b.text = items[k][0]
+		b.set_meta("id", items[k][1])
+		b.shadow = Vector2(6, 7)
+		b.hover_scale = 1.04
+		if k == 0:
+			# o principal: dourado, recortado e maior, como o JOGAR / CONFIRMAR do design
+			b.shape = [[.03, .06], [1, 0], [.97, .92], [0, 1]]
+			b.border = 6.0
+			b.font_px = 32
+			b.text_rot = -2.0
+			b.fill = Paper.GOLD
+			b.fill_hover = Paper.GOLD_HOVER
+			b.position = Vector2(38, y)
+			b.size = Vector2(384, 84)
+			y += 104.0
+		else:
+			b.skew = 12.0
+			b.border = 4.0
+			b.font_px = 22
+			b.fill = Paper.CREAM
+			b.fill_hover = Paper.GOLD
+			b.position = Vector2(54 + (10 if k % 2 == 0 else 0), y)
+			b.size = Vector2(346, 58)
+			y += 78.0
 		b.mouse_entered.connect(func():
 			_focus = k
 			_mark_focus())
@@ -86,12 +104,11 @@ func _ready() -> void:
 		_box.add_child(b)
 		_btns.append(b)
 
-	var hint := Ink.text("", 14, UiStyle.DIM)
-	_hint = hint
-	hint.position = Vector2(0, PANEL.y - 34)
-	hint.size = Vector2(PANEL.x, 20)
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_box.add_child(hint)
+	_hint = Paper.label("", 14, DIM, Paper.body(700))
+	_hint.position = Vector2(0, box_size.y - 38)
+	_hint.size = Vector2(box_size.x, 20)
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_box.add_child(_hint)
 
 
 func open() -> void:
@@ -127,20 +144,17 @@ func back_from_options() -> void:
 
 func _mark_focus() -> void:
 	for k in _btns.size():
-		_btns[k].outline = Ink.CREAM if k == _focus else Ink.OUT
-		_btns[k].queue_redraw()
+		_btns[k].focused = k == _focus
 
 
 func _choose(k: int) -> void:
 	if not visible:
 		return
-	if in_tutorial and k == 2:
-		k = 3
-	match k:
-		0: resume_pressed.emit()
-		1: options_pressed.emit()
-		2: cards_pressed.emit()
-		3: title_pressed.emit()
+	match String(_btns[k].get_meta("id")):
+		"resume": resume_pressed.emit()
+		"options": options_pressed.emit()
+		"cards": cards_pressed.emit()
+		"title": title_pressed.emit()
 
 
 func _unhandled_input(event: InputEvent) -> void:

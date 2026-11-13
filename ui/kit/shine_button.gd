@@ -6,7 +6,7 @@ extends BaseButton
 
 var text := "": set = _redraw_s
 var font_px := 16
-var fill := Paper.GOLD
+var fill := Paper.GOLD: set = _set_fill
 var fill_hover := Paper.CREAM
 var fg := Paper.INK
 var fg_hover := Paper.INK
@@ -25,6 +25,12 @@ var dim := false
 var idle := false
 var idle_every := 3.2
 var hover_scale := 1.08
+## Sombra dura atrás do botão (zero = sem sombra).
+var shadow := Vector2.ZERO
+## Foco de teclado: moldura dourada em volta, como o item selecionado do design.
+var focused := false: set = _set_focused
+## Sem cor de hover própria: no hover usa o `fill` clareado (botões que trocam de cor em uso).
+var auto_hover := false
 
 var _shine := -1.0
 var _hot := false
@@ -37,6 +43,16 @@ var _base_rot := 0.0
 
 func _redraw_s(v: String) -> void:
 	text = v
+	queue_redraw()
+
+
+func _set_fill(v: Color) -> void:
+	fill = v
+	queue_redraw()
+
+
+func _set_focused(v: bool) -> void:
+	focused = v
 	queue_redraw()
 
 
@@ -117,13 +133,25 @@ func _has_point(p: Vector2) -> bool:
 func _draw() -> void:
 	var pts := _outline()
 	var inner := Paper.inset(pts, border)
+	if shadow != Vector2.ZERO:
+		draw_colored_polygon(Paper.moved(pts, shadow), Paper.INK)
+	if focused and not disabled:
+		for ring in Geometry2D.offset_polygon(pts, 5.0, Geometry2D.JOIN_MITER):
+			draw_colored_polygon(ring, Paper.GOLD)
 	draw_colored_polygon(pts, Paper.INK)
 	if texture != null:
 		var r := Rect2(Vector2(border, border), size - Vector2(border, border) * 2.0)
 		draw_texture_rect(texture, r, false, Color(1, 1, 1, 1.0 if _hot else (0.28 if dim else 0.6)))
 	else:
-		draw_colored_polygon(inner, fill_hover if _hot else fill)
-	var col := fg_hover if _hot else fg
+		var body := fill
+		if disabled:
+			body = fill.darkened(0.45)
+		elif _hot:
+			body = fill.lightened(0.3) if auto_hover else fill_hover
+		draw_colored_polygon(inner, body)
+	var col := fg_hover if (_hot and not auto_hover) else fg
+	if disabled:
+		col = Color(fg.r, fg.g, fg.b, 0.45)
 	var f := Paper.display()
 	var tw := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_px).x if text != "" else 0.0
 	var cw := chevron_px * 0.55 if chevron != 0 else 0.0
