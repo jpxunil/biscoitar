@@ -53,6 +53,8 @@ func _ready() -> void:
 
 
 func _on_hover(on: bool) -> void:
+	if disabled and on:
+		return
 	_hot = on
 	if on:
 		_shine = 0.0

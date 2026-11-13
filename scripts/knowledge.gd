@@ -234,6 +234,11 @@ static func equip(i: int, id: String, slot := -1) -> bool:
 		return false
 	if at >= 0:
 		arr[at] = ""
+	# cópia única: equipar aqui tira de quem estava com ela
+	if is_unique(id):
+		for j in HEROES.size():
+			if j != i:
+				unequip(j, id)
 	arr[slot] = id
 	return true
 
@@ -243,6 +248,22 @@ static func unequip(i: int, id: String) -> void:
 	var at := arr.find(id)
 	if at >= 0:
 		arr[at] = ""
+
+
+## Cópia única: itens e tudo que se compra na loja (moedas ou ticket). Você tem UMA, e só um herói
+## usa por vez. As cartas conquistadas jogando (maestria, Rotação, etc.) são conhecimento: valem pra todos.
+static func is_unique(id: String) -> bool:
+	var c: Dictionary = CARDS[id]
+	return c["kind"] == "item" or c.has("price") or c.has("ticket")
+
+
+## Quem está com a carta de cópia única (índice do herói), ou -1 se ela está solta.
+static func holder(id: String) -> int:
+	var kind: String = CARDS[id]["kind"]
+	for j in HEROES.size():
+		if deck(j)[kind].has(id):
+			return j
+	return -1
 
 
 ## Cartas que o herói i pode usar e que não estão equipadas nele, da mais rara pra mais comum.
@@ -417,3 +438,15 @@ static func load_save() -> void:
 				var id := str(arr[n])
 				if id != "" and CARDS.has(id) and CARDS[id]["kind"] == kind and is_owned_by(i, id) and usable(i, id):
 					d[kind][n] = id
+	# saves antigos podem ter a mesma carta de cópia única em mais de um herói: fica com o primeiro
+	var held := {}
+	for i in HEROES.size():
+		for kind in KINDS:
+			var arr: Array = deck(i)[kind]
+			for n in arr.size():
+				if arr[n] == "" or not is_unique(arr[n]):
+					continue
+				if held.has(arr[n]):
+					arr[n] = ""
+				else:
+					held[arr[n]] = true

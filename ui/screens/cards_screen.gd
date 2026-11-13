@@ -23,7 +23,13 @@ const SLOT_AT := {
 	"item": [Vector2(741, 184)],
 }
 ## Frase do balão. Quem não tem frase própria usa o `blurb` do herói.
-const QUOTES := {"maga": "Relaxa, eu resolvo. Como sempre.", "nurse": "Fica parado. Vai doer."}
+const QUOTES := {
+	"tank": "Atrás de mim. Sempre.",
+	"healer": "Ninguém morre no meu turno.",
+	"assassina": "Pisca e já acabou.",
+	"maga": "Relaxa, eu resolvo. Como sempre.",
+	"nurse": "Fica parado. Vai doer.",
+}
 ## Ordem dos heróis no seletor: as duas tanks ficam lado a lado.
 const ORDER := [0, 4, 1, 2, 3]
 ## Enquadramento da arte por herói: largura na tela e canto de cima. A altura segue a proporção do arquivo;
@@ -78,6 +84,7 @@ class HeroTile extends BaseButton:
 	var dim := false: set = _set_dim
 	var slot := -1
 	var tw: Tween
+	var hover_tw: Tween
 	var _face: TextureRect
 	var _hot := false
 
@@ -120,7 +127,15 @@ class HeroTile extends BaseButton:
 		_shade()
 		if k > 0.05 or (tw != null and tw.is_running()):
 			return
-		create_tween().tween_property(self, "scale", Vector2.ONE * (1.15 if on else 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		stop_hover()
+		hover_tw = create_tween()
+		hover_tw.tween_property(self, "scale", Vector2.ONE * (1.15 if on else 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	## A troca de herói assume a escala da peça: o crescer do hover não pode brigar com ela.
+	func stop_hover() -> void:
+		if hover_tw != null:
+			hover_tw.kill()
+			hover_tw = null
 
 	func _draw() -> void:
 		var h: Dictionary = Knowledge.HEROES[hero]
@@ -166,12 +181,20 @@ var _face_frame: CutPanel
 var _face_tex: TextureRect
 var _bubble: Control
 var _bubble_text: Label
+var _bubble_panel: CutPanel
 var _boss: Draw
 var _strip_bar: CutPanel
 ## Seletor: uma peça por herói (índice em Knowledge.HEROES), sempre na ordem de ORDER girada.
 var _tiles := {}
 ## Fila do seletor (heróis, o atual na frente) e o lugar onde o antigo acabou de ser inserido.
 var _row: Array = []
+## Carta sob o mouse: os detalhes mostram ela enquanto o mouse está em cima.
+var _peek = null
+var _pager: Draw
+var _spin_prev: ShineButton
+var _spin_next: ShineButton
+var _art_tw: Tween
+var _ticks_tw: Tween
 var _push_at := -1
 var _name_tag: Control
 var _name_panel: CutPanel
@@ -297,6 +320,12 @@ func refresh(animate := false, dir := 0) -> void:
 	else:
 		_face_tex.texture = load("res://assets/portraits/%s_face.png" % h["key"])
 	_bubble_text.text = QUOTES.get(h["key"], h["blurb"])
+	# o balão cresce pra baixo com o número de linhas da frase
+	var bf := Paper.body(700)
+	var lines := maxi(1, roundi(bf.get_multiline_string_size(_bubble_text.text, HORIZONTAL_ALIGNMENT_LEFT, 118, 14).y / bf.get_height(14)))
+	_bubble_text.size = Vector2(118, lines * 18.0 + 4.0)
+	_bubble_panel.size = Vector2(150, lines * 18.0 + 44.0)
+	_bubble_panel.queue_redraw()
 	# nome, classe e vida
 	var nm := String(h["name"]).to_upper()
 	_name_label.text = nm
@@ -327,9 +356,17 @@ func refresh(animate := false, dir := 0) -> void:
 		_art.modulate.a = 0.0
 		var from := 60.0 if dir >= 0 else -60.0
 		_art.position.x = _art_home.x + from
-		var tw := _art.create_tween().set_parallel(true)
-		tw.tween_property(_art, "position:x", _art_home.x, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.tween_property(_art, "modulate:a", 1.0, 0.18)
+		if _art_tw != null:
+			_art_tw.kill()
+		_art_tw = _art.create_tween().set_parallel(true)
+		_art_tw.tween_property(_art, "position:x", _art_home.x, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_art_tw.tween_property(_art, "modulate:a", 1.0, 0.18)
+	else:
+		if _art_tw != null:
+			_art_tw.kill()
+			_art_tw = null
+		_art.position.x = _art_home.x
+		_art.modulate.a = 1.0
 
 
 # ---------------------------------------------------------------- montagem (uma vez)
@@ -383,9 +420,13 @@ func _build() -> void:
 	var prev := _arrow(-1)
 	_add(_stage, prev, Vector2(296, 668), Vector2(44, 44))
 	prev.pressed.connect(func(): _spin(-1))
+	_spin_prev = prev
 	var nxt := _arrow(1)
 	_add(_stage, nxt, Vector2(560, 668), Vector2(44, 44))
 	nxt.pressed.connect(func(): _spin(1))
+	_spin_next = nxt
+	_pager = _drawer(_stage, _draw_pager)
+	_pager.z_index = 8
 	var hub_label := Paper.label("SUAS CARTAS", 21, Paper.CREAM, Paper.display())
 	hub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hub_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -429,7 +470,7 @@ func _build() -> void:
 	_bubble.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_add(_stage, _bubble, Vector2(876, 62), Vector2(156, 84))
 	_bubble.pivot_offset = Vector2(78, 42)
-	_add(_bubble, CutPanel.make(Rect2(0, 0, 150, 78), [[0, .1], [1, 0], [.96, .86], [.8, .88], [.84, 1], [.62, .9], [.04, .96]], Paper.CREAM, 3, Vector2(6, 6)))
+	_bubble_panel = _add(_bubble, CutPanel.make(Rect2(0, 0, 150, 78), [[0, .1], [1, 0], [.96, .86], [.8, .88], [.84, 1], [.62, .9], [.04, .96]], Paper.CREAM, 3, Vector2(6, 6)))
 	_bubble_text = Paper.label("", 14, Paper.INK, Paper.body(700))
 	_bubble_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_bubble_text.add_theme_constant_override("line_spacing", -4)
@@ -574,11 +615,32 @@ func _disc(d: Draw, r: float, col: Color) -> void:
 
 func _draw_wheel(d: Draw) -> void:
 	_disc(d, RIM, Paper.INK)
-	_disc(d, 666, Paper.CREAM)
+	# arrastando uma carta equipada: o aro acende, a roleta é onde ela pode ser devolvida
+	_disc(d, 666, Paper.GOLD if (_drag != null and _drag["src"] == "slot") else Paper.CREAM)
 	_disc(d, 652, Paper.INK)
 	_disc(d, 648, Paper.BROWN)
 	_disc(d, 470, Paper.INK)
 	_disc(d, 464, _th["deep"])
+
+
+## Um losango por carta da mão, na cor da raridade (apagado = ainda não conquistada); o maior é a
+## carta em foco. Mostra quantas cartas existem e onde você está, sem texto.
+func _draw_pager(d: Draw) -> void:
+	var n := _hand.size()
+	if n <= 1:
+		return
+	var pitch := minf(13.0, 250.0 / (n - 1))
+	for k in n:
+		var id: String = _hand[k]
+		var c := Vector2(HUB.x + (k - (n - 1) * 0.5) * pitch, 655.0)
+		var col: Color = Paper.KIND[Knowledge.kind_of(id)]["bg"]
+		if not Knowledge.is_owned_by(hero, id):
+			col = Color(col.r, col.g, col.b, 0.3)
+		var r := 6.5 if k == _focus else 3.5
+		if k == _focus:
+			d.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r - 2.5), c + Vector2(r + 2.5, 0), c + Vector2(0, r + 2.5), c + Vector2(-r - 2.5, 0)]), Paper.CREAM)
+			col.a = 1.0
+		d.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]), col)
 
 
 func _draw_ticks(d: Draw) -> void:
@@ -661,12 +723,19 @@ func _layout_tiles(animate: bool) -> void:
 		var was := t.slot
 		t.slot = n
 		t.dim = Knowledge.is_tank(id) and id != Knowledge.tank_pick
+		# Trocas em sequência rápida interrompem a animação anterior no meio: a peça pode estar em
+		# qualquer lugar, meio aberta, pequena ou transparente. Por isso cada caminho abaixo parte do
+		# estado em que ela ESTÁ e leva todas as propriedades (posição, giro, escala, alfa, abertura)
+		# até o valor final do lugar novo; nenhum deixa algo "como estava".
 		if t.tw != null:
 			t.tw.kill()
 			t.tw = null
+		t.stop_hover()
 		var pos := _tile_pos(n)
 		var rot := deg_to_rad(TILE_ROT[n])
-		if not animate or was < 0 or was == n:
+		var settled: bool = was == n and t.position.is_equal_approx(pos) and is_equal_approx(t.k, 1.0 if n == 0 else 0.0) \
+				and t.scale.is_equal_approx(Vector2.ONE) and is_equal_approx(t.modulate.a, 1.0)
+		if not animate or was < 0 or settled:
 			t.position = pos
 			t.rotation = rot
 			t.scale = Vector2.ONE
@@ -679,14 +748,14 @@ func _layout_tiles(animate: bool) -> void:
 		if n == 0:
 			# escolhido: corre pra frente e abre no caminho
 			t.z_index = 3
-			t.scale = Vector2.ONE
-			t.modulate.a = 1.0
 			tw.set_parallel(true)
 			tw.tween_property(t, "position", pos, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 			tw.tween_property(t, "rotation", rot, 0.3)
+			tw.tween_property(t, "scale", Vector2.ONE, 0.12)
+			tw.tween_property(t, "modulate:a", 1.0, 0.1)
 			tw.tween_property(t, "k", 1.0, 0.34).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			tw.chain().tween_callback(func(): t.z_index = 0)
-		elif was == 0:
+			tw.chain().tween_callback(_tile_done.bind(t, n))
+		elif was == 0 and t.modulate.a > 0.05:
 			# antigo: retrai e some onde está; reaparece crescendo no lugar novo da fila
 			t.z_index = 1
 			tw.tween_property(t, "k", 0.0, 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -694,18 +763,46 @@ func _layout_tiles(animate: bool) -> void:
 			tw.tween_callback(func():
 				t.position = pos
 				t.rotation = rot
+				t.k = 0.0
 				t.scale = Vector2.ONE * 0.4)
 			tw.tween_interval(0.06)
 			tw.tween_property(t, "modulate:a", 1.0, 0.14)
 			tw.parallel().tween_property(t, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			tw.tween_callback(func(): t.z_index = 0)
-		else:
-			# vizinhos: empurrados pelo antigo entrando, um depois do outro a partir de onde ele entrou
+			tw.tween_callback(_tile_done.bind(t, n))
+		elif t.modulate.a <= 0.05:
+			# estava invisível (interrompida no meio do sumiço): só reaparece no lugar certo
 			t.z_index = 0
-			t.modulate.a = 1.0
-			tw.tween_interval(0.2 + absi(n - _push_at) * 0.04)
-			tw.tween_property(t, "position", pos, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			tw.parallel().tween_property(t, "rotation", rot, 0.26)
+			t.position = pos
+			t.rotation = rot
+			t.k = 0.0
+			t.scale = Vector2.ONE * 0.4
+			tw.tween_property(t, "modulate:a", 1.0, 0.14)
+			tw.parallel().tween_property(t, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_callback(_tile_done.bind(t, n))
+		else:
+			# vizinhos: empurrados pelo antigo entrando, um depois do outro a partir de onde ele entrou.
+			# Se a peça ficou meio aberta, pequena ou apagada de uma troca interrompida, conserta já.
+			t.z_index = 0
+			tw.set_parallel(true)
+			tw.tween_property(t, "k", 0.0, 0.12)
+			tw.tween_property(t, "scale", Vector2.ONE, 0.12)
+			tw.tween_property(t, "modulate:a", 1.0, 0.1)
+			var wait := 0.2 + absi(n - _push_at) * 0.04
+			tw.tween_property(t, "position", pos, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).set_delay(wait)
+			tw.tween_property(t, "rotation", rot, 0.26).set_delay(wait)
+			tw.chain().tween_callback(_tile_done.bind(t, n))
+
+
+## Fim da animação de uma peça: crava o estado final, pra nenhum resto de arredondamento ou de
+## animação interrompida sobrar.
+func _tile_done(t: HeroTile, n: int) -> void:
+	t.position = _tile_pos(n)
+	t.rotation = deg_to_rad(TILE_ROT[n])
+	t.scale = Vector2.ONE
+	t.modulate.a = 1.0
+	t.k = 1.0 if n == 0 else 0.0
+	t.z_index = 0
+	t.tw = null
 
 
 # ---------------------------------------------------------------- cartas
@@ -742,6 +839,7 @@ func _build_cards(deal := false, drop := "") -> void:
 		c.queue_free()
 	_slots.clear()
 	_spokes.clear()
+	_peek = null
 	var deck := Knowledge.deck(hero)
 	for kind in Knowledge.KINDS:
 		for n in Knowledge.SLOTS[kind]:
@@ -770,6 +868,11 @@ func _build_cards(deal := false, drop := "") -> void:
 			var key := Knowledge.mastery_key(id)
 			if key != "":
 				cv.progress = Knowledge.mastery_of(key)
+		elif Knowledge.is_unique(id):
+			# cópia única (item ou carta da loja): o selo mostra com quem está; arrastar pra cá tira de lá
+			var holder := Knowledge.holder(id)
+			if holder >= 0 and holder != hero:
+				cv.badge = load("res://assets/portraits/%s_face.png" % Knowledge.HEROES[holder]["key"])
 		cv.position = Vector2(-CARD_HALF.x, -RADIUS - CARD_HALF.y)
 		spoke.add_child(cv)
 		var info := {"cv": cv, "src": "hand", "idx": k, "n": k, "id": id, "kind": Knowledge.kind_of(id), "home": cv.position,
@@ -783,7 +886,10 @@ func _build_cards(deal := false, drop := "") -> void:
 			if info["id"] != "":
 				_deal(info, info["idx"] * 0.045)
 		for info in _spokes:
-			_deal(info, 0.35 + info["idx"] * 0.04)
+			# só as que aparecem na tela, abrindo a partir da carta em foco
+			var far := absi(info["idx"] - _focus)
+			if far <= 4:
+				_deal(info, 0.16 + far * 0.045)
 	if drop != "":
 		# a carta que acabou de encaixar chega maior e inclinada e assenta
 		var list: Array = _slots if drop.begins_with("s") else _spokes
@@ -801,15 +907,64 @@ func _wire(info: Dictionary) -> void:
 	cv.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if info["drag_ok"] else Control.CURSOR_ARROW
 	cv.mouse_entered.connect(func():
 		info["hover"] = true
-		_settle(info))
+		_peek = info
+		_settle(info)
+		_update_details())
 	cv.mouse_exited.connect(func():
 		info["hover"] = false
+		if _peek != null and is_same(_peek, info):
+			_peek = null
+			_update_details()
 		_settle(info))
 	cv.gui_input.connect(func(e: InputEvent):
-		if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT and e.pressed:
-			_pend = {"info": info, "start": _mouse_at}
-			info["press"] = true
-			_settle(info))
+		if not (e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT and e.pressed):
+			return
+		if e.double_click:
+			_quick(info)
+			return
+		_pend = {"info": info, "start": _mouse_at, "shook": false}
+		info["press"] = true
+		_settle(info))
+
+
+## Duplo clique, o atalho do arrasto: carta da roleta vai pro primeiro slot livre do tipo dela;
+## carta equipada volta pra roleta.
+func _quick(info: Dictionary) -> void:
+	_cancel_drag()
+	var drop := ""
+	if info["src"] == "slot":
+		drop = _unequip_to_hand(info["id"])
+	elif info["drag_ok"]:
+		for s in _slots:
+			if s["kind"] == info["kind"] and s["id"] == "":
+				drop = _equip_from_hand(info["idx"], s["idx"])
+				break
+	if drop == "":
+		_shake(info)
+		return
+	_sel = -1
+	Knowledge.save()
+	_sync_hand()
+	_build_cards(false, drop)
+
+
+func _unequip_to_hand(id: String) -> String:
+	Knowledge.unequip(hero, id)
+	_hand.insert(mini(_focus, _hand.size()), id)
+	return "h%d" % _focus
+
+
+## "Não dá": a carta balança no lugar (sem slot livre, ou carta que ainda não é sua).
+func _shake(info: Dictionary) -> void:
+	var cv: CardView = info["cv"]
+	if info["tw"] != null:
+		info["tw"].kill()
+	var home: Vector2 = info["home"]
+	var tw := cv.create_tween()
+	for dx in [7.0, -7.0, 4.0, -4.0, 0.0]:
+		tw.tween_property(cv, "position:x", home.x + dx, 0.04)
+	tw.tween_callback(func(): _settle(info))
+	info["tw"] = tw
 
 
 ## Escala, giro (graus) e deslocamento vertical que a carta deve ter agora.
@@ -848,7 +1003,7 @@ func _settle(info: Dictionary, snap := false, time := 0.22) -> void:
 	var sc := Vector2.ONE * float(p[0])
 	var rot := deg_to_rad(float(info["rot0"]) + float(p[1]))
 	var pos: Vector2 = info["home"] + Vector2(0, p[2])
-	var lifted: bool = _drag != null and is_same(_drag, info)
+	var lifted: bool = (_drag != null and is_same(_drag, info)) or info.get("away", false)
 	var hand: bool = info["src"] == "hand"
 	cv.halo = hand and info["idx"] == _focus and _sel < 0
 	if info["src"] == "slot":
@@ -917,10 +1072,17 @@ func _set_focus(k: int) -> void:
 	_sel = -1
 	for info in _spokes:
 		var sp: Control = info["spoke"]
+		# girar de novo antes de parar: o giro anterior é cancelado, senão os dois brigam pelo mesmo raio
+		if info.get("spin") != null:
+			info["spin"].kill()
 		var tw := sp.create_tween()
+		info["spin"] = tw
 		# passa um pouco do ponto e volta, como roleta parando
 		tw.tween_property(sp, "rotation", deg_to_rad((info["idx"] - _focus) * STEP), 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_ticks.create_tween().tween_property(_ticks, "rotation", deg_to_rad(-_focus * STEP), 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if _ticks_tw != null:
+		_ticks_tw.kill()
+	_ticks_tw = _ticks.create_tween()
+	_ticks_tw.tween_property(_ticks, "rotation", deg_to_rad(-_focus * STEP), 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_settle_all()
 	_update_details()
 
@@ -950,8 +1112,12 @@ func _input(event: InputEvent) -> void:
 	var info: Dictionary = _pend["info"]
 	if event is InputEventMouseMotion:
 		var p := _mouse_at
-		if _drag == null and info["drag_ok"] and p.distance_to(_pend["start"]) > 6.0:
-			_start_drag(info)
+		if _drag == null and p.distance_to(_pend["start"]) > 6.0:
+			if info["drag_ok"]:
+				_start_drag(info)
+			elif not _pend["shook"]:
+				_pend["shook"] = true
+				_shake(info)
 		if _drag != null:
 			_ghost.position = p - CARD_HALF
 			var si := _slot_at(p)
@@ -975,7 +1141,9 @@ func _start_drag(info: Dictionary) -> void:
 	_ghost.z_index = 50
 	_top.add_child(_ghost)
 	_ghost.position = _mouse_at - CARD_HALF
+	_wheel.queue_redraw()
 	_settle_all()
+	_update_details()
 
 
 func _cancel_drag() -> void:
@@ -987,12 +1155,16 @@ func _cancel_drag() -> void:
 	if _ghost != null and is_instance_valid(_ghost):
 		_ghost.queue_free()
 	_ghost = null
+	_wheel.queue_redraw()
 
 
 func _finish() -> void:
 	var info: Dictionary = _pend["info"]
 	var dragged: bool = _drag != null
 	var p := _mouse_at
+	# o fantasma sobrevive ao fim do arrasto: se a carta não encaixou, é ele que voa de volta
+	var ghost := _ghost
+	_ghost = null
 	_cancel_drag()
 	if not dragged:
 		# clique simples: carta da roleta vem pro foco; carta equipada mostra os detalhes
@@ -1018,14 +1190,40 @@ func _finish() -> void:
 			drop = "s%d" % si
 	elif info["src"] == "slot" and p.distance_to(HUB) < RIM:
 		# de volta pra roleta: a carta entra na mão já em foco
-		Knowledge.unequip(hero, id)
-		_hand.insert(mini(_focus, _hand.size()), id)
-		drop = "h%d" % _focus
+		drop = _unequip_to_hand(id)
 	_sel = -1
-	if drop != "":
-		Knowledge.save()
-		_sync_hand()
+	if drop == "":
+		_fly_back(ghost, info)
+		return
+	if ghost != null and is_instance_valid(ghost):
+		ghost.queue_free()
+	Knowledge.save()
+	_sync_hand()
 	_build_cards(false, drop)
+
+
+## Soltou num lugar que não vale: a carta volta voando pra onde estava, em vez de sumir.
+func _fly_back(ghost: CardView, info: Dictionary) -> void:
+	var cv: CardView = info["cv"]
+	if ghost == null or not is_instance_valid(ghost) or not is_instance_valid(cv):
+		_settle_all()
+		return
+	info["away"] = true
+	_settle_all()
+	var to_stage := _stage.get_global_transform().affine_inverse()
+	var center: Vector2 = to_stage * (cv.get_global_transform() * CARD_HALF)
+	var rot: float = cv.rotation
+	if info["spoke"] != null:
+		rot += float(info["spoke"].rotation)
+	var tw := ghost.create_tween().set_parallel(true)
+	tw.tween_property(ghost, "position", center - CARD_HALF, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ghost, "rotation", rot, 0.2)
+	tw.tween_property(ghost, "scale", cv.scale, 0.2)
+	tw.chain().tween_callback(func():
+		ghost.queue_free()
+		info["away"] = false
+		if is_instance_valid(cv):
+			_settle(info))
 
 
 ## Roleta -> slot. Se o slot estava ocupado, a carta antiga volta pro mesmo lugar da mão.
@@ -1078,13 +1276,21 @@ func _notification(what: int) -> void:
 func _update_details() -> void:
 	var id := ""
 	var mine := true
-	if _sel >= 0 and _sel < _slots.size() and _slots[_sel]["id"] != "":
+	if _peek != null and _drag == null and _peek["id"] != "":
+		id = _peek["id"]
+		mine = _peek["src"] == "slot" or Knowledge.is_owned_by(hero, id)
+	elif _sel >= 0 and _sel < _slots.size() and _slots[_sel]["id"] != "":
 		id = _slots[_sel]["id"]
 	elif _focus < _hand.size():
 		id = _hand[_focus]
 		mine = Knowledge.is_owned_by(hero, id)
 	_detail_id = id
 	_d_tile.queue_redraw()
+	_pager.queue_redraw()
+	# setas da roleta apagadas nas pontas
+	for pair in [[_spin_prev, _focus > 0], [_spin_next, _focus < _hand.size() - 1]]:
+		pair[0].disabled = not pair[1]
+		pair[0].modulate.a = 1.0 if pair[1] else 0.35
 	_d_kind.visible = id != ""
 	_d_cat.visible = id != ""
 	if id == "":

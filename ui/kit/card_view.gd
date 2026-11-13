@@ -28,6 +28,8 @@ var halo_grow := 0.0: set = _set_halo_grow
 var ring := Color(0, 0, 0, 0): set = _set_ring
 var ring_gap := 4.0: set = _set_ring_gap
 var ring_w := 4.0
+## Rosto pequeno no canto: quem está com esta carta de cópia única agora (item ou carta da loja).
+var badge: Texture2D: set = _set_badge
 
 
 static func make(card_id: String, card_state := "face") -> CardView:
@@ -91,6 +93,11 @@ func _set_halo_grow(v: float) -> void:
 	halo_grow = v
 	if halo:
 		queue_redraw()
+
+
+func _set_badge(v: Texture2D) -> void:
+	badge = v
+	queue_redraw()
 
 
 func _set_ring(v: Color) -> void:
@@ -198,6 +205,9 @@ func _draw() -> void:
 		Paper.draw_suit(self, cat, Vector2(67.5, 126), 10, ink)
 	if state == "dim":
 		_rr(full, Color(ink.r, ink.g, ink.b, 0.6), 9)
+	if badge != null:
+		draw_rect(Rect2(W - 24, -12, 32, 41), ink)
+		draw_texture_rect(badge, Rect2(W - 21, -9, 26, 35), false)
 
 
 func _wrap(t: String, f: Font, px: int, max_w: float) -> Array:

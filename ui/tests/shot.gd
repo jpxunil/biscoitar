@@ -31,6 +31,11 @@ func _ready() -> void:
 		Knowledge.mastery["spread"] = 1
 		for id in ["stack", "mitigate", "potion"]:
 			Knowledge.equip(hero, id)
+	for a in args:
+		# --itemon=N: a Poção começa equipada no herói N (pra ver o selo de quem segura o item)
+		if a.begins_with("--itemon="):
+			Knowledge.owned["potion"] = true
+			Knowledge.equip(int(a.trim_prefix("--itemon=")), "potion")
 	var scene: Control = load("res://ui/screens/%s_screen.tscn" % which).instantiate()
 	add_child(scene)
 	if which == "cards":
@@ -66,6 +71,50 @@ func _ready() -> void:
 							get_viewport().get_texture().get_image().save_png("user://screen.png")
 							get_tree().quit()
 							return
+						"spam":
+							# troca de herói p[1] vezes com p[2] s entre elas (setas e cliques misturados),
+							# espera assentar e confere o estado final de cada peça do seletor
+							var rng := RandomNumberGenerator.new()
+							rng.seed = int(p[3]) if p.size() > 3 else 7
+							for n in int(p[1]):
+								match rng.randi_range(0, 2):
+									0: scene._switch(1)
+									1: scene._switch(-1)
+									_: scene._go(scene._row[rng.randi_range(1, 4)], 1)
+								await get_tree().create_timer(float(p[2])).timeout
+							await get_tree().create_timer(1.3).timeout
+							var bad := 0
+							for n in scene._row.size():
+								var t = scene._tiles[scene._row[n]]
+								var ok: bool = t.position.is_equal_approx(scene._tile_pos(n)) and t.scale.is_equal_approx(Vector2.ONE) \
+										and is_equal_approx(t.modulate.a, 1.0) and is_equal_approx(t.k, 1.0 if n == 0 else 0.0) and t.z_index == 0 and t.slot == n
+								if not ok:
+									bad += 1
+									print("PEÇA RUIM lugar=", n, " heroi=", t.hero, " pos=", t.position, " escala=", t.scale, " alfa=", t.modulate.a, " k=", t.k, " z=", t.z_index)
+							print("spam: fila=", scene._row, " heroi=", scene.hero, " frente ok=", scene._row[0] == scene.hero, " peças ruins=", bad)
+						"dbl":
+							# duplo clique de verdade em (x, y)
+							var at := Vector2(float(p[1]), float(p[2]))
+							_mouse_move(at)
+							await get_tree().process_frame
+							await get_tree().process_frame
+							_mouse_button(at, true)
+							await get_tree().process_frame
+							_mouse_button(at, false)
+							await get_tree().process_frame
+							var e := InputEventMouseButton.new()
+							e.button_index = MOUSE_BUTTON_LEFT
+							e.pressed = true
+							e.double_click = true
+							e.position = at
+							e.global_position = at
+							Input.parse_input_event(e)
+							await get_tree().process_frame
+							_mouse_button(at, false)
+							await get_tree().process_frame
+							print("deck=", Knowledge.deck(scene.hero), " foco=", scene._focus, " mão=", scene._hand.slice(0, 5))
+						"focusid":
+							scene._set_focus(scene._hand.find(p[1]))
 						"spin":
 							scene._set_focus(scene._focus + int(p[1]))
 						"sel":
@@ -100,6 +149,12 @@ func _ready() -> void:
 								continue
 							_mouse_button(m1, false)
 							await get_tree().process_frame
+							if p.size() > 5 and p[5].begins_with("t"):
+								# captura logo depois de soltar (ex.: t0.08), pra ver a carta voltando
+								await get_tree().create_timer(float(p[5].substr(1))).timeout
+								get_viewport().get_texture().get_image().save_png("user://screen.png")
+								get_tree().quit()
+								return
 							print("deck=", Knowledge.deck(scene.hero), " foco=", scene._focus, " sel=", scene._sel, " mão=", scene._hand.slice(0, 6))
 						"equip":
 							scene._pend = {"info": scene._spokes[int(p[1])], "start": Vector2.ZERO}
