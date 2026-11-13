@@ -19,17 +19,27 @@ signal deck_changed
 var tutor := {}
 var _tutor_panel: CutPanel
 var _tutor_text: Label
+var _tutor_next: Chip
+var _d_panel: CutPanel
 
 
 ## Fala de quem ensina, no painel da direita (só no modo guiado).
-func tutor_say(text: String) -> void:
+## `wait`: a fala espera o jogador; aparece a etiqueta ENTER no canto do painel.
+func tutor_say(text: String, wait := false) -> void:
 	if _tutor_panel == null:
+		_tutor_next = Chip.new()
+		_tutor_next.px = 13
+		_tutor_next.arrow = true
+		_tutor_next.text = "ENTER"
+		_tutor_next.z_index = 2
+		_add(_top, _tutor_next, Vector2(1264 - _tutor_next.size.x - 4, 452))
 		_tutor_panel = _add(_top, CutPanel.make(Rect2(892, 356, 372, 112), [[.02, 0], [1, .05], [.97, 1], [0, .94]], Paper.CREAM, 5, Vector2(8, 8)))
 		_tutor_text = Paper.label("", 17, Paper.INK, Paper.body(700))
 		_tutor_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_tutor_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_tutor_text.add_theme_constant_override("line_spacing", -3)
 		_add(_top, _tutor_text, Vector2(912, 364), Vector2(336, 96))
+	_tutor_next.visible = wait
 	_tutor_text.text = text
 	_tutor_text.visible_ratio = 0.0
 	_tutor_text.create_tween().tween_property(_tutor_text, "visible_ratio", 1.0, minf(0.9, text.length() * 0.012))
@@ -580,8 +590,8 @@ func _build() -> void:
 	_hp = _drawer(_top, _draw_hp, Vector2(1060, 446), Vector2(140, 28))
 
 	# detalhes da carta
-	_add(_top, CutPanel.make(Rect2(916, 480, 348, 124), [[.02, 0], [1, .05], [.97, 1], [0, .94]], Paper.CREAM, 5, Vector2(8, 8)))
-	_d_tile = _drawer(_top, _draw_tile, Vector2(936, 496), Vector2(44, 44))
+	_d_panel = _add(_top, CutPanel.make(Rect2(916, 480, 348, 124), [[.02, 0], [1, .05], [.97, 1], [0, .94]], Paper.CREAM, 5, Vector2(8, 8)))
+	_d_tile =_drawer(_top, _draw_tile, Vector2(936, 496), Vector2(44, 44))
 	_d_tile.pivot_offset = Vector2(22, 22)
 	_d_tile.rotation = deg_to_rad(-6.0)
 	_d_name = Paper.label("", 22, Paper.INK, Paper.display())
@@ -1333,6 +1343,10 @@ func _update_details() -> void:
 		pair[0].modulate.a = 1.0 if pair[1] else 0.35
 	_d_kind.visible = id != ""
 	_d_cat.visible = id != ""
+	if not tutor.is_empty():
+		# aula: sem carta pra mostrar (todas já foram pro baralho), o painel de detalhes some
+		for n in [_d_panel, _d_tile, _d_name, _d_desc]:
+			n.visible = id != ""
 	if id == "":
 		_d_name.text = ""
 		_d_desc.text = ""

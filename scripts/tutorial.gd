@@ -24,6 +24,8 @@ const STACK_R := 2.5
 const PAIR_R := 1.8
 const SPREAD_R := 5.0
 const LINK_BREAK := 8.0
+## Quantas vezes mais devagar o companheiro anda quando vem resolver sozinho (a prova do final).
+const NPC_SLOW := 1.9
 const LINK_TICK := 0.5
 const LINK_DMG := 6.0
 const STACK_COL := Color(1.0, 0.6, 0.1)
@@ -358,7 +360,7 @@ func _to_black() -> void:
 
 func _leave() -> void:
 	Knowledge.leave_sandbox()
-	Knowledge.screen = "title"
+	Knowledge.screen = "tutorials"
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://main.tscn")
 
@@ -375,7 +377,7 @@ func _say(text: String, wait := false) -> void:
 	text = _fmt(text)
 	_waiting = wait
 	if cards != null:
-		cards.tutor_say(text + ("   [ENTER]" if wait else ""))
+		cards.tutor_say(text, wait)
 		return
 	talk_box.visible = true
 	talk_text.text = text
@@ -738,7 +740,10 @@ func _tick_units(delta: float) -> void:
 				var to: Vector3 = goal - u.position
 				to.y = 0.0
 				if to.length() > 0.08:
-					u.position += to.normalized() * minf(to.length(), u.speed * delta)
+					# fora da demonstração, quem anda sozinho é o companheiro que aprendeu a carta: vem sem
+					# pressa (NPC_SLOW), pra dar tempo de ver que é ele que está resolvendo
+					var pace: float = u.speed if demo else u.speed / NPC_SLOW
+					u.position += to.normalized() * minf(to.length(), pace * delta)
 					u.face(to)
 		u.position = _in_arena(u.position) if Vector2(u.position.x, u.position.z).length() > ARENA_R else u.position
 

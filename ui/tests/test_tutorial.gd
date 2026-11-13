@@ -205,6 +205,12 @@ func _initialize() -> void:
 	await create_timer(0.5, false).timeout
 	check(tut.cards != null and tut.stage == "cards", "equipar outra carta não avança")
 	cards._drop_slot("white", 0, {"card": "stack", "from": "hand"})
+	for id in ["spread", "link"]:
+		cards._drop_slot("white", 2 if id == "spread" else 3, {"card": id, "from": "hand"})
+	await create_timer(0.6, false).timeout
+	check(cards._hand.is_empty() and not cards._d_panel.visible, "sem carta na mão, o painel de detalhes some")
+	check(cards._tutor_next.visible and tut._waiting, "a fala que espera mostra a etiqueta ENTER")
+	await shot("cartas_perfeito")
 	check(await advance(func(): return tut.cards == null), "com a Laranja Junto no companheiro, a aula segue")
 
 	# ---- a prova
@@ -236,10 +242,35 @@ func _initialize() -> void:
 	for i in 10:
 		await process_frame
 	check(current_scene != tut and current_scene != null and current_scene.scene_file_path == "res://main.tscn", "ENTER volta pro jogo")
-	check(not Knowledge.sandbox and Knowledge.screen == "title", "volta pro menu principal")
+	check(not Knowledge.sandbox and Knowledge.screen == "tutorials", "volta pra lista de tutoriais")
+	check(current_scene.hud.menus.tutorials.visible, "a lista de tutoriais está na tela")
 	check(Knowledge.owned.has("mitigate") and not Knowledge.owned.has("pair") and Knowledge.money == 123, "as cartas de verdade voltam como estavam")
 	check(Knowledge.mastery.get("stack", 0) == 2 and Knowledge.has(0, "mitigate") and Knowledge.start_hero == 1, "maestria, baralhos e herói inicial intocados")
 
+	# ---- menu de tutoriais
 	Engine.time_scale = 1.0
+	var menus = current_scene.hud.menus
+	await key(KEY_ESCAPE)
+	check(menus.title.visible and not menus.tutorials.visible, "ESC na lista volta pro menu principal")
+	menus.title.get_node("BtnTutorial").pressed.emit()
+	await process_frame
+	check(menus.tutorials.visible and not menus.title.visible, "TUTORIAL DO JOGO abre a lista de tutoriais")
+	check(menus.tutorials.LIST[0]["name"] == "TUTORIAL 1" and menus.tutorials.LIST.size() > 1, "a lista tem o TUTORIAL 1 e lugares pros próximos")
+	menus.tutorials._focus = 1
+	menus.tutorials._go()
+	await process_frame
+	check(current_scene.scene_file_path == "res://main.tscn", "tutorial que ainda não existe não abre nada")
+	menus.tutorials._focus = 0
+	await key(KEY_ENTER)
+	for i in 10:
+		await process_frame
+	check(current_scene != null and current_scene.scene_file_path == "res://tutorial.tscn", "ENTER no TUTORIAL 1 começa a aula")
+	if shots:
+		await create_timer(1.0).timeout
+	current_scene._leave()
+	for i in 10:
+		await process_frame
+	await shot("lista")
+
 	print("Results: %d passed, %d failed" % [passed, failed])
 	quit(1 if failed > 0 else 0)

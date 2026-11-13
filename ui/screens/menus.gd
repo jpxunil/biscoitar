@@ -2,6 +2,7 @@ extends Control
 ## Liga as telas de menu entre si e com a luta:
 ##   título -> bosses -> cartas -> luta      título -> gear (cartas, sem o botão de luta)
 ##   vitória -> loja -> título
+##   título -> tutoriais -> (cena do tutorial) -> tutoriais
 ##   título -> opções (a tela de opções é do hud.gd: é a mesma que o pause abre)
 ## Cada tela é uma cena própria em ui/screens/, que também abre sozinha com F6.
 
@@ -10,6 +11,7 @@ var title: TitleScreen
 var bosses: BossScreen
 var cards: CardsScreen
 var shop: ShopScreen
+var tutorials: TutorialsScreen
 var _gear := false
 
 
@@ -20,7 +22,8 @@ func setup(game) -> void:
 	bosses = preload("res://ui/screens/boss_screen.tscn").instantiate()
 	cards = preload("res://ui/screens/cards_screen.tscn").instantiate()
 	shop = preload("res://ui/screens/shop_screen.tscn").instantiate()
-	for s in [title, bosses, cards, shop]:
+	tutorials = TutorialsScreen.new()
+	for s in [title, bosses, cards, shop, tutorials]:
 		add_child(s)
 		s.visible = false
 	title.bosses_pressed.connect(show_screen.bind("bosses"))
@@ -29,10 +32,12 @@ func setup(game) -> void:
 		show_screen("cards"))
 	title.shop_pressed.connect(show_screen.bind("shop"))
 	title.options_pressed.connect(func(): g.hud.open_options(false))
-	title.tutorial_pressed.connect(func():
-		# o tutorial é uma cena própria (scripts/tutorial.gd); ele volta pra cá sozinho quando acaba
+	title.tutorial_pressed.connect(show_screen.bind("tutorials"))
+	tutorials.back_pressed.connect(show_screen.bind("title"))
+	tutorials.tutorial_chosen.connect(func(scene: String):
+		# cada tutorial é uma cena própria (o 1 é scripts/tutorial.gd); ele volta pra esta lista quando acaba
 		Knowledge.save()
-		get_tree().change_scene_to_file("res://tutorial.tscn"))
+		get_tree().change_scene_to_file(scene))
 	bosses.back_pressed.connect(show_screen.bind("title"))
 	bosses.boss_chosen.connect(func(i: int):
 		_gear = false
@@ -59,7 +64,7 @@ func show_screen(id: String) -> void:
 	if id == "shop" and not Knowledge.shop_unlocked:
 		id = "title"
 	Knowledge.screen = id
-	for s in [title, bosses, cards, shop]:
+	for s in [title, bosses, cards, shop, tutorials]:
 		s.visible = false
 	match id:
 		"bosses":
@@ -71,6 +76,9 @@ func show_screen(id: String) -> void:
 		"shop":
 			shop.visible = true
 			shop.open()
+		"tutorials":
+			tutorials.visible = true
+			tutorials.open()
 		_:
 			_gear = false
 			title.visible = true
