@@ -54,6 +54,9 @@ var cancel_ratio := 0.0
 var in_red := false
 var stuck_t := 0.0
 var enmity := 0.0
+## Cartas e itens de uso único por luta.
+var phoenix_used := false
+var potion_used := false
 var weak_t := 0.0      # Fraqueza: revivido pelo Reviver comum dá metade do dano
 var immortal_t := 0.0  # Limit Break do Tank
 var pillar: MeshInstance3D

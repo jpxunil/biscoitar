@@ -1,176 +1,396 @@
 class_name Knowledge
-## O "deck" de cada personagem. Fica em variáveis estáticas pra sobreviver ao retry.
+## Tudo que o jogador carrega entre lutas: cartas, baralho de cada herói, maestria,
+## dinheiro e tickets. Fica em variáveis estáticas (sobrevive ao retry) e é salvo em disco.
 ##
-## ROXA   — resolve uma mecânica inteira sozinha. Rara: poucas cópias pra party toda.
-## AMARELA — comportamento básico já pronto.
-## BRANCA — em branco: você monta "QUANDO x → FAZ y" com as peças que descobriu lutando.
+## Carta = uma ação única. Três raridades mais os itens:
+##   BRANCA (comum)  — resolve uma mecânica ou dá um bônus pequeno.
+##   DOURADA (rara)  — comportamento de classe ou bônus forte.
+##   ROXA (épica)    — as mais fortes. Na loja só saem com ticket (ranking SSS).
+##   ITEM            — um por herói ("item on hold").
+##
+## Carta de mecânica não cai por sorte nem na primeira vez: o jogador precisa resolver
+## a mecânica certo, na mão, MASTERY_NEED vezes. Aí a carta é liberada e a IA aprende.
 
-const PURPLE_SLOTS := 1
-const YELLOW_SLOTS := 4
-const WHITE_SLOTS := 3
-## Quantas cópias da Marca Elemental a party tem no total. Uma pra cada herói:
-## o boss de fusão mistura elementos com as outras mecânicas, e três brancas não dão conta de tudo.
-const PURPLE_COPIES := 4
+const HEROES := [
+	{"key": "tank", "name": "Tank", "role": "Tanque", "color": Color(0.3, 0.5, 1.0), "hp": 160,
+		"blurb": "Segura a boss. Mitigação e Bora Biscoitar."},
+	{"key": "healer", "name": "Healer", "role": "Curandeira", "color": Color(0.4, 0.95, 0.55), "hp": 90,
+		"blurb": "Cura, revive e protege com escudo."},
+	{"key": "assassina", "name": "Assassina", "role": "DPS corpo a corpo", "color": Color(0.78, 0.38, 1.0), "hp": 100,
+		"blurb": "O maior dano, colada na boss."},
+	{"key": "maga", "name": "Maga", "role": "DPS à distância", "color": Color(1.0, 0.72, 0.25), "hp": 90,
+		"blurb": "Dano de longe, com cast."},
+]
 
-const PURPLE_NAME := "Marca Elemental"
-## Roxas: "mark" resolve a mecânica elemental; "dps" é a rotação otimizada do personagem.
-## A de DPS é de cada herói: você libera jogando bem com ele, e aí a IA dele bate mais forte.
-const PURPLE := {"mark": "Marca Elemental", "dps": "Rotação"}
-const PURPLE_ORDER := ["mark", "dps"]
-## Texto que aparece ao passar o mouse na carta, no menu.
-const PURPLE_DESC := {
-	"mark": "Resolve a Marca Elemental sozinho: zona oposta, par e abrigo.",
-	"dps": "Bate mais forte. Assassina e Maga soltam o golpe de 20 s sempre que dá.",
+## Mesma ordem de BOSSES em game.gd.
+const BOSS_INFO := [
+	{"name": "BISCOITO-KUN", "mini": true, "blurb": "Mini boss. Fraquinho, bom pra juntar moedas."},
+	{"name": "MINI-CHAN", "mini": false, "blurb": "Desvios, círculos e um grande final."},
+	{"name": "PROTÓTIPO-CHAN", "mini": false, "blurb": "Marca Elemental, zonas e Cataclismo."},
+	{"name": "FUSÃO-CHAN", "mini": false, "blurb": "Tudo junto e mais rápido."},
+]
+
+const KINDS := ["purple", "gold", "white", "item"]
+const SLOTS := {"purple": 2, "gold": 3, "white": 4, "item": 1}
+const KIND_NAME := {"purple": "Épica", "gold": "Rara", "white": "Comum", "item": "Item"}
+const KIND_COLOR := {
+	"purple": Color(0.62, 0.36, 1.0), "gold": Color(1.0, 0.8, 0.25),
+	"white": Color(0.97, 0.96, 0.9), "item": Color(0.3, 0.9, 1.0),
 }
-const YELLOW_DESC := {
-	"dodge": "Sai dos ataques vermelhos.",
-	"instinct": "Cura quem está com pouca vida.",
-	"provoke": "Usa Bora Biscoitar quando o boss larga dele.",
-	"safe_cast": "Não conjura em cima de ataque vermelho.",
-	"spread": "No círculo roxo, corre pro próprio canto.",
+const CATS := ["attack", "defense", "utility", "special"]
+const CAT_NAME := {"attack": "Ataque", "defense": "Defesa", "utility": "Utilidade", "special": "Especial"}
+
+const MASTERY_NEED := 3
+
+## who = classes que podem usar (sem a chave = todas) · start = já vem com o jogador ·
+## mastery = liberada pela maestria daquela mecânica · price = à venda por moedas ·
+## ticket = à venda por tickets · earn = liberada por um feito (texto explica).
+const CARDS := {
+	# ---- brancas
+	"dodge": {"name": "Desvio", "kind": "white", "cat": "defense", "start": true,
+		"desc": "Sai dos ataques vermelhos."},
+	"stack": {"name": "Laranja Junto", "kind": "white", "cat": "utility", "mastery": "stack",
+		"desc": "Corre pro círculo laranja pra dividir o dano com a party."},
+	"pair": {"name": "Dupla Laranja", "kind": "white", "cat": "utility", "mastery": "pair",
+		"desc": "Com dois círculos laranjas, forma dupla: dois em cada."},
+	"spread": {"name": "Dispersão", "kind": "white", "cat": "utility", "mastery": "spread",
+		"desc": "No círculo roxo, corre pro próprio canto da arena."},
+	"link": {"name": "Quebra-Elo", "kind": "white", "cat": "utility", "mastery": "link",
+		"desc": "Preso no Elo Perdido, se afasta do par até a corrente quebrar."},
+	"zone": {"name": "Zona Oposta", "kind": "white", "cat": "utility", "mastery": "zone",
+		"desc": "Com um elemento, vai pra zona do elemento oposto."},
+	"partner": {"name": "Par Elemental", "kind": "white", "cat": "utility", "mastery": "partner",
+		"desc": "No Cataclismo, acha quem tem o elemento oposto."},
+	"shelter": {"name": "Abrigo", "kind": "white", "cat": "defense", "mastery": "shelter",
+		"desc": "No Cataclismo, sem elemento, corre pro abrigo."},
+	"safe_cast": {"name": "Cautela", "kind": "white", "cat": "defense", "who": ["healer", "maga"], "mastery": "cast",
+		"desc": "Não conjura em cima de ataque vermelho."},
+	"sharpen": {"name": "Lâmina Afiada", "kind": "white", "cat": "attack", "price": 100,
+		"desc": "+8% de dano."},
+	"plate": {"name": "Couraça", "kind": "white", "cat": "defense", "price": 100,
+		"desc": "Recebe 10% menos dano."},
+	"breath": {"name": "Fôlego", "kind": "white", "cat": "utility", "earn": "Vença o BISCOITO-KUN.",
+		"desc": "Recupera 1 de vida por segundo."},
+	# ---- douradas
+	"mitigate": {"name": "Guarda", "kind": "gold", "cat": "defense", "who": ["tank"], "mastery": "buster",
+		"desc": "Usa Mitigação quando a boss prepara o Esmagar."},
+	"provoke": {"name": "Biscoiteiro", "kind": "gold", "cat": "utility", "who": ["tank"], "mastery": "provoke",
+		"desc": "Usa Bora Biscoitar sempre que a boss larga dele."},
+	"instinct": {"name": "Instinto", "kind": "gold", "cat": "utility", "who": ["healer"], "mastery": "heal",
+		"desc": "Cura quem está com pouca vida."},
+	"eshield": {"name": "Escudo de Emergência", "kind": "gold", "cat": "defense", "who": ["healer"], "price": 220,
+		"desc": "Quando a boss conjura ESMAGAR, põe Escudo no Tank antes do golpe."},
+	"burst": {"name": "Golpe Lapidado", "kind": "gold", "cat": "attack", "who": ["assassina", "maga"], "price": 260,
+		"desc": "Golpe forte melhor. Assassina: +30% de dano. Maga: conjura 0,7 s mais rápido e +15%."},
+	"executor": {"name": "Carrasco", "kind": "gold", "cat": "attack", "price": 200,
+		"desc": "+25% de dano com a boss abaixo de 30% de vida."},
+	"secondskin": {"name": "Segunda Pele", "kind": "gold", "cat": "defense", "price": 180,
+		"desc": "Começa a luta, e volta de um reviver, com um escudo de 30."},
+	"final": {"name": "Protocolo Final", "kind": "gold", "cat": "special", "mastery": "final",
+		"desc": "No grande final: lê a mão que a boss levanta, vai pro seu quadrado e ocupa a sua torre."},
+	"spark": {"name": "Faísca de Limite", "kind": "gold", "cat": "utility", "price": 200,
+		"desc": "O dano dele enche o Limit Break 50% mais rápido."},
+	# ---- roxas
+	"dps": {"name": "Rotação", "kind": "purple", "cat": "attack", "earn": "Segure um DPS bom com o herói por 20 s.",
+		"desc": "Bate mais forte. Assassina e Maga soltam o golpe de 20 s sempre que dá."},
+	"mark": {"name": "Marca Elemental", "kind": "purple", "cat": "special", "earn": "Passe pelo Cataclismo com a party inteira viva.",
+		"desc": "Resolve a Marca Elemental sozinho: zona oposta, par e abrigo."},
+	"revive": {"name": "Reviver Automático", "kind": "purple", "cat": "special", "who": ["healer"], "ticket": 1,
+		"desc": "Quando alguém morre, revive sozinha assim que for seguro."},
+	"phoenix": {"name": "Fênix", "kind": "purple", "cat": "special", "ticket": 1,
+		"desc": "Uma vez por luta, em vez de morrer, volta com metade da vida."},
+	"overdrive": {"name": "Sobrecarga", "kind": "purple", "cat": "attack", "ticket": 1,
+		"desc": "+20% de dano, mas recebe 15% a mais."},
+	# ---- itens
+	"potion": {"name": "Poção", "kind": "item", "cat": "utility", "price": 80,
+		"desc": "Uma vez por luta, cura 50 quando a vida cai abaixo de 30%."},
+	"cookie": {"name": "Biscoito da Sorte", "kind": "item", "cat": "special", "price": 150,
+		"desc": "O Limit Break começa a luta com 25% de carga."},
 }
-## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói
-## (uns 60% do que a classe rende com a rotação perfeita, pra sobrar folga pros desvios).
+
+## Mecânicas com maestria: o que o jogador precisa fazer na mão, e a carta que isso libera.
+const MASTERY := {
+	"stack": {"name": "Círculo laranja", "card": "stack"},
+	"pair": {"name": "Duplas laranjas", "card": "pair"},
+	"spread": {"name": "Círculo roxo", "card": "spread"},
+	"link": {"name": "Elo Perdido", "card": "link"},
+	"final": {"name": "Grande final (mão e torres)", "card": "final"},
+	"zone": {"name": "Zonas elementais", "card": "zone"},
+	"partner": {"name": "Par no Cataclismo", "card": "partner"},
+	"shelter": {"name": "Abrigo no Cataclismo", "card": "shelter"},
+	"cast": {"name": "Cast seguro", "card": "safe_cast"},
+	"buster": {"name": "Esmagar", "card": "mitigate"},
+	"provoke": {"name": "Recuperar a boss", "card": "provoke"},
+	"heal": {"name": "Socorro", "card": "instinct"},
+}
+
+const RANKS := ["F", "E", "D", "C", "B", "A", "S", "SS", "SSS"]
+## Nota mínima (0 a 100) de cada ranking, e as moedas que ele paga num boss normal.
+const RANK_MIN := [0, 20, 32, 44, 56, 68, 78, 87, 94]
+const RANK_COINS := [20, 40, 60, 90, 120, 160, 220, 300, 400]
+const MINI_REWARD := 0.4
+const LOW_HP := 0.5
+## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói pra liberar a Rotação.
 const DPS_GOAL := {"tank": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0}
 const DPS_WINDOW := 20
+const SAVE_PATH := "user://save.json"
 
-## Um único desvio cobre todos os avisos vermelhos. Vem de fábrica, já equipado em todo mundo.
-const YELLOW := {
-	"dodge": "Desvio",
-	"instinct": "Instinto",
-	"provoke": "Biscoiteiro",
-	"safe_cast": "Cautela",
-	"spread": "Dispersão",
-}
-## Dispersão: no círculo roxo cada um corre pro próprio canto da arena.
-## A party aprende quando você resolve um círculo roxo na mão sem ninguém te acertar.
-const YELLOW_ORDER := ["dodge", "spread", "instinct", "provoke", "safe_cast"]
-## Instinto: reage a pouca vida. O Healer cura quem está mal (ele mesmo primeiro).
-## A party aprende quando alguém fica por um fio.
-## Biscoiteiro: o Tank usa o Bora Biscoitar sozinho sempre que o boss não está nele
-## (por exemplo depois de morrer e ser revivido). Aprende quando você recupera o aggro na mão.
-## Cautela: Maga e Healer não conjuram em cima de ataque vermelho. Sem ela, terminam o cast
-## antes de sair da área. A party aprende quando você desvia na mão jogando de Maga ou Healer.
-const YELLOW_ONLY := {"instinct": ["healer"], "provoke": ["tank"], "safe_cast": ["healer", "maga"]}
-const LOW_HP := 0.5
-
-
-static func yellow_for(unit_key: String) -> Array:
-	var out: Array = []
-	for id in YELLOW_ORDER:
-		if not YELLOW_ONLY.has(id) or YELLOW_ONLY[id].has(unit_key):
-			out.append(id)
-	return out
-
-const TRIGGERS := {
-	"stack": "um círculo laranja",
-	"stack2": "dois círculos laranjas",
-	"buster": "o boss preparar Esmagar",
-	"got_element": "receber um elemento",
-	"zones_done": "a Sobrecarga acabar",
-	"cata": "o Cataclismo começar",
-}
-const TRIGGER_ORDER := ["stack", "stack2", "buster", "got_element", "zones_done", "cata"]
-
-const ACTIONS := {
-	"to_marked": "juntar com o marcado",
-	"pair_up": "fazer dupla",
-	"mitigate": "usar Mitigação",
-	"zone_opp": "ir pra zona oposta",
-	"zone_same": "ir pra zona igual",
-	"partner": "achar o elemento oposto",
-	"shelter": "ir pro abrigo",
-	"center": "ir pro centro",
-	"stay": "ficar parado",
-}
-const ACTION_ORDER := ["to_marked", "pair_up", "mitigate", "zone_opp", "zone_same", "partner", "shelter", "center", "stay"]
-
-## Cada QUANDO só oferece os FAZ que fazem sentido pra ele.
-const COMPAT := {
-	"stack": ["to_marked", "center", "stay"],
-	"stack2": ["pair_up", "to_marked", "center", "stay"],
-	"buster": ["mitigate"],
-	"got_element": ["zone_opp", "zone_same", "center", "stay"],
-	"zones_done": ["partner", "center", "stay"],
-	"cata": ["shelter", "partner", "center", "stay"],
-}
-## Peças exclusivas de uma classe (a Mitigação é do Tank, e só ele reage ao Esmagar).
-const ONLY := {"buster": "tank", "mitigate": "tank"}
-
-
-static func triggers_for(unit_key: String) -> Array:
-	var out: Array = []
-	for id in TRIGGER_ORDER:
-		if not ONLY.has(id) or ONLY[id] == unit_key:
-			out.append(id)
-	return out
-
-
-static func actions_for(trigger: String, unit_key: String) -> Array:
-	var out: Array = []
-	for id in COMPAT.get(trigger, []):
-		if not ONLY.has(id) or ONLY[id] == unit_key:
-			out.append(id)
-	return out
-
-
-static var triggers_known := {}
-static var actions_known := {"center": true, "stay": true}
-static var purple_known := false
-static var dps_known := {}  # chave do herói -> true
-static var yellow_known := {"dodge": true}
-## Quem você controla quando a luta começa (escolhido no menu).
-static var start_hero := 2
-static var boss := 0
-static var boss_unlocked := 0
+static var owned := {"dodge": true}
 static var decks := {}
+static var mastery := {}
+static var money := 0
+static var tickets := 0
+static var shop_unlocked := false
+## Rotação é de cada herói: chave do herói -> true.
+static var dps_known := {}
+## Melhor ranking por boss (índice -> índice em RANKS). Boss vencido libera o próximo.
+static var best_rank := {}
+## Quem você controla quando a luta começa, e a luta escolhida.
+static var start_hero := 2
+static var boss := 1
 static var attempts := 1
+## Em que tela o menu abre depois de recarregar a cena: "title", "bosses", "cards", "shop".
+static var screen := "title"
+## Testes automáticos desligam o save pra não ler nem sujar o progresso do jogador.
+static var persist := true
+static var _loaded := false
 
+
+# ---------------------------------------------------------------- baralhos
 
 static func deck(i: int) -> Dictionary:
 	if not decks.has(i):
-		var whites: Array = []
-		for n in WHITE_SLOTS:
-			whites.append({"t": "", "a": ""})
-		decks[i] = {"purple": "", "yellow": ["dodge"], "white": whites}
+		var d := {}
+		for kind in KINDS:
+			var arr: Array = []
+			for n in SLOTS[kind]:
+				arr.append("")
+			d[kind] = arr
+		decks[i] = d
+		# o que o jogador já tem de fábrica entra equipado
+		for id in owned:
+			if CARDS[id].get("start", false):
+				equip(i, id)
 	return decks[i]
 
 
-static func has_yellow(i: int, id: String) -> bool:
-	var y: Array = deck(i)["yellow"]
-	return y.has(id)
+static func kind_of(id: String) -> String:
+	return CARDS[id]["kind"]
 
 
-static func toggle_yellow(i: int, id: String) -> void:
-	var y: Array = deck(i)["yellow"]
-	if y.has(id):
-		y.erase(id)
-	elif y.size() < YELLOW_SLOTS:
-		y.append(id)
+static func has(i: int, id: String) -> bool:
+	if not CARDS.has(id):
+		return false
+	var arr: Array = deck(i)[CARDS[id]["kind"]]
+	return arr.has(id)
 
 
-static func purple_left() -> int:
-	var used := 0
+## A classe do herói i pode usar essa carta?
+static func usable(i: int, id: String) -> bool:
+	var c: Dictionary = CARDS[id]
+	return not c.has("who") or c["who"].has(HEROES[i]["key"])
+
+
+## O jogador tem essa carta pro herói i? (a Rotação é conquistada herói por herói)
+static func is_owned_by(i: int, id: String) -> bool:
+	if id == "dps":
+		return dps_known.has(HEROES[i]["key"])
+	return owned.has(id)
+
+
+## Equipa no slot pedido (ou no primeiro livre). Se o slot estava ocupado, a carta antiga volta pro inventário.
+static func equip(i: int, id: String, slot := -1) -> bool:
+	if not is_owned_by(i, id) or not usable(i, id):
+		return false
+	var arr: Array = deck(i)[CARDS[id]["kind"]]
+	var at := arr.find(id)
+	if slot < 0:
+		if at >= 0:
+			return true
+		slot = arr.find("")
+		if slot < 0:
+			return false
+	if slot >= arr.size():
+		return false
+	if at >= 0:
+		arr[at] = ""
+	arr[slot] = id
+	return true
+
+
+static func unequip(i: int, id: String) -> void:
+	var arr: Array = deck(i)[CARDS[id]["kind"]]
+	var at := arr.find(id)
+	if at >= 0:
+		arr[at] = ""
+
+
+## Cartas que o herói i pode usar e que não estão equipadas nele, da mais rara pra mais comum.
+static func inventory(i: int) -> Array:
+	var out: Array = []
+	for kind in KINDS:
+		for id in CARDS:
+			if CARDS[id]["kind"] == kind and is_owned_by(i, id) and usable(i, id) and not has(i, id):
+				out.append(id)
+	return out
+
+
+static func grant(id: String) -> bool:
+	if owned.has(id):
+		return false
+	owned[id] = true
+	save()
+	return true
+
+
+# ---------------------------------------------------------------- maestria
+
+static func mastery_of(key: String) -> int:
+	return mini(int(mastery.get(key, 0)), MASTERY_NEED)
+
+
+## Registra uma resolução correta. Devolve true se foi a que liberou a carta.
+static func add_mastery(key: String) -> bool:
+	if not MASTERY.has(key) or mastery_of(key) >= MASTERY_NEED:
+		return false
+	mastery[key] = mastery_of(key) + 1
+	var done := mastery_of(key) >= MASTERY_NEED
+	if done:
+		owned[MASTERY[key]["card"]] = true
+	save()
+	return done
+
+
+## Chave de maestria que libera a carta, ou "" se ela vem de outro jeito.
+static func mastery_key(id: String) -> String:
+	return CARDS[id].get("mastery", "")
+
+
+# ---------------------------------------------------------------- loja
+
+static func shop_list(cat := "") -> Array:
+	var out: Array = []
+	for kind in KINDS:
+		for id in CARDS:
+			var c: Dictionary = CARDS[id]
+			if c["kind"] == kind and (c.has("price") or c.has("ticket")) and (cat == "" or c["cat"] == cat):
+				out.append(id)
+	return out
+
+
+static func can_buy(id: String) -> bool:
+	var c: Dictionary = CARDS[id]
+	if owned.has(id):
+		return false
+	if c.has("ticket"):
+		return tickets >= int(c["ticket"])
+	return c.has("price") and money >= int(c["price"])
+
+
+static func buy(id: String) -> bool:
+	if not can_buy(id):
+		return false
+	var c: Dictionary = CARDS[id]
+	if c.has("ticket"):
+		tickets -= int(c["ticket"])
+	else:
+		money -= int(c["price"])
+	owned[id] = true
+	save()
+	return true
+
+
+# ---------------------------------------------------------------- bosses e ranking
+
+static func boss_open(i: int) -> bool:
+	# o mini boss e o primeiro boss estão sempre abertos; cada vitória abre o seguinte
+	return i <= 1 or best_rank.has(i - 1)
+
+
+static func rank_for(score: float) -> int:
+	var r := 0
+	for k in RANKS.size():
+		if score >= RANK_MIN[k]:
+			r = k
+	return r
+
+
+## Paga a vitória. Devolve {"coins", "ticket", "card"} com o que o jogador ganhou.
+static func reward(boss_i: int, rank: int) -> Dictionary:
+	var mini_boss: bool = BOSS_INFO[boss_i]["mini"]
+	var coins := int(RANK_COINS[rank] * (MINI_REWARD if mini_boss else 1.0))
+	var out := {"coins": coins, "ticket": 0, "card": ""}
+	money += coins
+	if rank == RANKS.size() - 1 and not mini_boss:
+		tickets += 1
+		out["ticket"] = 1
+	if mini_boss and not owned.has("breath"):
+		owned["breath"] = true
+		out["card"] = "breath"
+	if not best_rank.has(boss_i) or int(best_rank[boss_i]) < rank:
+		best_rank[boss_i] = rank
+	shop_unlocked = true
+	save()
+	return out
+
+
+# ---------------------------------------------------------------- save
+
+static func save() -> void:
+	if not persist:
+		return
+	var data := {
+		"owned": owned.keys(), "decks": {}, "mastery": mastery, "money": money, "tickets": tickets,
+		"shop": shop_unlocked, "dps": dps_known.keys(), "rank": {}, "hero": start_hero, "boss": boss,
+	}
 	for i in decks:
-		if decks[i]["purple"] == "mark":
-			used += 1
-	return PURPLE_COPIES - used
+		data["decks"][str(i)] = decks[i]
+	for b in best_rank:
+		data["rank"][str(b)] = best_rank[b]
+	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(data))
 
 
-static func purple_can(i: int, id: String, unit_key: String) -> bool:
-	if id == "mark":
-		return purple_known and (deck(i)["purple"] == "mark" or purple_left() > 0)
-	return dps_known.has(unit_key)
-
-
-## Um slot roxo por herói: equipar uma tira a outra.
-static func toggle_purple(i: int, id: String, unit_key: String) -> void:
-	var d := deck(i)
-	if d["purple"] == id:
-		d["purple"] = ""
-	elif purple_can(i, id, unit_key):
-		d["purple"] = id
-
-
-static func set_white(i: int, slot: int, trigger: String, action: String) -> void:
-	deck(i)["white"][slot] = {"t": trigger, "a": action}
+static func load_save() -> void:
+	if _loaded or not persist:
+		return
+	_loaded = true
+	if not FileAccess.file_exists(SAVE_PATH):
+		return
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	if not (parsed is Dictionary):
+		return
+	for id in parsed.get("owned", []):
+		if CARDS.has(id):
+			owned[id] = true
+	for k in parsed.get("dps", []):
+		dps_known[k] = true
+	for key in parsed.get("mastery", {}):
+		if MASTERY.has(key):
+			mastery[key] = int(parsed["mastery"][key])
+	money = int(parsed.get("money", 0))
+	tickets = int(parsed.get("tickets", 0))
+	shop_unlocked = bool(parsed.get("shop", false))
+	start_hero = clampi(int(parsed.get("hero", 2)), 0, 3)
+	for b in parsed.get("rank", {}):
+		best_rank[int(b)] = int(parsed["rank"][b])
+	boss = clampi(int(parsed.get("boss", 1)), 0, BOSS_INFO.size() - 1)
+	if not boss_open(boss):
+		boss = 1
+	# baralhos: só entra o que ainda existe, é do jogador e cabe no slot
+	var saved: Dictionary = parsed.get("decks", {})
+	for si in saved:
+		var i := int(si)
+		if i < 0 or i > 3:
+			continue
+		var d := deck(i)
+		for kind in KINDS:
+			for n in SLOTS[kind]:
+				d[kind][n] = ""
+		for kind in KINDS:
+			var arr: Array = saved[si].get(kind, [])
+			for n in mini(arr.size(), SLOTS[kind]):
+				var id := str(arr[n])
+				if id != "" and CARDS.has(id) and CARDS[id]["kind"] == kind and is_owned_by(i, id) and usable(i, id):
+					d[kind][n] = id

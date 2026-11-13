@@ -101,7 +101,7 @@ const STEPS_DODGE := [
 	{"t": "idle", "dur": 0.5},
 	{"t": "nova", "dur": 2.5, "total": 2.4},
 	{"t": "core", "dur": 2.4, "total": 2.2},
-	{"t": "blast", "dur": 3.5},
+	{"t": "blast", "dur": 3.5, "ratio": 0.2},
 	{"t": "idle", "dur": 2.0},
 	{"t": "spread", "n": 1, "dur": 5.0},
 	{"t": "knives", "n": 4, "dur": 2.4},
@@ -210,8 +210,57 @@ const LB_DPS_CUT := 0.10   # Limit Break de DPS: tira 10% da vida máxima do bos
 const LB_IMMORTAL := 2.0   # Limit Break do Tank: party imortal por 2 s
 const WEAK_TIME := 30.0    # revivido pelo Reviver comum: metade do dano por 30 s
 
+## Grande final da MINI-CHAN: entra uma vez, perto do fim da luta, e depois a luta volta ao normal.
+## raid (cast + dano em todos, ratio = fração da vida máxima) · linkcleave (Elo Perdido em dois heróis
+## + dois golpes de meia arena, um de cada lado, avisados pela mão que ela levanta) ·
+## collapse (cast + raidwide; a arena vira dois quadrados e o resto é vazio) · towers (uma torre por herói) ·
+## buster + window (o Tank segura o Esmagar e abre uma janela de dano dobrado) · raid final com a arena de volta.
+const STEPS_FINALE := [
+	{"t": "raid", "dur": 5.0, "ratio": 0.5, "name": "Gran Finale"},
+	{"t": "linkcleave", "dur": 5.6},
+	{"t": "collapse", "dur": 4.0, "ratio": 0.2},
+	{"t": "towers", "dur": 5.0},
+	{"t": "buster", "dur": 3.0},
+	{"t": "window", "dur": 5.0},
+	{"t": "raid", "dur": 4.0, "ratio": 0.3, "name": "Cortina Final", "restore": true},
+	{"t": "idle", "dur": 1.0},
+]
+## O final começa quando passa essa fração do tempo, ou com a boss abaixo dessa vida.
+const FINALE_AT := 0.635
+const FINALE_HP := 0.3
+## Os dois quadrados que sobram quando a arena desaba, e a torre de cada herói
+## (Tank e Assassina nas da frente, ao alcance da boss; Healer e Maga nas de trás).
+const SQUARES := [Vector3(-3.6, 0, -4.4), Vector3(3.6, 0, -4.4)]
+const SQ_HALF := 2.4
+const TOWER_POS := [Vector3(-2.4, 0, -5.6), Vector3(-4.8, 0, -3.2), Vector3(2.4, 0, -5.6), Vector3(4.8, 0, -3.2)]
+const TOWER_R := 1.1
+const TOWER_COL := Color(0.55, 0.9, 1.0)
+const CLEAVE_DMG := 40.0
+## A mão sobe e brilha esse tempo antes do golpe; a marca no chão só aparece no último meio segundo.
+const CLEAVE_TELL := 1.9
+const LINK_COL := Color(1.0, 0.4, 0.75)
+const LINK_BREAK := 9.0
+const LINK_TICK := 0.5
+const LINK_DMG := 3.0
+const LINK_MAX := 8.0
+const ENRAGE_CAST := 10.0
+
+## Mini boss: poucos ataques, todos simples. Serve pra juntar moedas antes do boss de verdade.
+const STEPS_COOKIE := [
+	{"t": "idle", "dur": 3.0},
+	{"t": "circles", "n": 2, "dur": 2.6},
+	{"t": "idle", "dur": 2.0},
+	{"t": "line", "n": 1, "dur": 2.8},
+	{"t": "idle", "dur": 2.0},
+	{"t": "stack", "need": 4, "dur": 6.0},
+	{"t": "idle", "dur": 2.0},
+	{"t": "knives", "n": 2, "dur": 2.6},
+	{"t": "idle", "dur": 2.5},
+]
+## Mesma ordem de Knowledge.BOSS_INFO.
 const BOSSES := [
-	{"name": "MINI-CHAN", "hp": 7000.0, "enrage": 120.0, "steps": STEPS_DODGE, "hair": Color(0.25, 0.8, 0.9), "scale": 0.95},
+	{"name": "BISCOITO-KUN", "hp": 2600.0, "enrage": 100.0, "steps": STEPS_COOKIE, "look": "cookie", "hair": Color(0.86, 0.6, 0.3), "scale": 0.8},
+	{"name": "MINI-CHAN", "hp": 7000.0, "enrage": 120.0, "steps": STEPS_DODGE, "finale": true, "hair": Color(0.25, 0.8, 0.9), "scale": 0.95},
 	{"name": "PROTÓTIPO-CHAN", "hp": 10400.0, "enrage": 150.0, "steps": STEPS_ELEMENT, "elements": true, "hair": Color(1.0, 0.38, 0.66), "scale": 1.2},
 	# haste: tudo dela (passos, avisos, casts) corre esse tanto mais rápido
 	{"name": "FUSÃO-CHAN", "hp": 11500.0, "enrage": 165.0, "steps": STEPS_FUSION, "elements": true, "haste": 1.2, "hair": Color(0.75, 0.45, 1.0), "scale": 1.3},
@@ -222,6 +271,8 @@ var ctrl := 0
 var swap_cd := 0.0
 var lb := 0.0  # carga do Limit Break, 0..1, da party toda
 var enrage := 120.0
+var win_test := 0.0   # só pra teste: --win=N vence a luta aos N segundos (pra ver ranking e recompensa)
+var card_test := 0.0  # só pra teste: --cardtest=N mostra o aviso de carta nova aos N segundos
 var swap_test := 0.0  # só pra teste: --swaptest=N troca de herói aos N segundos
 var lb_test := 0.0  # só pra teste: --lbtest=N dispara o Limit Break aos N segundos
 var sel := -1  # alvo escolhido no card (cura, reviver); -1 = automático
@@ -244,6 +295,7 @@ var cast_name := ""
 
 var hazards: Array = []
 var stacks: Array = []  # círculos laranjas ativos
+var enrage_k := 0.0
 var haste := 1.0
 var cur_step: Dictionary = {}
 ## Contagem: ordem dos golpes, qual é o próximo e quanto falta pra ele.
@@ -274,7 +326,22 @@ var fury := false
 var log_lines: Array[String] = []
 var rot_unit := -1
 var rot_buckets: Array[float] = []
-var hit_count := {}  # só pro relatório de teste: quantas vezes cada motivo acertou alguém
+var hit_count := {}
+## Pro ranking: dano que a party tomou e quantas mortes aconteceram na luta.
+var dmg_taken := 0.0
+var deaths := 0
+var void_on := false
+var void_warn := false
+## 0 = ainda não veio · 1 = rolando · 2 = já passou
+var finale_state := 0
+var fin_i := -1
+var link = null       # {"a","b","node","t","tick"}
+var cleaves: Array = []  # {"side": -1|1, "t": segundos até o golpe, "shown": bool}
+var cleave_side := 0  # lado que vai ser atingido agora (0 = nenhum)
+var cleave_fail := false
+var towers: Array = []   # {"pos","node","fill","unit"}
+var tower_t := 0.0
+var tower_total := 1.0  # só pro relatório de teste: quantas vezes cada motivo acertou alguém
 var auto_t := 0.0
 var target: Unit
 var heal_focus: Unit
@@ -292,10 +359,13 @@ var shot_left := -1.0
 func _ready() -> void:
 	randomize()
 	var args := OS.get_cmdline_user_args()
+	# qualquer argumento de teste desliga o save: não lê nem suja o progresso do jogador
+	if args.size() > 0:
+		Knowledge.persist = false
+	Knowledge.load_save()
 	for a in args:
 		if a.begins_with("--boss="):
 			Knowledge.boss = clampi(int(a.trim_prefix("--boss=")), 0, BOSSES.size() - 1)
-			Knowledge.boss_unlocked = maxi(Knowledge.boss_unlocked, Knowledge.boss)
 	boss_def = BOSSES[Knowledge.boss]
 	steps = boss_def["steps"]
 	boss_max = boss_def["hp"]
@@ -320,44 +390,32 @@ func _ready() -> void:
 		autoplay = true
 		auto_left = minf(150.0, enrage - 2.0)
 		Engine.time_scale = 6.0
-		for i in 4:
-			var d := Knowledge.deck(i)
-			d["yellow"] = [["dodge", "spread", "provoke"], ["dodge", "spread", "instinct", "safe_cast"], ["dodge", "spread"], ["dodge", "spread", "safe_cast"]][i]
-			if Knowledge.boss == 2:
-				d["purple"] = "mark"
-			if Knowledge.boss != 1:
-				d["white"] = [
-					{"t": "stack", "a": "to_marked"},
-					{"t": "stack2", "a": "pair_up"},
-					{"t": "buster", "a": "mitigate"},
-				]
-			else:
-				d["white"] = [
-					{"t": "got_element", "a": "zone_opp"},
-					{"t": "zones_done", "a": "partner"},
-					{"t": "cata", "a": "shelter"},
-				]
+		_test_decks()
 	if args.has("--naive"):
 		autoplay = true
 		auto_left = 90.0
 		Engine.time_scale = 6.0
 	if args.has("--known"):
-		for id in Knowledge.TRIGGERS:
-			Knowledge.triggers_known[id] = true
-		for id in Knowledge.ACTIONS:
-			Knowledge.actions_known[id] = true
-		for id in Knowledge.YELLOW:
-			Knowledge.yellow_known[id] = true
-		Knowledge.purple_known = true
+		# tudo liberado, pra conferir os menus
+		for id in Knowledge.CARDS:
+			Knowledge.owned[id] = true
 		for def in UNIT_DEFS:
 			Knowledge.dps_known[def["key"]] = true
-		Knowledge.set_white(0, 0, "got_element", "zone_opp")
-		Knowledge.toggle_yellow(1, "dodge")
-		Knowledge.toggle_purple(2, "mark", "assassina")
-		Knowledge.toggle_purple(3, "dps", "maga")
+		Knowledge.money = 500
+		Knowledge.tickets = 1
+		Knowledge.shop_unlocked = true
+		Knowledge.mastery["link"] = 2
+	if args.has("--rich"):
+		Knowledge.money = 600
+		Knowledge.tickets = 2
+		Knowledge.shop_unlocked = true
 	prep = not autoplay
 	hud.set_prep(prep)
 	for a in args:
+		if a.begins_with("--win="):
+			win_test = float(a.trim_prefix("--win="))
+		if a.begins_with("--cardtest="):
+			card_test = float(a.trim_prefix("--cardtest="))
 		if a.begins_with("--swaptest="):
 			swap_test = float(a.trim_prefix("--swaptest="))
 		if a.begins_with("--lbtest="):
@@ -427,6 +485,7 @@ func _build_world() -> void:
 
 	boss = preload("res://scripts/boss.gd").new()
 	boss.hair_color = boss_def["hair"]
+	boss.look = boss_def.get("look", "girl")
 	boss.position = Vector3(0, 0, -13.3)
 	boss.scale = Vector3.ONE * float(boss_def["scale"])
 	add_child(boss)
@@ -460,9 +519,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if fury:
 		return
 	if prep:
-		if k == KEY_ENTER or k == KEY_KP_ENTER:
-			start_fight()
-		return
+		return  # os menus cuidam das próprias teclas
 	match k:
 		KEY_TAB: _cycle_ctrl()
 		KEY_1: pick_hero(0)
@@ -490,17 +547,52 @@ func start_fight() -> void:
 	prep = false
 	hud.set_prep(false)
 	intro_left = hud.play_intro()
+	_fight_setup()
 
 
+## Efeitos de carta que valem "no começo da luta".
+func _fight_setup() -> void:
+	for u in units:
+		_spawn_cards(u)
+		if Knowledge.has(u.idx, "cookie"):
+			lb = minf(1.0, lb + 0.25)
+
+
+## Segunda Pele: entra na luta (e volta de um reviver) com um escudo pequeno.
+func _spawn_cards(u: Unit) -> void:
+	if Knowledge.has(u.idx, "secondskin"):
+		u.shield_hp = maxf(u.shield_hp, 30.0)
+		u.shield_t = 600.0
+
+
+## Sai da luta. Vitória leva pra loja; derrota ou desistência volta pras cartas.
 func retry() -> void:
 	if won:
-		Knowledge.boss_unlocked = mini(Knowledge.boss + 1, BOSSES.size() - 1)
-		Knowledge.boss = Knowledge.boss_unlocked
 		Knowledge.attempts = 1
+		Knowledge.screen = "shop"
 	else:
 		Knowledge.attempts += 1
+		Knowledge.screen = "cards"
 	Engine.time_scale = 1.0
 	get_tree().reload_current_scene()
+
+
+## Baralho "tudo ensinado" dos testes automáticos: todas as cartas liberadas e as de mecânica equipadas.
+func _test_decks() -> void:
+	for id in Knowledge.CARDS:
+		Knowledge.owned[id] = true
+	var whites := ["dodge", "stack", "pair", "spread"]
+	if Knowledge.boss == 2:
+		whites = ["dodge", "zone", "partner", "shelter"]
+	var golds := [["mitigate", "provoke", "final"], ["instinct", "eshield", "final"], ["final"], ["final"]]
+	for i in 4:
+		for id in whites + golds[i]:
+			Knowledge.equip(i, id)
+		# só no teste: o Quebra-Elo entra como quinta branca, pra validar a luta com tudo ensinado
+		if Knowledge.boss == 1:
+			Knowledge.deck(i)["white"].append("link")
+		if Knowledge.boss == 3:
+			Knowledge.equip(i, "mark")
 
 
 func select_hero(i: int) -> void:
@@ -513,6 +605,8 @@ func select_hero(i: int) -> void:
 func select_boss(i: int) -> void:
 	Knowledge.boss = i
 	Knowledge.attempts = 1
+	Knowledge.screen = "cards"
+	Knowledge.save()
 	get_tree().reload_current_scene()
 
 
@@ -618,6 +712,14 @@ func _process(delta: float) -> void:
 		return
 
 	fight_time += delta
+	if win_test > 0.0 and fight_time >= win_test:
+		win_test = 0.0
+		boss_hp = 0.0
+		_end(true)
+		return
+	if card_test > 0.0 and fight_time >= card_test:
+		card_test = 0.0
+		hud.card_unlocked("stack")
 	if swap_test > 0.0 and fight_time >= swap_test:
 		swap_test = 0.0
 		_cycle_ctrl()
@@ -631,6 +733,9 @@ func _process(delta: float) -> void:
 	_tick_stacks(delta)
 	_tick_spreads(delta)
 	_tick_count(delta)
+	_tick_link(delta)
+	_tick_cleaves(delta)
+	_tick_towers(delta)
 	_tick_buster(delta)
 	_tick_pairs(delta)
 	for u in units:
@@ -644,19 +749,31 @@ func _process(delta: float) -> void:
 		u.immortal_t = maxf(0.0, u.immortal_t - delta)
 		for n in u.skill_cd.size():
 			u.skill_cd[n] = maxf(0.0, u.skill_cd[n] - delta)
+		if u.hp < u.max_hp and Knowledge.has(u.idx, "breath"):
+			u.hp = minf(u.max_hp, u.hp + delta)
 		u.cancel_t = maxf(0.0, u.cancel_t - delta)
 		u.shield_t = maxf(0.0, u.shield_t - delta)
 		if u.shield_t <= 0.0:
 			u.shield_hp = 0.0
 		_shield_fx(u)
 		u.dash_cd = maxf(0.0, u.dash_cd - delta)
+		var before := u.position
 		if u.controlled and not autoplay:
 			_tick_player(u, delta)
 		else:
 			_tick_ai(u, delta)
+			# a IA nunca pisa no vazio por conta própria
+			if void_on and _in_square(before) and not _in_square(u.position):
+				u.position = before
 		_clamp_to_arena(u)
+		if void_on and u.alive and not _in_square(u.position, 0.15):
+			kill(u, "caiu no vazio")
 	_tick_auto(delta)
 	_tick_dps(delta)
+
+	# Fúria chegando: nos últimos segundos ela vai ficando vermelha e tremendo
+	enrage_k = clampf((fight_time - (enrage - ENRAGE_CAST)) / ENRAGE_CAST, 0.0, 1.0)
+	boss.enrage_k = enrage_k
 
 	# DPS check: acabou o tempo, acabou a luta
 	if fight_time >= enrage and not ended:
@@ -725,9 +842,9 @@ func _tick_rotation(u: Unit) -> void:
 		sum += b
 	if sum / Knowledge.DPS_WINDOW >= Knowledge.DPS_GOAL[u.key]:
 		Knowledge.dps_known[u.key] = true
-		if Knowledge.deck(u.idx)["purple"] == "":
-			Knowledge.toggle_purple(u.idx, "dps", u.key)
-		hud.toast("Carta roxa: " + Knowledge.PURPLE["dps"] + " · " + u.unit_name, 3.5)
+		Knowledge.equip(u.idx, "dps")
+		Knowledge.save()
+		hud.card_unlocked("dps")
 
 
 # ---------------------------------------------------------------- jogador
@@ -789,9 +906,9 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	# conjurando (a Cura da IA também tem cast): fica parado até soltar
 	var i := u.idx
 	var caster := u.key == "healer" or u.key == "maga"
-	var careful := not caster or Knowledge.has_yellow(i, "safe_cast")
+	var careful := not caster or Knowledge.has(i, "safe_cast")
 	# Cautela: larga o cast (sem gastar a recarga) se um vermelho aparecer embaixo
-	var rot_card: bool = Knowledge.deck(i)["purple"] == "dps" and (u.key == "assassina" or u.key == "maga")
+	var rot_card: bool = Knowledge.has(i, "dps") and (u.key == "assassina" or u.key == "maga")
 	if careful and u.channel_t > 0.0 and u.channel_slot >= 0:
 		# o golpe forte da Rotação também é largado se uma mecânica de juntar começar
 		var must_move: bool = rot_card and u.channel_slot == 2 and not stacks.is_empty()
@@ -818,7 +935,8 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		goal = units[ctrl].position + Vector3(cos(ang2), 0, sin(ang2)) * 1.1
 		text = "Reunindo"
 	elif order == "spread":
-		goal = SPREAD_POS[i]
+		# com a arena desabando, "espalhar" manda cada um pra própria torre
+		goal = TOWER_POS[i] if (void_on or void_warn) else SPREAD_POS[i]
 		text = "Espalhando"
 	else:
 		goal = ATK_POS[i]
@@ -883,10 +1001,27 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		elif _in_range(u):
 			u.face(BOSS_POINT - u.position)
 
-	# Instinto (carta amarela): só reage a pouca vida, então não fica gastando cura à toa.
-	if Knowledge.has_yellow(i, "instinct") and u.key == "healer":
+	if u.key == "healer" and not (careful and in_danger):
+		# Escudo de Emergência: só no cast do ESMAGAR, e a tempo de sair antes do golpe
+		if Knowledge.has(i, "eshield") and buster != null and u.skill_cd[4] <= 0.0 and buster["t"] > 1.15 \
+				and buster["target"].alive and buster["target"].shield_hp <= 0.0:
+			if use_skill(u, 4, true, buster["target"]):
+				u.set_action("Escudo no " + buster["target"].unit_name, 1)
+				return
+		# Reviver Automático: só quando parar 1,5 s não coloca ela em risco
+		if Knowledge.has(i, "revive") and u.skill_cd[2] <= 0.0 and stacks.is_empty() and spreads.is_empty() \
+				and buster == null and not mechanic_active() and hazards.is_empty() and not void_on:
+			for o in units:
+				if not o.alive:
+					if use_skill(u, 2, true):
+						u.set_action("Revivendo " + o.unit_name, 1)
+						return
+					break
+
+	# Instinto: só reage a pouca vida, então não fica gastando cura à toa.
+	if Knowledge.has(i, "instinct") and u.key == "healer":
 		# no Dodge Time a explosão do fim tira 70% da vida: ele enche todo mundo antes
-		var topping: bool = DODGE_PHASES.has(phase)
+		var topping: bool = DODGE_PHASES.has(phase) or finale_state == 1
 		var low: float = 0.95 if topping else Knowledge.LOW_HP
 		# primeiro ele mesmo: healer morto não cura ninguém
 		var ht: Unit = u if u.hp / u.max_hp < Knowledge.LOW_HP else _heal_target()
@@ -908,7 +1043,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		elif heal_focus != null and u.skill_cd[1] <= 0.0:
 			use_skill(u, 1, true, heal_focus)
 
-	if u.key == "tank" and Knowledge.has_yellow(i, "provoke") and target != null and target != u and u.skill_cd[3] <= 0.0:
+	if u.key == "tank" and Knowledge.has(i, "provoke") and target != null and target != u and u.skill_cd[3] <= 0.0:
 		use_skill(u, 3, true)
 
 	# Rotação: o golpe forte sai quando não tem nada pra resolver e ele já está no lugar
@@ -921,7 +1056,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	# Auto-ataque conservador: bem mais fraco que o jogador no controle.
 	if _in_range(u):
 		# carta roxa Rotação: a IA usa a rotação que você mostrou jogando bem com esse herói
-		var rate: float = ROTATION_DPS[u.key] if Knowledge.deck(i)["purple"] == "dps" else u.ai_dps
+		var rate: float = ROTATION_DPS[u.key] if Knowledge.has(i, "dps") else u.ai_dps
 		_damage_boss(u, rate * delta, false, false)
 		u.dmg_acc += rate * delta * _dmg_mult()
 		u.dmg_timer += delta
@@ -946,49 +1081,58 @@ func _shield_fx(u: Unit) -> void:
 		fx.name = "ShieldFx"
 	fx.visible = true
 	# a bolha encolhe conforme o escudo é gasto
-	var k := clampf(u.shield_hp / (u.max_hp * SHIELD_RATIO), 0.0, 1.0)
+	var k := clampf(u.shield_hp / (u.max_hp * SHIELD_RATIO), 0.3, 1.0)
 	fx.scale = Vector3.ONE * lerpf(0.75, 1.0, k)
 
 
-## Devolve [posição, texto] da primeira carta que se aplica agora, ou null.
+## O que as cartas de mecânica mandam o herói fazer agora: [posição, texto], ou null.
+## Cada carta é uma ação única; sem a carta, o herói não sabe resolver aquela mecânica.
 func _card_plan(u: Unit):
-	var d := Knowledge.deck(u.idx)
+	var i := u.idx
+	# Guarda: aperta a Mitigação no fim do cast do Esmagar, como você faria (não depende de onde ele está)
+	if u.key == "tank" and Knowledge.has(i, "mitigate") and buster != null and buster["target"] == u and buster["t"] <= 1.2:
+		use_skill(u, 1, true)
+	# Quebra-Elo: os dois presos correm em sentidos opostos até a corrente arrebentar
+	if link != null and (link["a"] == u or link["b"] == u) and Knowledge.has(i, "link"):
+		var first: bool = link["a"] == u
+		var lx := clampf(u.position.x, -3.5, 3.5)
+		if cleave_side != 0:
+			lx = -cleave_side * 3.5
+		return [Vector3(lx, 0, -6.5 if first else 6.5), "Quebrando o elo"]
+	if Knowledge.has(i, "final"):
+		# a mão dela subiu: sai daquele lado antes da marca aparecer no chão
+		if cleave_side != 0 and u.position.x * cleave_side > -1.4:
+			return [Vector3(-cleave_side * 3.2, 0, u.position.z), "→ Lado seguro"]
+		if void_warn or void_on:
+			return [TOWER_POS[i], "→ Torre"]
 	# Dispersão: marcado de roxo vai pro próprio canto. Sem dupla pra formar, todo mundo vai.
-	if not spreads.is_empty() and Knowledge.has_yellow(u.idx, "spread") and (_spread_on(u) or stacks.is_empty()):
-		return [CORNERS[u.idx], "→ Canto"]
-	if d["purple"] == "mark":
-		var r = null
-		if zones_active:
-			r = _act(u, "zone_opp")
-		elif phase == "cata" and u.element >= 0:
-			r = _act(u, "partner")
-		elif phase == "cata":
-			r = _act(u, "shelter")
-		if r != null:
-			return r
-	for w in d["white"]:
-		if w["t"] == "" or w["a"] == "" or not _trigger_on(u, w["t"]):
-			continue
-		if w["a"] == "mitigate":
-			# carta que usa habilidade em vez de andar: aperta no fim do cast, como você faria
-			if u.key == "tank" and buster != null and buster["target"] == u and buster["t"] <= 1.2:
-				use_skill(u, 1, true)
-			continue
-		var r2 = _act(u, w["a"])
-		if r2 != null:
-			return r2
+	if not spreads.is_empty() and Knowledge.has(i, "spread") and (_spread_on(u) or stacks.is_empty()):
+		return [CORNERS[i], "→ Canto"]
+	# a Marca Elemental (roxa) vale pelas três brancas de elemento
+	var mark := Knowledge.has(i, "mark")
+	if zones_active and (mark or Knowledge.has(i, "zone")):
+		var rz = _act(u, "zone_opp")
+		if rz != null:
+			return rz
+	if phase == "cata":
+		if u.element >= 0 and (mark or Knowledge.has(i, "partner")):
+			var rp = _act(u, "partner")
+			if rp != null:
+				return rp
+		if mark or Knowledge.has(i, "shelter"):
+			var rs = _act(u, "shelter")
+			if rs != null:
+				return rs
+	if not stacks.is_empty():
+		if stack_need == 4 and Knowledge.has(i, "stack"):
+			var r4 = _act(u, "to_marked")
+			if r4 != null:
+				return r4
+		if stack_need == 2 and Knowledge.has(i, "pair"):
+			var r2 = _pair_plan(u)
+			if r2 != null:
+				return r2
 	return null
-
-
-func _trigger_on(u: Unit, t: String) -> bool:
-	match t:
-		"stack": return not stacks.is_empty() and stack_need == 4
-		"stack2": return not stacks.is_empty() and stack_need == 2
-		"buster": return buster != null
-		"got_element": return zones_active and u.element >= 0
-		"zones_done": return phase == "cata" and u.element >= 0
-		"cata": return phase == "cata"
-	return false
 
 
 func _act(u: Unit, a: String):
@@ -1124,6 +1268,8 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 			var st: Unit = target if target != null else u
 			if not by_ai and sel >= 0 and units[sel].alive:
 				st = units[sel]
+			if forced != null:
+				st = forced
 			u.cast_target = st
 		"Reviver":
 			var dead: Unit = null
@@ -1137,8 +1283,12 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 			u.cast_target = dead
 
 	if sk.has("cast"):
-		u.channel_t = sk["cast"]
-		u.channel_total = sk["cast"]
+		var cast: float = sk["cast"]
+		# Golpe Lapidado: a Maga conjura o golpe forte mais rápido
+		if slot == 2 and u.key == "maga" and Knowledge.has(u.idx, "burst"):
+			cast -= 0.7
+		u.channel_t = cast
+		u.channel_total = cast
 		u.channel_slot = slot
 		u.cast_ai = by_ai
 		if u.cast_target != null:
@@ -1189,7 +1339,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					top = maxf(top, o.enmity)
 			# recuperou o aggro na mão: a party aprende a carta que faz isso sozinha
 			if not by_ai and u.key == "tank" and target != null and target != u:
-				learn_yellow("provoke")
+				_master("provoke")
 			u.enmity = maxf(u.enmity, top) + PROVOKE_BONUS
 			_burst(u.position, Color(1.0, 0.35, 0.6), 3.2)
 			_beam(u.position, Vector3(0, 5.0, -11.5), Color(1.0, 0.35, 0.6, 0.95), 0.45)
@@ -1203,6 +1353,9 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			if ht == null:
 				return
 			var amount := HEAL_AI if by_ai else HEAL_PLAYER
+			# socorreu na mão alguém com pouca vida: conta pra maestria do Instinto
+			if not by_ai and ht.hp / ht.max_hp < Knowledge.LOW_HP:
+				_master("heal")
 			ht.hp = minf(ht.max_hp, ht.hp + amount)
 			u.enmity += amount * HEAL_ENMITY
 			_beam(u.position, ht.position, Color(0.5, 1.0, 0.65, 0.95), 0.3)
@@ -1214,6 +1367,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				return
 			dead.revive(0.5)
 			dead.weak_t = WEAK_TIME  # voltou no susto: metade do dano por um tempo
+			_spawn_cards(dead)
 			_beam(u.position, dead.position, Color(1.0, 0.95, 0.6, 0.95), 0.4)
 			_burst(dead.position, Color(1.0, 0.95, 0.6), 3.0)
 			hud.toast(dead.unit_name + " voltou", 2.0)
@@ -1228,7 +1382,10 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_attack_fx(u, big)
 			if sk.has("cast") and sk["cast"] >= LOCKED_CAST:
 				_burst(Vector3(0, 4, -11.5), u.color.lightened(0.3), 6.0)
-			_damage_boss(u, sk["dmg"], true, big)
+			var amount: float = sk["dmg"]
+			if slot == 2 and Knowledge.has(u.idx, "burst"):
+				amount *= 1.3 if u.key == "assassina" else 1.15
+			_damage_boss(u, amount, true, big)
 
 
 # ---------------------------------------------------------------- Limit Break
@@ -1249,7 +1406,7 @@ func use_lb() -> void:
 func _resolve_lb(u: Unit) -> void:
 	lb = 0.0
 	hud.flash(Color(u.color.r, u.color.g, u.color.b, 0.6))
-	hud.toast("LIMIT BREAK", 2.0)
+	hud.limit_cut(u)
 	_burst(u.position, u.color.lightened(0.4), 7.0)
 	match u.key:
 		"tank":
@@ -1261,6 +1418,7 @@ func _resolve_lb(u: Unit) -> void:
 			for o in units:
 				if not o.alive:
 					o.revive(0.6)  # sem Fraqueza: é a vantagem sobre o Reviver comum
+					_spawn_cards(o)
 					_beam(u.position, o.position, Color(1.0, 0.95, 0.6, 0.95), 0.6)
 					_burst(o.position, Color(1.0, 0.95, 0.6), 3.0)
 		_:
@@ -1301,6 +1459,14 @@ func _beam(from: Vector3, to: Vector3, col: Color, time: float) -> void:
 func _add_hazard(h: Dictionary) -> void:
 	h["total"] = h["total"] / haste
 	h["t"] = h["total"]
+	if h["shape"] == "void":
+		# aviso do desabamento: perigo em tudo que não é quadrado. O desenho é do chão (shader).
+		h["node"] = Node3D.new()
+		fx_root.add_child(h["node"])
+		h["fill"] = h["node"]
+		h["inside"] = []
+		hazards.append(h)
+		return
 	var node := Node3D.new()
 	fx_root.add_child(node)
 	var soft := Fx.mat(Color(DANGER.r, DANGER.g, DANGER.b, 0.2), 0.0, true)
@@ -1360,15 +1526,20 @@ func _hit_test(h: Dictionary, p: Vector3, margin: float) -> bool:
 			return along <= h["half_l"] + margin and side <= h["half_w"] + margin
 		"donut":
 			return Vector2(p.x, p.z).length() > h["r"] - margin
+		"void":
+			return not _in_square(p, -margin)
 	return false
 
 
 ## Tem perigo em p? Com `known`, só conta os ataques pros quais a unidade tem carta.
 func _danger_at(p: Vector3, u: Unit, known: bool, margin: float) -> bool:
 	for h in hazards:
-		if known and not Knowledge.has_yellow(u.idx, h["card"]):
+		# quem tem o Protocolo Final já sabe pra qual quadrado ir: não foge pro mais perto
+		if h["shape"] == "void" and Knowledge.has(u.idx, "final"):
 			continue
-		if not known and Knowledge.has_yellow(u.idx, h["card"]):
+		if known and not Knowledge.has(u.idx, h["card"]):
+			continue
+		if not known and Knowledge.has(u.idx, h["card"]):
 			continue
 		if _hit_test(h, p, margin):
 			return true
@@ -1417,15 +1588,20 @@ func _tick_hazards(delta: float) -> void:
 		var player := units[ctrl]
 		var player_hit := false
 		for u in units:
-			if u.alive and u.invuln <= 0.0 and _hit_test(h, u.position, 0.0):
+			if h["dmg"] > 0.0 and u.alive and u.invuln <= 0.0 and _hit_test(h, u.position, 0.0):
 				if u == player:
 					player_hit = true
 				hurt(u, h["dmg"], h["why"])
+		# golpes de meia arena: passar ileso pelos dois, lendo a mão, conta pra maestria
+		if h.has("cleave"):
+			if player_hit:
+				cleave_fail = true
+			if h["cleave"] == "last" and not cleave_fail and player.alive:
+				_master("final")
 		# desviou na mão de um ataque que ia te pegar: a carta daquele desvio é sua
 		if player.alive and not player_hit and h["inside"].has(player.idx):
-			learn_yellow(h["card"])
 			if player.key == "healer" or player.key == "maga":
-				learn_yellow("safe_cast")
+				_master("cast")
 
 
 func _hazard_boom(h: Dictionary) -> void:
@@ -1482,7 +1658,6 @@ func _start_stacks(total: float, need: int, exclude: Array = [], dmg := -1.0) ->
 				row.append(Fx.inst(arm, _arrow_mesh(), mats[j]))
 			arrows.append(row)
 		stacks.append({"target": pool[c], "r": r, "node": node, "fill": fill, "mats": mats, "arrows": arrows})
-	learn_trigger("stack" if need == 4 else "stack2")
 	_tick_stacks(0.0)
 
 
@@ -1569,7 +1744,7 @@ func _tick_stacks(delta: float) -> void:
 	for u in deaths:
 		kill(u, deaths[u])
 	if player_ok and player.alive:
-		learn_action("to_marked" if stack_need == 4 else "pair_up")
+		_master("stack" if stack_need == 4 else "pair")
 	for u in units:
 		u.hold_pos = null
 
@@ -1707,7 +1882,7 @@ func _tick_spreads(delta: float) -> void:
 	for h in hits:
 		hurt(h[0], SPREAD_DMG, h[1])
 	if player_clean:
-		learn_yellow("spread")
+		_master("spread")
 	if stacks.is_empty():
 		for u in units:
 			u.hold_pos = null
@@ -1737,7 +1912,6 @@ func _start_buster(total: float) -> void:
 	Fx.inst(node, Fx.torus(1.5, 1.56), Fx.mat(Color(DANGER.r, DANGER.g, DANGER.b, 0.5), 2.0, true))
 	buster = {"target": t, "t": total, "total": total, "node": node}
 	boss.six_seven = true
-	learn_trigger("buster")
 
 
 func _tick_buster(delta: float) -> void:
@@ -1761,7 +1935,7 @@ func _tick_buster(delta: float) -> void:
 	_burst(t.position, DANGER, 3.0)
 	hurt(t, BUSTER_DMG, "tomou o Esmagar sem Mitigação" if not mitigated else "não aguentou o Esmagar")
 	if mitigated and t.alive and t == units[ctrl]:
-		learn_action("mitigate")
+		_master("buster")
 
 
 func _alive_shuffled() -> Array:
@@ -1801,6 +1975,181 @@ func _line_at(u: Unit, half_w: float, total: float, dmg: float, why: String) -> 
 	var t2 := -b + sqrt(disc)
 	_add_hazard({"shape": "rect", "pos": from + dir * ((t1 + t2) * 0.5), "dir": dir, "half_l": (t2 - t1) * 0.5, "half_w": half_w,
 		"total": total, "dmg": dmg, "card": "dodge", "why": why})
+
+
+# ---------------------------------------------------------------- grande final da MINI-CHAN
+
+func _raidwide(ratio: float, why: String) -> void:
+	hud.flash(Color(1.0, 0.2, 0.35) * Color(1, 1, 1, 0.5))
+	_burst(Vector3(0, 0.2, 0), DANGER, ARENA_R)
+	for u in units:
+		if u.alive:
+			hurt(u, u.max_hp * ratio, why)
+
+
+func _in_square(p: Vector3, margin := 0.0) -> bool:
+	for c in SQUARES:
+		if absf(p.x - c.x) <= SQ_HALF + margin and absf(p.z - c.z) <= SQ_HALF + margin:
+			return true
+	return false
+
+
+## warn = os quadrados aparecem marcados no chão · on = o resto da arena virou vazio.
+func _set_void(warn: bool, on: bool) -> void:
+	void_warn = warn
+	void_on = on
+	floor_mat.set_shader_parameter("void_warn", 1.0 if warn else 0.0)
+	floor_mat.set_shader_parameter("void_on", 1.0 if on else 0.0)
+	if on:
+		hud.flash(Color(0.5, 0.3, 1.0) * Color(1, 1, 1, 0.4))
+
+
+## Elo Perdido: dois heróis presos por uma corrente. Dói enquanto existir;
+## pra quebrar, os dois se afastam até ela esticar demais.
+func _start_link() -> void:
+	_clear_link()
+	var pool := _alive_shuffled()
+	if pool.size() < 2:
+		return
+	var node := Fx.inst(fx_root, BoxMesh.new(), Fx.mat(LINK_COL, 3.0, true))
+	link = {"a": pool[0], "b": pool[1], "node": node, "t": 0.0, "tick": 0.0}
+	_tick_link(0.0)
+
+
+func _clear_link() -> void:
+	if link != null:
+		link["node"].queue_free()
+		link = null
+
+
+func _tick_link(delta: float) -> void:
+	if link == null:
+		return
+	var a: Unit = link["a"]
+	var b: Unit = link["b"]
+	if not a.alive or not b.alive:
+		_clear_link()
+		return
+	link["t"] += delta
+	link["tick"] += delta
+	var pa := a.position + Vector3(0, 1.0, 0)
+	var pb := b.position + Vector3(0, 1.0, 0)
+	var dist := pa.distance_to(pb)
+	var node: MeshInstance3D = link["node"]
+	node.position = (pa + pb) * 0.5
+	if dist > 0.05:
+		node.look_at(pb, Vector3.UP)
+	# quanto mais esticada, mais fina e clara: dá pra ver que está quase arrebentando
+	var k := clampf(dist / LINK_BREAK, 0.0, 1.0)
+	var thick := lerpf(0.34, 0.07, k)
+	node.scale = Vector3(thick, thick, maxf(dist, 0.1))
+	(node.material_override as StandardMaterial3D).albedo_color = LINK_COL.lerp(Color.WHITE, k * k)
+	if dist >= LINK_BREAK or link["t"] >= LINK_MAX:
+		var broke := dist >= LINK_BREAK
+		_burst(pa, LINK_COL, 2.0)
+		_burst(pb, LINK_COL, 2.0)
+		_clear_link()
+		if broke and (a.controlled or b.controlled):
+			_master("link")
+		return
+	if link["tick"] >= LINK_TICK:
+		link["tick"] = 0.0
+		hurt(a, LINK_DMG, "ficou preso no Elo Perdido")
+		if link != null and b.alive:
+			hurt(b, LINK_DMG, "ficou preso no Elo Perdido")
+
+
+## Golpes de meia arena. O aviso de verdade é a mão: a que sobe e brilha é o lado que vai apanhar.
+func _tick_cleaves(delta: float) -> void:
+	if cleaves.is_empty():
+		if cleave_side != 0:
+			cleave_side = 0
+			boss.cleave_hand = 0
+		return
+	for c in cleaves:
+		c["t"] -= delta
+	var c0: Dictionary = cleaves[0]
+	if c0["t"] <= CLEAVE_TELL:
+		cleave_side = c0["side"]
+		boss.cleave_hand = c0["side"]
+	if c0["t"] <= 0.5 and not c0["shown"]:
+		c0["shown"] = true
+		# a marca no chão só aparece agora: quem esperou por ela quase não tem tempo
+		_add_hazard({"shape": "rect", "pos": Vector3(c0["side"] * ARENA_R * 0.5, 0, 0), "dir": Vector3(0, 0, 1),
+			"half_l": ARENA_R, "half_w": ARENA_R * 0.5, "total": maxf(c0["t"], 0.05) * haste, "dmg": CLEAVE_DMG, "card": "dodge",
+			"why": "tomou o golpe de meia arena", "cleave": "last" if c0["last"] else "first"})
+	if c0["t"] <= 0.0:
+		cleaves.pop_front()
+		cleave_side = 0
+		boss.cleave_hand = 0
+
+
+## Uma torre por herói vivo. Cada uma precisa de exatamente uma pessoa dentro quando carregar.
+func _start_towers(total: float) -> void:
+	_clear_towers()
+	tower_t = total
+	tower_total = total
+	for u in units:
+		if not u.alive:
+			continue
+		var node := Node3D.new()
+		node.position = TOWER_POS[u.idx] + Vector3(0, 0.05, 0)
+		fx_root.add_child(node)
+		Fx.inst(node, Fx.torus(TOWER_R - 0.1, TOWER_R), Fx.mat(TOWER_COL, 3.0, true))
+		Fx.inst(node, Fx.disc(TOWER_R), Fx.mat(Color(TOWER_COL.r, TOWER_COL.g, TOWER_COL.b, 0.14), 0.0, true))
+		var fill := Fx.inst(node, Fx.disc(TOWER_R), Fx.mat(Color(TOWER_COL.r, TOWER_COL.g, TOWER_COL.b, 0.45), 0.0, true), Vector3(0, 0.01, 0))
+		# coluna de luz: de longe dá pra ver onde ficam as torres
+		var beam := Fx.inst(node, Fx.cyl(TOWER_R * 0.9, TOWER_R * 0.9, 5.0), Fx.mat(Color(TOWER_COL.r, TOWER_COL.g, TOWER_COL.b, 0.08), 0.6, true), Vector3(0, 2.5, 0))
+		beam.name = "Beam"
+		towers.append({"pos": TOWER_POS[u.idx], "node": node, "fill": fill})
+
+
+func _clear_towers() -> void:
+	for tw in towers:
+		tw["node"].queue_free()
+	towers.clear()
+
+
+func _tick_towers(delta: float) -> void:
+	if towers.is_empty():
+		return
+	tower_t -= delta
+	var f := clampf(1.0 - tower_t / tower_total, 0.01, 1.0)
+	for tw in towers:
+		tw["fill"].scale = Vector3(f, 1, f)
+	if tower_t > 0.0:
+		return
+	var player := units[ctrl]
+	var empty := 0
+	var crowded: Array = []
+	var soakers: Array = []
+	for tw in towers:
+		var inside: Array = []
+		for u in units:
+			if u.alive and u.position.distance_to(tw["pos"]) <= TOWER_R:
+				inside.append(u)
+		if inside.is_empty():
+			empty += 1
+			_burst(tw["pos"], DANGER, 4.0)
+		elif inside.size() == 1:
+			soakers.append(inside[0])
+			_burst(tw["pos"], TOWER_COL.lightened(0.3), 2.2)
+		else:
+			crowded.append_array(inside)
+			_burst(tw["pos"], STACK_COL, 2.6)
+	_clear_towers()
+	for u in soakers:
+		hurt(u, 10.0, "absorveu a torre")
+	for u in crowded:
+		hurt(u, 60.0, "torre com gente demais")
+	# cada torre vazia explode na party inteira
+	if empty > 0:
+		hud.flash(Color(1.0, 0.2, 0.35) * Color(1, 1, 1, 0.5))
+		for u in units:
+			if u.alive:
+				hurt(u, u.max_hp * 0.45 * empty, "torre vazia explodiu")
+	if soakers.has(player) and player.alive:
+		_master("final")
 
 
 # ---------------------------------------------------------------- Contagem (golpes numerados)
@@ -1873,8 +2222,14 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 	var dmg := amount * _dmg_mult()
 	if u.weak_t > 0.0:
 		dmg *= 0.5
+	if Knowledge.has(u.idx, "sharpen"):
+		dmg *= 1.08
+	if Knowledge.has(u.idx, "overdrive"):
+		dmg *= 1.2
+	if boss_hp / boss_max < 0.3 and Knowledge.has(u.idx, "executor"):
+		dmg *= 1.25
 	boss_hp -= dmg
-	lb = minf(1.0, lb + dmg / (boss_max * LB_NEED))
+	lb = minf(1.0, lb + dmg / (boss_max * LB_NEED) * (1.5 if Knowledge.has(u.idx, "spark") else 1.0))
 	u.dmg_total += dmg
 	u.dmg_bucket += dmg
 	u.enmity += dmg * (TANK_STANCE if u.key == "tank" else 1.0)
@@ -1924,6 +2279,11 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 		return
 	if u.guard_t > 0.0:
 		dmg *= MITIGATION
+	if Knowledge.has(u.idx, "plate"):
+		dmg *= 0.9
+	if Knowledge.has(u.idx, "overdrive"):
+		dmg *= 1.15
+	dmg_taken += dmg
 	if u.shield_hp > 0.0:
 		var soak := minf(dmg, u.shield_hp)
 		u.shield_hp -= soak
@@ -1936,9 +2296,12 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 	hit_count[reason] = hit_count.get(reason, 0) + 1
 	u.flash_hit(dmg / u.max_hp)
 	_popup(int(dmg), DANGER.lightened(0.3), 72, u.position + Vector3(0, 2.6, 0), "-")
-	# alguém ficou por um fio: a party aprende a reagir a pouca vida
-	if u.hp > 0.0 and u.hp / u.max_hp < 0.35:
-		learn_yellow("instinct")
+	# Poção (item): uma vez por luta, segura a queda quando a vida passa de 30%
+	if u.hp > 0.0 and u.hp / u.max_hp < 0.3 and not u.potion_used and Knowledge.has(u.idx, "potion"):
+		u.potion_used = true
+		u.hp = minf(u.max_hp, u.hp + 50.0)
+		_burst(u.position, Color(0.4, 1.0, 0.6), 1.6)
+		_popup(50, Color(0.5, 1.0, 0.65), 56, u.position + Vector3(0, 3.2, 0), "+")
 	if u.hp <= 0.0:
 		kill(u, reason)
 
@@ -1950,8 +2313,16 @@ func kill(u: Unit, reason: String, force := false) -> void:
 	if u.immortal_t > 0.0 and not force:
 		_burst(u.position, Color(1.0, 0.9, 0.5), 1.8)
 		return
+	# Fênix (roxa): uma vez por luta, volta em vez de morrer. A Fúria não perdoa.
+	if not force and not u.phoenix_used and Knowledge.has(u.idx, "phoenix"):
+		u.phoenix_used = true
+		u.hp = u.max_hp * 0.5
+		_burst(u.position, Color(1.0, 0.6, 0.2), 3.0)
+		_popup(int(u.hp), Color(1.0, 0.75, 0.3), 64, u.position + Vector3(0, 3.0, 0), "+")
+		return
 	if u.controlled and not fury:
 		hud.flash(Color(1.0, 0.1, 0.2) * Color(1, 1, 1, 0.6))
+	deaths += 1
 	u.die()
 	_sfx(SFX_DEATH, -4.0)
 	log_lines.append(u.unit_name + ": " + reason)
@@ -1981,39 +2352,62 @@ func _end(victory: bool) -> void:
 		return
 	ended = true
 	won = victory
-	hud.show_end(victory, log_lines)
+	var rank := -1
+	var prize := {}
+	if victory:
+		rank = Knowledge.rank_for(_score())
+		if not autoplay:
+			prize = Knowledge.reward(Knowledge.boss, rank)
+	hud.show_end(victory, log_lines, rank, prize)
 
 
-func learn_trigger(id: String) -> void:
-	if Knowledge.triggers_known.has(id) or autoplay:
+## Nota de 0 a 100 da vitória: rapidez (40), dano tomado (40) e mortes (20).
+func _score() -> float:
+	# matar com 45% do tempo sobrando já vale a nota cheia de rapidez
+	var speed := clampf((1.0 - fight_time / enrage) / 0.45, 0.0, 1.0) * 40.0
+	var party_hp := 0.0
+	for u in units:
+		party_hp += u.max_hp
+	# tomar o equivalente a três vezes a vida da party inteira zera a nota de dano
+	var clean := clampf(1.0 - dmg_taken / (party_hp * 3.0), 0.0, 1.0) * 40.0
+	var alive_pts := maxf(0.0, 20.0 - deaths * 7.0)
+	return speed + clean + alive_pts
+
+
+## Maestria: você resolveu a mecânica certo, na mão. Na terceira vez a carta é liberada
+## e entra no baralho de quem tiver slot livre, então a IA já sai usando.
+func _master(key: String) -> void:
+	if autoplay or Knowledge.mastery_of(key) >= Knowledge.MASTERY_NEED:
 		return
-	Knowledge.triggers_known[id] = true
-	hud.toast("Nova peça: QUANDO " + Knowledge.TRIGGERS[id], 3.0)
-
-
-func learn_action(id: String) -> void:
-	if Knowledge.actions_known.has(id) or autoplay:
-		return
-	Knowledge.actions_known[id] = true
-	hud.toast("Nova peça: " + Knowledge.ACTIONS[id].to_upper(), 3.0)
-
-
-func learn_yellow(id: String) -> void:
-	if Knowledge.yellow_known.has(id) or autoplay:
-		return
-	Knowledge.yellow_known[id] = true
-	# você desviou, a party viu: todo mundo com slot livre já sai usando
-	for i in 4:
-		if not Knowledge.has_yellow(i, id) and Knowledge.yellow_for(UNIT_DEFS[i]["key"]).has(id):
-			Knowledge.toggle_yellow(i, id)
-	hud.toast("A party aprendeu: " + Knowledge.YELLOW[id], 3.0)
+	var card: String = Knowledge.MASTERY[key]["card"]
+	if Knowledge.add_mastery(key):
+		for i in 4:
+			Knowledge.equip(i, card)
+		Knowledge.save()
+		hud.card_unlocked(card)
+	else:
+		hud.mastery_tick(key)
 
 
 # ---------------------------------------------------------------- boss
 
 func _next_step() -> void:
-	step = (step + 1) % steps.size()
-	var s: Dictionary = steps[step].duplicate()
+	# o grande final entra numa virada de passo, perto do fim, e nunca no meio do Dodge Time
+	if finale_state == 0 and boss_def.get("finale", false) and not DODGE_PHASES.has(phase) \
+			and (fight_time >= enrage * FINALE_AT or boss_hp / boss_max <= FINALE_HP):
+		finale_state = 1
+		fin_i = -1
+		hud.shout("BORA BISCOITAR!!!")
+	var s: Dictionary = {}
+	if finale_state == 1:
+		fin_i += 1
+		if fin_i < STEPS_FINALE.size():
+			s = STEPS_FINALE[fin_i].duplicate()
+		else:
+			finale_state = 2
+	if s.is_empty():
+		step = (step + 1) % steps.size()
+		s = steps[step].duplicate()
 	for key in ["dur", "volley_at"]:
 		if s.has(key):
 			s[key] = s[key] / haste
@@ -2035,6 +2429,28 @@ func _next_step() -> void:
 			cast_name = "Esmagar"
 			boss.casting = true
 			_start_buster(s["dur"])
+		"raid":
+			cast_name = s.get("name", "Explosão")
+			boss.casting = true
+			boss.rage_t = s["dur"]
+			if s.get("restore", false):
+				_set_void(false, false)
+		"linkcleave":
+			cast_name = "Elo Perdido"
+			_start_link()
+			var first := 1 if randf() < 0.5 else -1
+			cleave_fail = false
+			cleaves = [{"side": first, "t": 2.2, "shown": false, "last": false}, {"side": -first, "t": 4.5, "shown": false, "last": true}]
+		"collapse":
+			cast_name = "Colapso"
+			boss.casting = true
+			_set_void(true, false)
+			_add_hazard({"shape": "void", "pos": Vector3.ZERO, "total": s["dur"], "dmg": 0.0, "card": "dodge", "why": ""})
+		"towers":
+			cast_name = "Torres"
+			_start_towers(s["dur"])
+		"window":
+			vulnerable = true
 		"count":
 			cast_name = "Contagem"
 			boss.casting = true
@@ -2090,8 +2506,7 @@ func _next_step() -> void:
 			shield = true
 			boss.set_shield(true)
 			pair_timer = [0.0, 0.0]
-			learn_trigger("zones_done")
-			learn_trigger("cata")
+			pass
 		"burn":
 			vulnerable = not shield
 
@@ -2107,11 +2522,14 @@ func _tick_boss(delta: float) -> void:
 	match phase:
 		"blast":
 			# explosão no fim do Dodge Time: não dá pra desviar, é cura e escudo que seguram
-			hud.flash(Color(1.0, 0.2, 0.35) * Color(1, 1, 1, 0.5))
-			_burst(Vector3(0, 0.2, 0), DANGER, ARENA_R)
-			for u in units:
-				if u.alive:
-					hurt(u, u.max_hp * BLAST_RATIO, "Explosão do Dodge Time")
+			_raidwide(s.get("ratio", BLAST_RATIO), "Explosão do Dodge Time")
+		"raid":
+			_raidwide(s["ratio"], String(s.get("name", "Explosão")))
+		"collapse":
+			_raidwide(s["ratio"], "Colapso")
+			_set_void(false, true)
+		"window":
+			vulnerable = false
 		"zones": _resolve_zones()
 		"cata": _resolve_cataclysm()
 		"burn":
@@ -2140,7 +2558,6 @@ func _assign_elements() -> void:
 		Fx.inst(node, Fx.torus(ZONE_R - 0.08, ZONE_R), Fx.mat(col, 3.0, true))
 		zones.append({"pos": ZONE_POS[i], "el": e, "node": node})
 	zones_active = true
-	learn_trigger("got_element")
 
 
 func _resolve_zones() -> void:
@@ -2152,9 +2569,9 @@ func _resolve_zones() -> void:
 		for z in zones:
 			if z["pos"].distance_to(u.position) <= ZONE_R:
 				inside = z
-		if u == player and inside != null:
-			learn_action("zone_opp")
-			learn_action("zone_same")
+		# maestria só conta na zona certa: a do elemento oposto
+		if u == player and inside != null and inside["el"] == OPP[u.element]:
+			_master("zone")
 		if inside == null:
 			kill(u, "tinha " + EL_NAME[u.element] + " e ficou fora das zonas")
 		elif inside["el"] != OPP[u.element]:
@@ -2188,7 +2605,7 @@ func _tick_pairs(delta: float) -> void:
 		a.set_element(-1)
 		b.set_element(-1)
 		if a.controlled or b.controlled:
-			learn_action("partner")
+			_master("partner")
 		if pair == 0:
 			shield = false
 			boss.set_shield(false)
@@ -2225,7 +2642,7 @@ func _resolve_cataclysm() -> void:
 		elif u.position.distance_to(shelter_pos) > SHELTER_R:
 			kill(u, "Cataclismo fora do abrigo")
 		elif u == player:
-			learn_action("shelter")
+			_master("shelter")
 	var survivors := 0
 	for u in units:
 		if u.alive:
@@ -2233,9 +2650,8 @@ func _resolve_cataclysm() -> void:
 			u.set_element(-1)
 			u.hold_pos = null
 	# A carta roxa é prêmio por já ter resolvido a mecânica inteira com a party toda viva.
-	if survivors == 4 and not Knowledge.purple_known and not autoplay:
-		Knowledge.purple_known = true
-		hud.toast("Carta roxa: " + Knowledge.PURPLE_NAME, 3.5)
+	if survivors == 4 and not autoplay and Knowledge.grant("mark"):
+		hud.card_unlocked("mark")
 	if order == "hold":
 		order = "atk"
 	if shelter_node != null:

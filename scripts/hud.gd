@@ -40,7 +40,8 @@ var my_cast_label: Label
 var my_cast_bar: Control
 var my_cast_red: Control
 var flash_rect: ColorRect
-var deck_menu
+var menu_root: Control
+var menus
 var end_layer: Control
 var end_title_slab: PanelContainer
 var end_title: Label
@@ -90,11 +91,10 @@ func setup(game) -> void:
 	flash_rect.color = Color(1, 1, 1, 0)
 	root.add_child(flash_rect)
 
-	deck_menu = preload("res://ui/deck_menu.gd").new()
-	root.add_child(deck_menu)
-	deck_menu.setup(g)
-	deck_menu.fight_pressed.connect(g.start_fight)
-	deck_menu.visible = false
+	menu_root = root
+	menus = preload("res://ui/screens/menus.gd").new()
+	root.add_child(menus)
+	menus.setup(g)
 
 	_build_end(root)
 
@@ -452,8 +452,14 @@ func _process(delta: float) -> void:
 		(state_chip.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = state_col
 
 	var casting: bool = g.cast_name != ""
-	cast_row.modulate.a = 1.0 if casting else 0.0
-	if casting:
+	cast_row.modulate.a = 1.0 if casting or g.enrage_k > 0.0 else 0.0
+	if g.enrage_k > 0.0:
+		# a Fúria toma a barra de cast: quando encher, acabou
+		cast_label.text = "FÚRIA  %.1f" % maxf(0.0, g.enrage - g.fight_time)
+		cast_label.add_theme_color_override("font_color", UiStyle.DANGER)
+		UiStyle.set_bar(cast_bar, g.enrage_k)
+	elif casting:
+		cast_label.add_theme_color_override("font_color", UiStyle.YELLOW)
 		cast_label.text = "%s  %.1f" % [g.cast_name.to_upper(), maxf(0.0, g.phase_dur - g.phase_t)]
 		UiStyle.set_bar(cast_bar, g.phase_t / g.phase_dur)
 
@@ -536,11 +542,94 @@ func play_intro() -> float:
 
 
 func set_prep(on: bool) -> void:
-	deck_menu.visible = on
 	# com o menu aberto o HUD da luta some: nada competindo com as cartas
 	fight_ui.visible = not on
-	if on:
-		deck_menu.open()
+	if menus != null:
+		menus.set_open(on)
+
+
+## Carta nova liberada: a carta entra pela direita com a faixa "CARTA NOVA!".
+func card_unlocked(id: String) -> void:
+	var holder := _side_splash("CARTA NOVA!", Knowledge.KIND_COLOR[Knowledge.CARDS[id]["kind"]].darkened(0.35), 3.2)
+	var cv := CardView.make(id)
+	cv.position = Vector2(96, 96)
+	cv.scale = Vector2.ONE * 1.5
+	cv.rotation_degrees = 6
+	cv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(cv)
+	var nm := Ink.title(Knowledge.CARDS[id]["name"], 24)
+	nm.position = Vector2(20, 330)
+	nm.size = Vector2(300, 40)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	holder.add_child(nm)
+
+
+## Limit Break: o rosto de quem soltou entra pela direita.
+func limit_cut(u: Unit) -> void:
+	var holder := _side_splash("LIMIT BREAK!", u.color.darkened(0.25), 1.6)
+	var face := TextureRect.new()
+	face.texture = load("res://assets/portraits/%s_face.png" % u.key)
+	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	face.position = Vector2(60, 96)
+	face.size = Vector2(220, 220)
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(face)
+
+
+## Painel lateral que entra da direita, fica um pouco e sai: base dos avisos grandes da luta.
+func _side_splash(title_text: String, fill: Color, hold: float) -> Control:
+	var p := Ink.panel(fill, 27)
+	p.size = Vector2(340, 390)
+	p.position = Vector2(1300, 150)
+	p.rotation_degrees = 3
+	fight_ui.add_child(p)
+	var head := Ink.panel(Ink.CREAM, 13)
+	head.size = Vector2(330, 70)
+	head.position = Vector2(-30, -20)
+	head.rotation_degrees = -7
+	p.add_child(head)
+	var t := Ink.title(title_text, 38, Ink.OUT)
+	t.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	head.add_child(t)
+	var tw := p.create_tween()
+	tw.tween_property(p, "position:x", 910.0, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(hold)
+	tw.tween_property(p, "position:x", 1300.0, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(p.queue_free)
+	return p
+
+
+## Fala da boss em destaque: placa irregular com letra grande, por um instante.
+func shout(text: String) -> void:
+	var p := Ink.panel(Ink.CREAM, 17)
+	p.size = Vector2(620, 120)
+	p.position = Vector2(330, 150)
+	p.pivot_offset = p.size * 0.5
+	p.rotation_degrees = -4.0
+	fight_ui.add_child(p)
+	var l := Ink.title(text, 54, Ink.OUT)
+	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	p.add_child(l)
+	p.scale = Vector2.ONE * 0.4
+	var tw := p.create_tween()
+	tw.tween_property(p, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(1.5)
+	tw.tween_property(p, "modulate:a", 0.0, 0.3)
+	tw.tween_callback(p.queue_free)
+
+
+## Mais um acerto na mão: mostra o progresso da maestria daquela mecânica.
+func mastery_tick(key: String) -> void:
+	var n := Knowledge.mastery_of(key)
+	var pips := ""
+	for k in Knowledge.MASTERY_NEED:
+		pips += "◆" if k < n else "◇"
+	toast("%s  %s" % [Knowledge.MASTERY[key]["name"], pips], 2.6)
 
 
 # ---------------------------------------------------------------- fim
@@ -584,7 +673,7 @@ func _build_end(root: Control) -> void:
 	end_layer.visible = false
 
 
-func show_end(victory: bool, lines: Array) -> void:
+func show_end(victory: bool, lines: Array, rank := -1, prize := {}) -> void:
 	end_layer.visible = true
 	fight_ui.visible = false
 	var sb := end_title_slab.get_theme_stylebox("panel") as StyleBoxFlat
@@ -598,6 +687,14 @@ func show_end(victory: bool, lines: Array) -> void:
 	var head_line := "%s  ·  tentativa %d  ·  %d:%02d" % [g.boss_def["name"], Knowledge.attempts, t / 60, t % 60]
 	if not victory:
 		head_line += "  ·  boss em %d%%" % ceili(g.boss_hp / g.boss_max * 100.0)
+	if rank >= 0:
+		head_line += "\n\nRANKING  %s" % Knowledge.RANKS[rank]
+		if prize.has("coins"):
+			head_line += "   ·   +%d moedas" % prize["coins"]
+			if int(prize.get("ticket", 0)) > 0:
+				head_line += "   ·   +1 ticket roxo"
+			if String(prize.get("card", "")) != "":
+				head_line += "   ·   carta: " + Knowledge.CARDS[prize["card"]]["name"]
 	end_body.text = head_line
 	if lines.size() > 0:
 		end_body.text += "\n\n" + "\n".join(lines)
