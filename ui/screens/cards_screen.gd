@@ -71,6 +71,77 @@ class Tag extends Control:
 		draw_string(f, Vector2(0, size.y * 0.5 + (f.get_ascent(px) - f.get_descent(px)) * 0.5), text, HORIZONTAL_ALIGNMENT_CENTER, size.x, px, fg)
 
 
+## Uma peça do seletor de herói: fechada (k = 0) é só o rosto; aberta (k = 1) é a placa com nome e classe.
+class HeroTile extends BaseButton:
+	var hero := 0: set = _set_hero
+	var k := 0.0: set = _set_k
+	var dim := false: set = _set_dim
+	var slot := -1
+	var tw: Tween
+	var _face: TextureRect
+	var _hot := false
+
+	func _init() -> void:
+		focus_mode = Control.FOCUS_NONE
+		clip_contents = true
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		_face = TextureRect.new()
+		_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_face.position = Vector2(3, 3)
+		add_child(_face)
+		mouse_entered.connect(_hover.bind(true))
+		mouse_exited.connect(_hover.bind(false))
+
+	func _set_hero(v: int) -> void:
+		hero = v
+		_face.texture = load("res://assets/portraits/%s_face.png" % Knowledge.HEROES[v]["key"])
+
+	func _set_k(v: float) -> void:
+		k = v
+		size = Vector2(lerpf(38.0, 164.0, v), lerpf(48.0, 58.0, v))
+		pivot_offset = Vector2(minf(size.x, 50.0) * 0.5, size.y * 0.5)
+		_face.size = Vector2(lerpf(32.0, 44.0, minf(v * 4.0, 1.0)), size.y - 6.0)
+		_shade()
+		queue_redraw()
+
+	func _set_dim(v: bool) -> void:
+		dim = v
+		_shade()
+
+	func _shade() -> void:
+		# rosto fechado fica apagado (mais ainda a tank que está fora da party); aceso no hover e aberto
+		var rest := 0.28 if dim else 0.6
+		_face.modulate.a = 1.0 if (_hot or k > 0.05 or slot == 0) else rest
+
+	func _hover(on: bool) -> void:
+		_hot = on
+		_shade()
+		if k > 0.05 or (tw != null and tw.is_running()):
+			return
+		create_tween().tween_property(self, "scale", Vector2.ONE * (1.15 if on else 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	func _draw() -> void:
+		var h: Dictionary = Knowledge.HEROES[hero]
+		draw_rect(Rect2(Vector2.ZERO, size), Paper.INK)
+		var x0 := _face.size.x + 6.0
+		if size.x - x0 < 6.0:
+			return
+		draw_rect(Rect2(x0, 3, size.x - x0 - 3.0, size.y - 6.0), Paper.CREAM)
+		var f := Paper.display(0.0)
+		var nm := String(h["name"]).to_upper()
+		var px := 20
+		while px > 11 and f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > 96.0:
+			px -= 1
+		draw_string(f, Vector2(x0 + 8.0, 28), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px, Paper.INK)
+		var fb := Paper.body(700)
+		var rpx := 14
+		while rpx > 9 and fb.get_string_size(h["role"], HORIZONTAL_ALIGNMENT_LEFT, -1, rpx).x > 96.0:
+			rpx -= 1
+		draw_string(fb, Vector2(x0 + 8.0, 46), h["role"], HORIZONTAL_ALIGNMENT_LEFT, -1, rpx, Color("3e2413"))
+
+
 var hero := 0
 var _show_ready := true
 var _th: Dictionary = Paper.THEMES["tank"]
@@ -97,9 +168,11 @@ var _bubble: Control
 var _bubble_text: Label
 var _boss: Draw
 var _strip_bar: CutPanel
-var _chip: Draw
-var _chip_face: TextureRect
-var _faces: Array = []
+## Seletor: uma peça por herói (índice em Knowledge.HEROES), sempre na ordem de ORDER girada.
+var _tiles := {}
+## Fila do seletor (heróis, o atual na frente) e o lugar onde o antigo acabou de ser inserido.
+var _row: Array = []
+var _push_at := -1
 var _name_tag: Control
 var _name_panel: CutPanel
 var _name_label: Label
@@ -147,16 +220,35 @@ func _ready() -> void:
 func open(hero_idx: int, show_ready := true) -> void:
 	hero = clampi(hero_idx, 0, Knowledge.HEROES.size() - 1)
 	_show_ready = show_ready
+	# fila do seletor: o herói atual na frente, os outros na ordem padrão
+	_row = [hero]
+	for id in ORDER:
+		if id != hero:
+			_row.append(id)
+	for id in _tiles:
+		_tiles[id].slot = -1
 	refresh(true)
 
 
+## Seta: pra frente pega o primeiro rosto da fila; pra trás pega o último.
 func _switch(dir: int) -> void:
-	_go(ORDER[posmod(ORDER.find(hero) + dir, ORDER.size())], dir)
+	_go(_row[1] if dir > 0 else _row[_row.size() - 1], dir)
 
 
+## Troca de herói. O escolhido vai pra frente da fila e o antigo é inserido nela: no fim (o normal)
+## ou logo depois da frente quando se volta com a seta (pra seta de voltar desfazer a de avançar).
 func _go(to: int, dir: int) -> void:
 	if to == hero:
 		return
+	var old := hero
+	var back: bool = dir < 0 and _row[_row.size() - 1] == to
+	_row.erase(to)
+	_row.erase(old)
+	if back:
+		_row = [to, old] + _row
+	else:
+		_row = [to] + _row + [old]
+	_push_at = 1 if back else _row.size() - 1
 	hero = to
 	Knowledge.start_hero = hero
 	Knowledge.save()
@@ -183,9 +275,7 @@ func refresh(animate := false, dir := 0) -> void:
 	_item_tray.fill = _th["deep2"]
 	_strip_bar.fill = _th["deep2"]
 	_boss.queue_redraw()
-	_chip.queue_redraw()
-	_chip_face.texture = load("res://assets/portraits/%s_face.png" % h["key"])
-	_build_faces()
+	_layout_tiles(animate)
 	# arte: ilustração inteira se existir, senão o rosto numa moldura
 	var art := ""
 	for ext in ["webp", "png"]:
@@ -375,14 +465,13 @@ func _build() -> void:
 	var hn := _arrow(1)
 	_add(_top, hn, Vector2(854, 19), Vector2(40, 44))
 	hn.pressed.connect(func(): _switch(1))
-	_chip = _drawer(_top, _draw_chip, Vector2(512, 12), Vector2(164, 58))
-	_chip.pivot_offset = _chip.size * 0.5
-	_chip_face = TextureRect.new()
-	_chip_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_chip_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	_chip_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_add(_chip, _chip_face, Vector2(3, 3), Vector2(44, 52))
-	_chip.rotation = deg_to_rad(-2.0)
+	for id in ORDER:
+		var t := HeroTile.new()
+		t.hero = id
+		_top.add_child(t)
+		t.k = 0.0
+		t.pressed.connect(func(): _go(t.hero, 1))
+		_tiles[id] = t
 
 	# voltar
 	_drawer(_top, func(d: Draw): d.draw_colored_polygon(Paper.skew_rect(d.size, 12), Paper.INK), Vector2(1141, 21), Vector2(120, 40))
@@ -524,23 +613,6 @@ func _draw_boss(d: Draw) -> void:
 	d.draw_string(f, Vector2(x + w1 + gap, 27), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px, Paper.INK)
 
 
-func _draw_chip(d: Draw) -> void:
-	var h: Dictionary = Knowledge.HEROES[hero]
-	d.draw_rect(Rect2(Vector2.ZERO, d.size), Paper.INK)
-	d.draw_rect(Rect2(3, 3, d.size.x - 6, d.size.y - 6), Paper.CREAM)
-	d.draw_rect(Rect2(47, 3, 3, 52), Paper.INK)
-	var f := Paper.display(0.0)
-	var nm := String(h["name"]).to_upper()
-	var name_px := 20
-	while name_px > 11 and f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px).x > 96.0:
-		name_px -= 1
-	d.draw_string(f, Vector2(58, 28), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, name_px, Paper.INK)
-	var role_px := 14
-	while role_px > 9 and Paper.body(700).get_string_size(h["role"], HORIZONTAL_ALIGNMENT_LEFT, -1, role_px).x > 96.0:
-		role_px -= 1
-	d.draw_string(Paper.body(700), Vector2(58, 46), h["role"], HORIZONTAL_ALIGNMENT_LEFT, -1, role_px, Color("3e2413"))
-
-
 func _draw_hp(d: Draw) -> void:
 	var h: Dictionary = Knowledge.HEROES[hero]
 	var f := Paper.display()
@@ -564,27 +636,76 @@ func _draw_tile(d: Draw) -> void:
 
 # ---------------------------------------------------------------- seletor de herói
 
-func _build_faces() -> void:
-	for b in _faces:
-		_top.remove_child(b)
-		b.queue_free()
-	_faces.clear()
-	var xs := [684.0, 726.0, 768.0, 810.0]
-	var rots := [3.0, -3.0, 2.0, -2.0]
-	var k := 0
-	for i in ORDER:
-		if i == hero:
+## Lugares do seletor: 0 é a placa aberta (herói atual), 1 a 4 são os rostos, da esquerda pra direita.
+const TILE_X := [512.0, 684.0, 726.0, 768.0, 810.0]
+const TILE_ROT := [-2.0, 3.0, -3.0, 2.0, -2.0]
+
+
+func _tile_pos(slot: int) -> Vector2:
+	return Vector2(TILE_X[slot], 12.0 if slot == 0 else 17.0)
+
+
+## Põe cada herói no lugar dele na fila. Na troca:
+##   - a placa do atual retrai e some (fade);
+##   - o escolhido vai pra frente já abrindo com o nome, tudo num movimento só;
+##   - o antigo reaparece inserido na fila, e os rostos vizinhos são empurrados pra dar lugar.
+func _layout_tiles(animate: bool) -> void:
+	if _row.is_empty():
+		_row = [hero]
+		for id in ORDER:
+			if id != hero:
+				_row.append(id)
+	for n in _row.size():
+		var id: int = _row[n]
+		var t: HeroTile = _tiles[id]
+		var was := t.slot
+		t.slot = n
+		t.dim = Knowledge.is_tank(id) and id != Knowledge.tank_pick
+		if t.tw != null:
+			t.tw.kill()
+			t.tw = null
+		var pos := _tile_pos(n)
+		var rot := deg_to_rad(TILE_ROT[n])
+		if not animate or was < 0 or was == n:
+			t.position = pos
+			t.rotation = rot
+			t.scale = Vector2.ONE
+			t.modulate.a = 1.0
+			t.z_index = 0
+			t.k = 1.0 if n == 0 else 0.0
 			continue
-		var b := ShineButton.new()
-		b.texture = load("res://assets/portraits/%s_face.png" % Knowledge.HEROES[i]["key"])
-		b.skew = 0
-		b.hover_scale = 1.15
-		b.dim = Knowledge.is_tank(i) and i != Knowledge.tank_pick
-		_add(_top, b, Vector2(xs[k], 17), Vector2(38, 48))
-		b.rotation = deg_to_rad(rots[k])
-		b.pressed.connect(_go.bind(i, 1 if ORDER.find(i) > ORDER.find(hero) else -1))
-		_faces.append(b)
-		k += 1
+		var tw := t.create_tween()
+		t.tw = tw
+		if n == 0:
+			# escolhido: corre pra frente e abre no caminho
+			t.z_index = 3
+			t.scale = Vector2.ONE
+			t.modulate.a = 1.0
+			tw.set_parallel(true)
+			tw.tween_property(t, "position", pos, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			tw.tween_property(t, "rotation", rot, 0.3)
+			tw.tween_property(t, "k", 1.0, 0.34).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.chain().tween_callback(func(): t.z_index = 0)
+		elif was == 0:
+			# antigo: retrai e some onde está; reaparece crescendo no lugar novo da fila
+			t.z_index = 1
+			tw.tween_property(t, "k", 0.0, 0.14).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(t, "modulate:a", 0.0, 0.14)
+			tw.tween_callback(func():
+				t.position = pos
+				t.rotation = rot
+				t.scale = Vector2.ONE * 0.4)
+			tw.tween_interval(0.06)
+			tw.tween_property(t, "modulate:a", 1.0, 0.14)
+			tw.parallel().tween_property(t, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_callback(func(): t.z_index = 0)
+		else:
+			# vizinhos: empurrados pelo antigo entrando, um depois do outro a partir de onde ele entrou
+			t.z_index = 0
+			t.modulate.a = 1.0
+			tw.tween_interval(0.2 + absi(n - _push_at) * 0.04)
+			tw.tween_property(t, "position", pos, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(t, "rotation", rot, 0.26)
 
 
 # ---------------------------------------------------------------- cartas

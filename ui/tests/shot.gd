@@ -59,6 +59,13 @@ func _ready() -> void:
 				for step in a.trim_prefix("--act=").split(","):
 					var p := step.split(":")
 					match p[0]:
+						"go":
+							# troca de herói e espera p[2] segundos (pra capturar a animação no meio)
+							scene._go(int(p[1]), 1)
+							await get_tree().create_timer(float(p[2])).timeout
+							get_viewport().get_texture().get_image().save_png("user://screen.png")
+							get_tree().quit()
+							return
 						"spin":
 							scene._set_focus(scene._focus + int(p[1]))
 						"sel":

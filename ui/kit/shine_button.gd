@@ -67,6 +67,12 @@ func _on_press(on: bool) -> void:
 		_to(Vector2.ONE * (hover_scale if _hot else 1.0), Vector2.ZERO, 0.14)
 
 
+## Diz onde o botão mora, pra quem anima a posição dele por fora (o hover volta pra cá).
+func set_home(p: Vector2) -> void:
+	_home = p
+	_home_set = true
+
+
 func _to(sc: Vector2, off: Vector2, t: float) -> void:
 	if not _home_set:
 		_home = position
