@@ -29,6 +29,10 @@ func setup(game) -> void:
 		show_screen("cards"))
 	title.shop_pressed.connect(show_screen.bind("shop"))
 	title.options_pressed.connect(func(): g.hud.open_options(false))
+	title.tutorial_pressed.connect(func():
+		# o tutorial é uma cena própria (scripts/tutorial.gd); ele volta pra cá sozinho quando acaba
+		Knowledge.save()
+		get_tree().change_scene_to_file("res://tutorial.tscn"))
 	bosses.back_pressed.connect(show_screen.bind("title"))
 	bosses.boss_chosen.connect(func(i: int):
 		_gear = false

@@ -377,8 +377,39 @@ static func reward(boss_i: int, rank: int) -> Dictionary:
 
 # ---------------------------------------------------------------- save
 
+## Tutorial (scripts/tutorial.gd): o jogador treina com um conjunto de cartas só do tutorial.
+## enter_sandbox guarda o progresso de verdade e zera as cartas; leave_sandbox devolve tudo.
+## Enquanto dura, nada é gravado em disco.
+static var sandbox := false
+static var _kept := {}
+
+
+static func enter_sandbox() -> void:
+	if sandbox:
+		return
+	_kept = {"owned": owned, "decks": decks, "mastery": mastery, "dps": dps_known, "hero": start_hero, "tank": tank_pick}
+	sandbox = true
+	owned = {}
+	decks = {}
+	mastery = {}
+	dps_known = {}
+
+
+static func leave_sandbox() -> void:
+	if not sandbox:
+		return
+	owned = _kept["owned"]
+	decks = _kept["decks"]
+	mastery = _kept["mastery"]
+	dps_known = _kept["dps"]
+	start_hero = _kept["hero"]
+	tank_pick = _kept["tank"]
+	_kept = {}
+	sandbox = false
+
+
 static func save() -> void:
-	if not persist:
+	if not persist or sandbox:
 		return
 	var data := {
 		"owned": owned.keys(), "decks": {}, "mastery": mastery, "money": money, "tickets": tickets,

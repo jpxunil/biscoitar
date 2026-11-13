@@ -117,6 +117,19 @@ fg = Color(0.97, 0.94, 0.84, 1)
 font_px = 40
 shape_seed = 13
 
+[node name="BtnTutorial" type="Button" parent="."]
+layout_mode = 0
+offset_left = 440.0
+offset_top = 612.0
+offset_right = 920.0
+offset_bottom = 672.0
+script = ExtResource("2")
+text = "TUTORIAL DO JOGO"
+fill = Color(0.97, 0.94, 0.84, 1)
+fg = Color(0.05, 0.045, 0.1, 1)
+font_px = 26
+shape_seed = 19
+
 [node name="BtnOptions" type="Button" parent="."]
 layout_mode = 0
 offset_left = 960.0

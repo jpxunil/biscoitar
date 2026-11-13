@@ -9,6 +9,30 @@ extends Control
 
 signal ready_pressed
 signal back_pressed
+## Uma carta mudou de lugar (equipou, tirou ou trocou de slot).
+signal deck_changed
+
+## Modo guiado do tutorial (scripts/tutorial.gd). Com `tutor` preenchido a tela vira uma aula:
+## só aparecem as cartas que o jogador tem, não dá pra trocar de herói nem sair, a arte da direita
+## é de quem ensina e a carta `tutor["card"]` brilha e saltita até ser arrastada pra um slot.
+##   {"card": id da carta em destaque, "art": caminho da arte, "art_w": largura da arte}
+var tutor := {}
+var _tutor_panel: CutPanel
+var _tutor_text: Label
+
+
+## Fala de quem ensina, no painel da direita (só no modo guiado).
+func tutor_say(text: String) -> void:
+	if _tutor_panel == null:
+		_tutor_panel = _add(_top, CutPanel.make(Rect2(892, 356, 372, 112), [[.02, 0], [1, .05], [.97, 1], [0, .94]], Paper.CREAM, 5, Vector2(8, 8)))
+		_tutor_text = Paper.label("", 17, Paper.INK, Paper.body(700))
+		_tutor_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_tutor_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_tutor_text.add_theme_constant_override("line_spacing", -3)
+		_add(_top, _tutor_text, Vector2(912, 364), Vector2(336, 96))
+	_tutor_text.text = text
+	_tutor_text.visible_ratio = 0.0
+	_tutor_text.create_tween().tween_property(_tutor_text, "visible_ratio", 1.0, minf(0.9, text.length() * 0.012))
 
 const STAGE := Vector2(1280, 720)
 ## Roleta: centro fora da tela, cartas a RADIUS do centro, uma a cada STEP graus.
@@ -261,7 +285,7 @@ func _switch(dir: int) -> void:
 ## Troca de herói. O escolhido vai pra frente da fila e o antigo é inserido nela: no fim (o normal)
 ## ou logo depois da frente quando se volta com a seta (pra seta de voltar desfazer a de avançar).
 func _go(to: int, dir: int) -> void:
-	if to == hero:
+	if to == hero or not tutor.is_empty():
 		return
 	var old := hero
 	var back: bool = dir < 0 and _row[_row.size() - 1] == to
@@ -309,6 +333,16 @@ func refresh(animate := false, dir := 0) -> void:
 	_art_tex.visible = art != ""
 	_face_frame.visible = art == ""
 	var frame: Dictionary = ART_FRAME.get(h["key"], ART_DEFAULT) if art != "" else ART_DEFAULT
+	if not tutor.is_empty():
+		# quem aparece é quem ensina; nome, classe e vida do herói saem pra dar lugar à fala
+		art = tutor["art"]
+		_art_tex.visible = true
+		_face_frame.visible = false
+		frame = {"w": float(tutor.get("art_w", 400.0)), "x": 880.0, "y": 8.0}
+	_bubble.visible = tutor.is_empty()
+	_name_tag.visible = tutor.is_empty()
+	_role_tag.visible = tutor.is_empty()
+	_hp.visible = tutor.is_empty()
 	_art_home = Vector2(frame["x"], frame["y"])
 	_art.position = _art_home
 	if art != "":
@@ -812,6 +846,8 @@ func _hand_list() -> Array:
 	var out: Array = []
 	for id in Knowledge.inventory(hero):
 		out.append(id)
+	if not tutor.is_empty():
+		return out  # aula: só o que o jogador já ganhou, sem as cartas "?"
 	for kind in Knowledge.KINDS:
 		for id in Knowledge.CARDS:
 			if Knowledge.CARDS[id]["kind"] == kind and Knowledge.usable(hero, id) and not Knowledge.is_owned_by(hero, id):
@@ -931,6 +967,9 @@ func _wire(info: Dictionary) -> void:
 ## carta equipada volta pra roleta.
 func _quick(info: Dictionary) -> void:
 	_cancel_drag()
+	if not tutor.is_empty():
+		_shake(info)  # na aula a carta vai arrastada, que é o gesto sendo ensinado
+		return
 	var drop := ""
 	if info["src"] == "slot":
 		drop = _unequip_to_hand(info["id"])
@@ -1200,6 +1239,7 @@ func _finish() -> void:
 	Knowledge.save()
 	_sync_hand()
 	_build_cards(false, drop)
+	deck_changed.emit()
 
 
 ## Soltou num lugar que não vale: a carta volta voando pra onde estava, em vez de sumir.
@@ -1357,10 +1397,38 @@ func _process(delta: float) -> void:
 		for s in _slots:
 			if not is_same(s, _drag) and s["kind"] == _drag["kind"] and s["idx"] != _over:
 				s["cv"].ring_gap = 4.0 + 5.0 * _wave(0.7)
+	if not tutor.is_empty():
+		_tutor_fx()
+
+
+## Aula: a carta em destaque brilha e saltita na roleta; arrastando ela, os slots que servem acendem.
+func _tutor_fx() -> void:
+	var want: String = tutor.get("card", "")
+	var held: bool = _drag != null and _drag["id"] == want
+	for info in _spokes:
+		if info["id"] != want:
+			continue
+		var cv: CardView = info["cv"]
+		cv.halo = true
+		cv.halo_grow = 4.0 + 5.0 * _wave(0.6)
+		var busy: bool = info["tw"] != null and info["tw"].is_running()
+		if not held and not busy and not info["hover"] and not info["press"] and not info.get("away", false):
+			var hop := absf(sin(_t * 5.0)) * 14.0
+			cv.position.y = float(info["home"].y) + float(_pose(info)[2]) - hop
+			cv.modulate = Color(1, 1, 1).lerp(Color(1.25, 1.2, 1.0), _wave(0.6))
+	for s in _slots:
+		var lit: bool = held and s["kind"] == _drag["kind"] and s["id"] == ""
+		s["cv"].modulate = Color(1.0, 1.0, 1.0).lerp(Color(1.7, 1.6, 1.1), _wave(0.5)) if lit else Color(1, 1, 1)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_visible_in_tree() or not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	if not tutor.is_empty():
+		# aula: só gira a roleta; trocar de herói, sair e lutar ficam com quem ensina
+		match event.physical_keycode:
+			KEY_Q: _spin(-1)
+			KEY_E: _spin(1)
 		return
 	match event.physical_keycode:
 		KEY_A, KEY_LEFT: _switch(-1)

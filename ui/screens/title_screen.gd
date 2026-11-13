@@ -7,17 +7,19 @@ signal bosses_pressed
 signal gear_pressed
 signal shop_pressed
 signal options_pressed
+signal tutorial_pressed
 
 var _btns: Array = []
 var _focus := 0
 
 
 func _ready() -> void:
-	_btns = [$BtnBosses, $BtnGear, $BtnShop, $BtnOptions]
+	_btns = [$BtnBosses, $BtnGear, $BtnShop, $BtnTutorial, $BtnOptions]
 	$BtnBosses.pressed.connect(func(): bosses_pressed.emit())
 	$BtnGear.pressed.connect(func(): gear_pressed.emit())
 	$BtnShop.pressed.connect(func(): shop_pressed.emit())
 	$BtnOptions.pressed.connect(func(): options_pressed.emit())
+	$BtnTutorial.pressed.connect(func(): tutorial_pressed.emit())
 	$Wallet/CoinIcon.draw.connect(func(): Ink.draw_coin($Wallet/CoinIcon, 32))
 	$Wallet/TicketIcon.draw.connect(func(): Ink.draw_ticket($Wallet/TicketIcon, 32))
 	if get_tree().current_scene == self:

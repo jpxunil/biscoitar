@@ -58,6 +58,7 @@ scene("ui/screens/title_screen.tscn","res://ui/screens/title_screen.gd",[
   btn("BtnBosses",".",(820,210,380,92),"BOSSES","COIN","OUT",40,5),
   btn("BtnGear",".",(840,324,380,92),"GEAR","CREAM","OUT",40,9),
   btn("BtnShop",".",(820,438,380,92),"LOJA","GRAPE","CREAM",40,13),
+  btn("BtnTutorial",".",(440,612,480,60),"TUTORIAL DO JOGO","CREAM","OUT",26,19),
   btn("BtnOptions",".",(960,612,260,60),"OPÇÕES","NAVY","CREAM",26,17),
   pan("ShopLock",".",(880,536,280,38),"OUT",7),
   txt("ShopLockText","ShopLock",(14,7,260,26),"vença um boss pra abrir",15,"DIM"),

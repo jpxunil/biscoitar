@@ -12,6 +12,10 @@ signal title_pressed
 
 const PANEL := Vector2(460, 512)
 
+## No tutorial não existe seleção de cartas pra voltar: o menu fica com CONTINUAR, OPÇÕES e SAIR
+## (que emite title_pressed). Defina antes de pôr o nó na árvore.
+var in_tutorial := false
+
 var _btns: Array[InkButton] = []
 var _focus := 0
 var _box: Control
@@ -69,6 +73,8 @@ func _ready() -> void:
 		["SELEÇÃO DE CARTAS", Ink.CREAM, 7],
 		["MENU PRINCIPAL", Ink.CREAM, 11],
 	]
+	if in_tutorial:
+		items = [["CONTINUAR", Ink.COIN, 5], ["OPÇÕES", Ink.CREAM, 9], ["SAIR DO TUTORIAL", Ink.CREAM, 11]]
 	for k in items.size():
 		var b := Ink.button(items[k][0], items[k][1], Ink.OUT, 30, items[k][2])
 		b.position = Vector2(40 + (12 if k % 2 == 1 else 0), 112 + k * 92)
@@ -128,6 +134,8 @@ func _mark_focus() -> void:
 func _choose(k: int) -> void:
 	if not visible:
 		return
+	if in_tutorial and k == 2:
+		k = 3
 	match k:
 		0: resume_pressed.emit()
 		1: options_pressed.emit()
