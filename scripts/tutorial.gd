@@ -191,7 +191,7 @@ var pips: Control
 var demo_tag: Control
 var talk_box: Control
 var talk_text: Label
-var talk_next: PanelContainer
+var talk_next: Control
 var keys_hint: Label
 var card_pop: Control
 var cards: CardsScreen
@@ -760,7 +760,7 @@ func _process(delta: float) -> void:
 			card.dead = not u.alive
 	if talk_next.visible:
 		# a placa fica sólida (papel não pisca): só balança um pouco pra chamar o olho
-		talk_next.position.y = 106.0 + 2.5 * sin(_t * 5.0)
+		talk_next.position.y = 94.0 + 2.5 * sin(_t * 5.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1017,10 +1017,18 @@ func _build_ui() -> void:
 	talk_box.add_child(talk_text)
 	# "ENTER" numa placa de papel inclinada, como na tela de fim da luta (regra 1 do UiStyle:
 	# texto nunca fica solto, sempre em cima de uma placa INK ou PAPER)
-	talk_next = UiStyle.slab(UiStyle.PAPER, UiStyle.SKEW, 20, 3)
-	talk_next.add_child(UiStyle.text("ENTER  ▶", 15, UiStyle.INK))
-	talk_next.position = Vector2(756, 106)
+	# Embaixo dela, uma sombra dura e escura, deslocada pra baixo e pra esquerda (sem desfoque).
+	talk_next = Control.new()
+	talk_next.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	talk_next.position = Vector2(756, 94)
 	talk_box.add_child(talk_next)
+	for ply in 2:
+		var slab := UiStyle.slab(Ink.OUT if ply == 0 else UiStyle.PAPER, UiStyle.SKEW, 20, 3)
+		var word := UiStyle.text("ENTER  ▶", 15, UiStyle.INK)
+		word.modulate.a = float(ply)  # a sombra só precisa do tamanho do texto
+		slab.add_child(word)
+		slab.position = Vector2(-6, 8) if ply == 0 else Vector2.ZERO
+		talk_next.add_child(slab)
 	talk_box.visible = false
 
 	keys_hint = Ink.text("", 14, UiStyle.DIM)
