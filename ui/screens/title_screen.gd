@@ -1,21 +1,23 @@
 class_name TitleScreen
 extends Control
-## Tela inicial: BOSSES, GEAR e LOJA (a loja abre depois da primeira vitória).
+## Tela inicial: BOSSES, GEAR, LOJA (abre depois da primeira vitória) e OPÇÕES.
 ## O layout fica na cena (title_screen.tscn); aqui é só comportamento.
 
 signal bosses_pressed
 signal gear_pressed
 signal shop_pressed
+signal options_pressed
 
 var _btns: Array = []
 var _focus := 0
 
 
 func _ready() -> void:
-	_btns = [$BtnBosses, $BtnGear, $BtnShop]
+	_btns = [$BtnBosses, $BtnGear, $BtnShop, $BtnOptions]
 	$BtnBosses.pressed.connect(func(): bosses_pressed.emit())
 	$BtnGear.pressed.connect(func(): gear_pressed.emit())
 	$BtnShop.pressed.connect(func(): shop_pressed.emit())
+	$BtnOptions.pressed.connect(func(): options_pressed.emit())
 	$Wallet/CoinIcon.draw.connect(func(): Ink.draw_coin($Wallet/CoinIcon, 32))
 	$Wallet/TicketIcon.draw.connect(func(): Ink.draw_ticket($Wallet/TicketIcon, 32))
 	if get_tree().current_scene == self:

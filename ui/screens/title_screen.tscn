@@ -117,6 +117,19 @@ fg = Color(0.97, 0.94, 0.84, 1)
 font_px = 40
 shape_seed = 13
 
+[node name="BtnOptions" type="Button" parent="."]
+layout_mode = 0
+offset_left = 960.0
+offset_top = 612.0
+offset_right = 1220.0
+offset_bottom = 672.0
+script = ExtResource("2")
+text = "OPÇÕES"
+fill = Color(0.13, 0.13, 0.3, 1)
+fg = Color(0.97, 0.94, 0.84, 1)
+font_px = 26
+shape_seed = 17
+
 [node name="ShopLock" type="Control" parent="."]
 layout_mode = 0
 offset_left = 880.0

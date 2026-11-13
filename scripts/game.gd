@@ -159,8 +159,9 @@ const STEPS_ELEMENT := [
 ## Habilidades com recarga: J é o ataque básico (1 s), K e L as especiais. A IA só usa a Cura, e pior que o jogador:
 ## burst, mitigação e reviver são motivo pra você assumir o personagem.
 const PROVOKE := {"name": "Bora Biscoitar", "cd": 20.0}
-## Uma lista por herói, na ordem das teclas J, K, L, U. null = tecla sem habilidade.
-## U é o Bora Biscoitar, só do Tank: é ele quem puxa o boss pra si.
+## Uma lista por herói, na ordem dos slots da barra (até Binds.SKILL_SLOTS). null = slot sem habilidade.
+## As teclas de cada slot são do jogador (scripts/binds.gd); o padrão é J, K, L, U, O, P.
+## O slot 4 do Tank é o Bora Biscoitar: é ele quem puxa o boss pra si.
 const SKILLS := {
 	"tank": [{"name": "Golpe", "cd": 1.0, "dmg": 22.0},
 		{"name": "Mitigação", "cd": 10.0}, null, PROVOKE],
@@ -194,7 +195,6 @@ const HEAL_AI := 45.0
 const SFX_FART := preload("res://assets/sfx/fart.wav")
 const SFX_DEATH := preload("res://assets/sfx/death.wav")
 const COOKIE_COL := Color(0.86, 0.6, 0.3)
-const SKILL_KEYS := ["J", "K", "L", "U", "O"]
 const AUTO_EVERY := 2.0
 const AUTO_DMG := 6.0
 const GUARD_TIME := 4.0
@@ -388,6 +388,7 @@ func _ready() -> void:
 	if args.size() > 0:
 		Knowledge.persist = false
 	Knowledge.load_save()
+	Settings.boot()  # volume e atalhos do jogador
 	for a in args:
 		if a.begins_with("--boss="):
 			Knowledge.boss = clampi(int(a.trim_prefix("--boss=")), 0, BOSSES.size() - 1)
@@ -542,41 +543,49 @@ func _build_units() -> void:
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not (event is InputEventKey) or not event.pressed or event.echo:
-		return
-	var k: int = event.physical_keycode
-	if k == KEY_ESCAPE and not prep and not ended:
-		pause()
-		get_viewport().set_input_as_handled()
-		return
+	# toda tecla da luta passa pelo Binds (scripts/binds.gd): aqui só existem ações, nunca teclas fixas
 	if ended:
-		if k == KEY_ENTER or k == KEY_KP_ENTER:
+		if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER]:
 			retry()
-		return
-	if fury:
 		return
 	if prep:
 		return  # os menus cuidam das próprias teclas
-	match k:
-		KEY_TAB: _cycle_ctrl()
-		KEY_1: pick_hero(0)
-		KEY_2: pick_hero(1)
-		KEY_3: pick_hero(2)
-		KEY_4: pick_hero(3)
-		KEY_F1: select_target(0)
-		KEY_F2: select_target(1)
-		KEY_F3: select_target(2)
-		KEY_F4: select_target(3)
-		KEY_Q: give_order("gather")
-		KEY_E: give_order("spread")
-		KEY_R: give_order("hold")
-		KEY_F: give_order("atk")
-		KEY_SPACE: _try_dash()
-		KEY_K: use_skill(units[ctrl], 1)
-		KEY_L: use_skill(units[ctrl], 2)
-		KEY_U: use_skill(units[ctrl], 3)
-		KEY_O: use_skill(units[ctrl], 4)
-		KEY_I: use_lb()
+	var id := _pressed_action(event)
+	if id == "":
+		return
+	if id == "pause":
+		pause()
+		get_viewport().set_input_as_handled()
+		return
+	if fury:
+		return
+	match id:
+		"swap": _cycle_ctrl()
+		"dash": _try_dash()
+		"limit": use_lb()
+		"order_gather": give_order("gather")
+		"order_spread": give_order("spread")
+		"order_hold": give_order("hold")
+		"order_atk": give_order("atk")
+		_:
+			var n := int(id.get_slice("_", 1)) - 1
+			if id.begins_with("hero_"):
+				pick_hero(n)
+			elif id.begins_with("target_"):
+				select_target(n)
+			elif id.begins_with("skill_") and n > 0:
+				# o slot 1 é o ataque básico: vale enquanto segura, e quem lê é o _process
+				use_skill(units[ctrl], n)
+
+
+## Ação do Binds que este evento acabou de apertar ("" se nenhuma).
+func _pressed_action(event: InputEvent) -> String:
+	if not (event is InputEventKey or event is InputEventMouseButton) or not event.pressed or event.is_echo():
+		return ""
+	for a in Binds.ACTIONS:
+		if event.is_action_pressed(a["id"]):
+			return a["id"]
+	return ""
 
 
 ## ESC no meio da luta: congela tudo e abre o menu de pause (ui/screens/pause_menu.gd).
@@ -713,7 +722,7 @@ func set_ctrl(i: int) -> void:
 
 
 ## Tab: assume o herói focado (card ou teclas 1-4). Sem foco, vai pro próximo vivo.
-## Clique no card ou teclas 1-4: assume o herói na hora.
+## Clique no card ou atalho "controlar herói N": assume o herói na hora.
 ## Quem está morto (ou você mesmo) não dá pra assumir, então vira alvo (ex.: Reviver).
 func pick_hero(i: int) -> void:
 	if i != ctrl and units[i].alive:
@@ -756,10 +765,10 @@ func _try_dash() -> void:
 
 func _input_dir() -> Vector3:
 	var d := Vector3.ZERO
-	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP): d.z -= 1.0
-	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN): d.z += 1.0
-	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT): d.x -= 1.0
-	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT): d.x += 1.0
+	if Input.is_action_pressed("move_up"): d.z -= 1.0
+	if Input.is_action_pressed("move_down"): d.z += 1.0
+	if Input.is_action_pressed("move_left"): d.x -= 1.0
+	if Input.is_action_pressed("move_right"): d.x += 1.0
 	return d.normalized()
 
 
@@ -951,7 +960,7 @@ func _tick_player(u: Unit, delta: float) -> void:
 			u.face(d)
 
 	# J é o ataque básico: uma habilidade com 1 s de recarga (segurar repete)
-	var want_attack := Input.is_physical_key_pressed(KEY_J)
+	var want_attack := Input.is_action_pressed("skill_1")
 	if want_attack:
 		use_skill(u, 0)
 	if want_attack and not _in_range(u):
@@ -2937,6 +2946,7 @@ func _sfx(stream: AudioStream, volume_db := 0.0) -> void:
 	var p := AudioStreamPlayer.new()
 	p.stream = stream
 	p.volume_db = volume_db
+	p.bus = &"SFX"
 	add_child(p)
 	p.finished.connect(p.queue_free)
 	p.play()

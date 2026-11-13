@@ -64,7 +64,8 @@ func _initialize() -> void:
 	await key(KEY_ESCAPE)
 	await key(KEY_DOWN)
 	await key(KEY_DOWN)
-	check(main.hud.pause._focus == 2, "↓↓ chega em MENU PRINCIPAL")
+	await key(KEY_DOWN)
+	check(main.hud.pause._focus == 3, "↓↓↓ chega em MENU PRINCIPAL")
 	await key(KEY_ENTER)
 	check(not paused, "sair da luta desliga o pause")
 	check(Knowledge.screen == "title", "MENU PRINCIPAL abre a tela inicial (screen=%s)" % Knowledge.screen)
@@ -81,7 +82,7 @@ func _initialize() -> void:
 		for i in 5:
 			await process_frame
 		fresh.pause()
-		fresh.hud.pause._btns[1].pressed.emit()
+		fresh.hud.pause._btns[2].pressed.emit()
 		for i in 5:
 			await process_frame
 		var third: Node = current_scene

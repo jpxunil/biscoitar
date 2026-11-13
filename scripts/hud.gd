@@ -43,6 +43,8 @@ var flash_rect: ColorRect
 var menu_root: Control
 var menus
 var pause: PauseMenu
+var options: OptionsScreen
+var _options_from_pause := false
 var end_layer: Control
 var end_title_slab: PanelContainer
 var end_title: Label
@@ -105,9 +107,30 @@ func setup(game) -> void:
 	pause.resume_pressed.connect(g.resume)
 	pause.cards_pressed.connect(g.leave_fight.bind("cards"))
 	pause.title_pressed.connect(g.leave_fight.bind("title"))
+	pause.options_pressed.connect(open_options.bind(true))
+	# uma tela de opções só, pro menu principal e pro pause
+	options = OptionsScreen.new()
+	root.add_child(options)
+	options.closed.connect(_on_options_closed)
 
 
 # ---------------------------------------------------------------- boss
+
+## Abre as opções por cima de tudo. Vindo do pause, a luta continua congelada e fechar volta pro pause.
+func open_options(from_pause: bool) -> void:
+	_options_from_pause = from_pause
+	if from_pause:
+		pause.visible = false
+	options.open(g.units[g.ctrl].hero if from_pause else Knowledge.start_hero)
+
+
+func _on_options_closed() -> void:
+	if _options_from_pause:
+		pause.back_from_options()
+	# os atalhos podem ter mudado: a barra de habilidades mostra as teclas novas
+	if skill_for >= 0:
+		_show_skills(skill_for)
+
 
 func _build_boss() -> void:
 	var center := CenterContainer.new()
@@ -340,7 +363,7 @@ func _show_skills(i: int) -> void:
 		row.add_theme_constant_override("separation", 10)
 		v.add_child(row)
 		var key := UiStyle.slab(UiStyle.PAPER, 0.0, 7, 0)
-		key.add_child(UiStyle.text(g.SKILL_KEYS[n], 14, UiStyle.INK))
+		key.add_child(UiStyle.text(Binds.label("skill_%d" % (n + 1)), 14, UiStyle.INK))
 		row.add_child(key)
 		var name_l := UiStyle.text(String(list[n]["name"]).to_upper(), 15, UiStyle.PAPER)
 		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -362,7 +385,7 @@ func _show_skills(i: int) -> void:
 	srow.add_theme_constant_override("separation", 10)
 	sv.add_child(srow)
 	var skey := UiStyle.slab(UiStyle.PAPER, 0.0, 7, 0)
-	skey.add_child(UiStyle.text("TAB", 14, UiStyle.INK))
+	skey.add_child(UiStyle.text(Binds.label("swap"), 14, UiStyle.INK))
 	srow.add_child(skey)
 	swap_name = UiStyle.text("TROCAR", 15, UiStyle.PAPER)
 	swap_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL

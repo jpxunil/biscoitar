@@ -2,6 +2,7 @@ extends Control
 ## Liga as telas de menu entre si e com a luta:
 ##   título -> bosses -> cartas -> luta      título -> gear (cartas, sem o botão de luta)
 ##   vitória -> loja -> título
+##   título -> opções (a tela de opções é do hud.gd: é a mesma que o pause abre)
 ## Cada tela é uma cena própria em ui/screens/, que também abre sozinha com F6.
 
 var g
@@ -27,6 +28,7 @@ func setup(game) -> void:
 		_gear = true
 		show_screen("cards"))
 	title.shop_pressed.connect(show_screen.bind("shop"))
+	title.options_pressed.connect(func(): g.hud.open_options(false))
 	bosses.back_pressed.connect(show_screen.bind("title"))
 	bosses.boss_chosen.connect(func(i: int):
 		_gear = false

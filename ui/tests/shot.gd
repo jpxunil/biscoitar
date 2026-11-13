@@ -40,6 +40,18 @@ func _ready() -> void:
 	add_child(scene)
 	if which == "cards":
 		scene.open(hero)
+	elif which == "options":
+		# --tab=1 abre nos atalhos; --capture deixa um atalho esperando tecla; --conflict mostra o aviso
+		var tab := 0
+		for a in args:
+			if a.begins_with("--tab="):
+				tab = int(a.trim_prefix("--tab="))
+		scene.open(hero, tab)
+		if args.has("--capture"):
+			scene._start_capture("skill_2", 0)
+		if args.has("--conflict"):
+			scene._start_capture("skill_2", 0)
+			scene._captured(KEY_TAB)
 	else:
 		scene.open()
 	if args.has("--dialog"):
