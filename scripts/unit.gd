@@ -176,6 +176,11 @@ var visual: Node3D
 var gloves: Array[Node3D] = []
 var _glove_tw: Tween
 var body_mat: StandardMaterial3D
+## Cor normal do material do corpo: a do herói no boneco de cápsula, branco no boneco low-poly
+## (lá as cores vêm dos vértices e o material só multiplica).
+var body_tint := Color.WHITE
+## Boneco low-poly (HeroModels): os braços, que seguem as mãos. Vazio no boneco de cápsula.
+var arms: Array[Node3D] = []
 var ring: MeshInstance3D
 var orb: MeshInstance3D
 var orb_mat: StandardMaterial3D
@@ -198,30 +203,16 @@ func setup(i: int, d: Dictionary) -> void:
 
 	visual = Node3D.new()
 	add_child(visual)
-	body_mat = Fx.mat(color, 0.25)
-	Fx.inst(visual, Fx.capsule(0.38, 1.3), body_mat, Vector3(0, 0.7, 0))
-	Fx.inst(visual, Fx.sphere(0.3), Fx.mat(Color(1.0, 0.88, 0.8)), Vector3(0, 1.62, 0))
-	# faixa pra dar "frente" ao boneco
-	Fx.inst(visual, Fx.sphere(0.12), Fx.mat(Color.WHITE, 1.5), Vector3(0, 1.0, -0.36))
-	if key == "assassina":
-		# duas adagas curvas, uma em cada mão: lâmina clara, guarda dourada e cabo roxo
-		for s in [-1.0, 1.0]:
-			var hand := Node3D.new()
-			hand.position = _dagger_home(s)
-			visual.add_child(hand)
-			for k in 3:
-				# a lâmina em três gomos, pra fazer a curva
-				var seg := BoxMesh.new()
-				seg.size = Vector3(0.05, 0.13 - k * 0.03, 0.3)
-				var bm := Fx.inst(hand, seg, Fx.mat(Color(1.5, 1.7, 2.0), 0.0, true), Vector3(s * k * 0.05, k * 0.03, -0.2 - k * 0.27))
-				bm.rotation.y = s * -k * 0.18
-			var guard := BoxMesh.new()
-			guard.size = Vector3(0.26, 0.06, 0.06)
-			Fx.inst(hand, guard, Fx.mat(Color(1.0, 0.8, 0.25), 0.8), Vector3(0, 0, -0.03))
-			var grip := BoxMesh.new()
-			grip.size = Vector3(0.07, 0.07, 0.24)
-			Fx.inst(hand, grip, Fx.mat(Color(0.5, 0.24, 0.85), 0.4), Vector3(0, 0, 0.12))
-			daggers.append(hand)
+	body_tint = color
+	if HeroModels.has(key):
+		# boneco low-poly de papel recortado (scripts/hero_models.gd)
+		HeroModels.build(self)
+	else:
+		body_mat = Fx.mat(color, 0.25)
+		Fx.inst(visual, Fx.capsule(0.38, 1.3), body_mat, Vector3(0, 0.7, 0))
+		Fx.inst(visual, Fx.sphere(0.3), Fx.mat(Color(1.0, 0.88, 0.8)), Vector3(0, 1.62, 0))
+		# faixa pra dar "frente" ao boneco
+		Fx.inst(visual, Fx.sphere(0.12), Fx.mat(Color.WHITE, 1.5), Vector3(0, 1.0, -0.36))
 	if key == "nurse":
 		_build_syringe()
 		_build_med_shield()
@@ -320,6 +311,13 @@ func setup(i: int, d: Dictionary) -> void:
 
 
 func _process(delta: float) -> void:
+	# boneco low-poly: cada braço vai do ombro até a mão, onde quer que a animação a tenha levado
+	for n in arms.size():
+		var reach: Vector3 = daggers[n].position - arms[n].position
+		var len := reach.length()
+		if len > 0.05:
+			var up := Vector3.UP if absf(reach.normalized().y) < 0.95 else Vector3.BACK
+			arms[n].basis = Basis.looking_at(reach / len, up) * Basis.from_scale(Vector3(1, 1, len))
 	if orb.visible:
 		orb.position.y = 2.3 + sin(Time.get_ticks_msec() * 0.005 + idx) * 0.08
 	if ring.visible:
@@ -354,9 +352,9 @@ func _process(delta: float) -> void:
 		# o boneco fica roxo e a aura gira rápido
 		frenzy_ring.rotate_y(delta * 14.0)
 		frenzy_ring.position.y = 0.9 + sin(Time.get_ticks_msec() * 0.02) * 0.35
-		body_mat.albedo_color = Color(0.62, 0.12, 0.95)
+		body_mat.albedo_color = Color(0.62, 0.12, 0.95) if arms.is_empty() else Color(0.9, 0.6, 1.3)
 	elif frenzy_was:
-		body_mat.albedo_color = color
+		body_mat.albedo_color = body_tint
 	frenzy_was = frenzy_ring.visible
 	if wall_ring.visible:
 		wall_ring.rotate_y(delta * 3.0)
@@ -773,8 +771,8 @@ func dash_fx() -> void:
 
 func flash_hit(frac := 0.2) -> void:
 	var tw := create_tween()
-	body_mat.albedo_color = Color.WHITE
-	tw.tween_property(body_mat, "albedo_color", color, 0.25)
+	body_mat.albedo_color = Color.WHITE if arms.is_empty() else Color(2.4, 2.4, 2.4)
+	tw.tween_property(body_mat, "albedo_color", body_tint, 0.25)
 	shake_amp = clampf(0.05 + frac * 0.4, 0.05, 0.22)
 	shake_t = SHAKE_TIME
 
@@ -784,7 +782,7 @@ func revive(hp_ratio: float) -> void:
 	hp = max_hp * hp_ratio
 	visual.rotation.x = 0.0
 	visual.position = Vector3.ZERO
-	body_mat.albedo_color = color
+	body_mat.albedo_color = body_tint
 	body_mat.emission_enabled = true
 	weak_t = 0.0
 	ring.visible = controlled
