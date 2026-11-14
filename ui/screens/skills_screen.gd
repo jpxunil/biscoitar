@@ -281,6 +281,7 @@ func _refresh(dir: int) -> void:
 		var w := minf(360.0, 600.0 * ts.x / ts.y)
 		_art.texture = tex
 		_art.size = Vector2(w, w * ts.y / ts.x)
+		ArtShadow.attach(_art, _th.get("bg2", Paper.GOLD))
 		_art_home = Vector2(1100.0 - w * 0.5, 96.0 + maxf(0.0, (600.0 - _art.size.y) * 0.5))
 		_art.position = _art_home + Vector2(60.0 * dir, 0)
 		_art.modulate.a = 0.0 if dir != 0 else 1.0

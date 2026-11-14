@@ -393,6 +393,9 @@ const SW_STEP_GAP := 0.3       # dormindo: respiro entre uma habilidade da sequ�
 const SW_LOCK_NONE := 2.0      # acordou sem ter usado nada no sonho
 const SW_LOCK_BITE := 1.0      # usou só A Mordida dos Mil (visita curta pra renovar o DoT)
 const SW_LOCK_BROKEN := 3.0    # começou a sequência e não fechou com A Casa que Engole
+const SW_BITE_WAKE := 15.0     # acordar depois de usar só a Mordida custa só isso de Torpor (o resto fica)
+const SW_ECHO_TORPOR := 4.0    # Torpor por Fresta acertada com o Bocejo
+const SW_FULL_HOLD := 3.0      # ao chegar em 100 de Torpor, esse tempo sem perder nada
 const SW_BED_BONUS := 1.5      # A Cama Caiu! com Travesseiro Cheio
 const SW_DECAY := 1.0          # Torpor perdido por segundo, acordado
 const DREAM_MAX := 8           # Vulnerabilidade Onírica: até 8 stacks ...
@@ -1284,7 +1287,7 @@ func _tick_rotation(u: Unit) -> void:
 		sum += b
 	if sum / Knowledge.DPS_WINDOW >= Knowledge.DPS_GOAL[u.key]:
 		Knowledge.dps_known[u.key] = true
-		Knowledge.equip(u.hero, "dps")
+		Knowledge.mark_new("dps", u.hero)  # entra na coleção dele como NOVA; equipar é com o jogador
 		Knowledge.save()
 		hud.card_unlocked("dps")
 
@@ -2575,6 +2578,15 @@ func _sw_hit(u: Unit, base: float, big: bool) -> void:
 	_damage_boss(u, base * SW_SCALE, true, big)
 
 
+## Soma Torpor. Ao encher (100), ele segura cheio por SW_FULL_HOLD segundos antes de voltar a cair:
+## dá tempo de decidir e conjurar o Sono Profundo com a barra inteira.
+func _torpor_add(u: Unit, n: float) -> void:
+	var was := u.torpor
+	u.torpor = minf(100.0, u.torpor + n)
+	if u.torpor >= 100.0 and was < 100.0:
+		u.torpor_hold = SW_FULL_HOLD
+
+
 ## Todas as habilidades do Sleepwalker passam por aqui (acordado e dormindo).
 func _sleep_skill(u: Unit, slot: int) -> void:
 	if slot == 5:
@@ -2598,11 +2610,12 @@ func _sleep_skill(u: Unit, slot: int) -> void:
 			if e["open"] > 0.0 and not e["hit"]:
 				e["hit"] = true
 				amount += ECHO_BASE
+				gain += SW_ECHO_TORPOR
 				_burst(Vector3(0, 3.5, -11.5), Color(1, 1, 1), 3.4)
 				if u.controlled:
 					hud.toast("FRESTA!", 0.6)
 				break
-		u.torpor = minf(100.0, u.torpor + gain)
+		_torpor_add(u, gain)
 		_sw_hit(u, amount, amount > 60.0)
 		return
 	# sequência Lençol (1) -> Visitantes (2) -> Travesseiro (3) -> Cama (4): cada uma abre 1 s pra próxima
@@ -2627,15 +2640,20 @@ func _sleep_skill(u: Unit, slot: int) -> void:
 			u.pillow_full = false
 	if slot > 1 and not perfect:
 		gain = def["torpor"]
+		# fora da sequência (ou fora da janela): a corrente quebra aqui, como na Ringstar
+		u.crumbs = false
+		u.pillow_full = false
 		if u.controlled:
-			hud.toast("JANELA PERDIDA", 0.8)
+			hud.toast("FORA DA SEQUÊNCIA", 0.8)
 	elif slot > 1 and u.controlled:
 		hud.toast("PERFEITO", 0.5)
 	_dream_add(stacks)
-	u.torpor = minf(100.0, u.torpor + gain)
-	# abre a janela da próxima (a Cama é a última)
-	u.window_slot = slot + 1 if slot < 4 else -1
-	u.window_t = SW_WINDOW if slot < 4 else 0.0
+	_torpor_add(u, gain)
+	# A sequência só existe a partir do Puxar o Lençol: a janela da próxima abre apenas depois de
+	# um passo acertado. Usar Visitantes, Travesseiro ou Cama soltos não acende nada adiante.
+	var chain_on: bool = perfect and slot < 4
+	u.window_slot = slot + 1 if chain_on else -1
+	u.window_t = SW_WINDOW if chain_on else 0.0
 	_sw_hit(u, amount, true)
 
 
@@ -2665,6 +2683,7 @@ func _sw_toggle(u: Unit) -> void:
 ## `clean`: fechou a sequência com A Casa que Engole, então não tem punição. Qualquer outro jeito
 ## de acordar deixa ele um tempo sem agir (silence_t), conforme até onde foi no sonho.
 func _sw_wake(u: Unit, lose: bool, clean := false) -> void:
+	var steps := u.dream_step  # até onde ele foi no sonho
 	var lock := 0.0
 	if not clean:
 		lock = SW_LOCK_NONE if u.dream_step == 0 else (SW_LOCK_BITE if u.dream_step == 1 else SW_LOCK_BROKEN)
@@ -2678,7 +2697,9 @@ func _sw_wake(u: Unit, lose: bool, clean := false) -> void:
 	u.dream_step = 0
 	u.wake_t = 0.0
 	if lose:
-		u.torpor = 0.0
+		# visita curta (só a Mordida, pra renovar o DoT) custa SW_BITE_WAKE; largar o sonho de
+		# qualquer outro jeito custa o Torpor todo
+		u.torpor = maxf(0.0, u.torpor - SW_BITE_WAKE) if steps == 1 else 0.0
 	for n in 5:
 		u.skill_cd[n] = u.awake_cd[n]
 	_burst(u.position, Color(1, 1, 1), 2.0)
@@ -2791,7 +2812,10 @@ func _tick_sleep(u: Unit, delta: float) -> void:
 		u.silence_t = maxf(0.0, u.silence_t - delta)
 		u.set_action("Sonolento  %.1f" % u.silence_t, 2)
 	if not u.asleep:
-		u.torpor = maxf(0.0, u.torpor - SW_DECAY * delta)
+		if u.torpor_hold > 0.0:
+			u.torpor_hold -= delta
+		else:
+			u.torpor = maxf(0.0, u.torpor - SW_DECAY * delta)
 	else:
 		for n in 5:
 			u.awake_cd[n] = maxf(0.0, u.awake_cd[n] - delta)
@@ -4109,15 +4133,16 @@ func _score() -> float:
 	return speed + clean + alive_pts
 
 
-## Maestria: você resolveu a mecânica certo, na mão. Na terceira vez a carta é liberada
-## e entra no baralho de quem tiver slot livre, então a IA já sai usando.
+## Maestria: você resolveu a mecânica certo, na mão. Na terceira vez a carta é liberada.
+## Ela fica na coleção, com o selo NOVO, até o jogador equipar em quem quiser.
 func _master(key: String) -> void:
 	if autoplay or Knowledge.practice or Knowledge.mastery_of(key) >= Knowledge.MASTERY_NEED:
 		return
 	var card: String = Knowledge.MASTERY[key]["card"]
 	if Knowledge.add_mastery(key):
-		for i in Knowledge.HEROES.size():
-			Knowledge.equip(i, card)
+		# a carta entra na coleção marcada como NOVA pra quem a conquistou. Ela NÃO é equipada:
+		# quem decide usar é o jogador, na tela de cartas.
+		Knowledge.mark_new(card, units[ctrl].hero)
 		Knowledge.save()
 		hud.card_unlocked(card)
 	else:
@@ -4386,6 +4411,7 @@ func _resolve_cataclysm() -> void:
 			u.hold_pos = null
 	# A carta roxa é prêmio por já ter resolvido a mecânica inteira com a party toda viva.
 	if survivors == 4 and not autoplay and not Knowledge.practice and Knowledge.grant("mark"):
+		Knowledge.mark_new("mark", units[ctrl].hero)
 		hud.card_unlocked("mark")
 	if order == "hold":
 		order = "atk"

@@ -30,6 +30,9 @@ var ring_gap := 4.0: set = _set_ring_gap
 var ring_w := 4.0
 ## Rosto pequeno no canto: quem está com esta carta de cópia única agora (item ou carta da loja).
 var badge: Texture2D: set = _set_badge
+## Carta nova que o jogador ainda não viu: selo NOVO no canto e contorno dourado pulsando.
+var fresh := false: set = _set_fresh
+var _fresh_t := 0.0
 
 
 static func make(card_id: String, card_state := "face") -> CardView:
@@ -47,9 +50,21 @@ static func empty(slot_kind: String) -> CardView:
 
 
 func _init() -> void:
+	set_process(false)
 	custom_minimum_size = Vector2(W, H)
 	size = Vector2(W, H)
 	pivot_offset = Vector2(W, H) * 0.5
+
+
+func _set_fresh(v: bool) -> void:
+	fresh = v
+	set_process(v)
+	queue_redraw()
+
+
+func _process(delta: float) -> void:
+	_fresh_t += delta
+	queue_redraw()
 
 
 func _set_id(v: String) -> void:
@@ -208,6 +223,25 @@ func _draw() -> void:
 	if badge != null:
 		draw_rect(Rect2(W - 24, -12, 32, 41), ink)
 		draw_texture_rect(badge, Rect2(W - 21, -9, 26, 35), false)
+	if fresh:
+		_draw_fresh()
+
+
+## Selo NOVO do kit de papel: contorno dourado respirando e uma etiqueta rosa inclinada, com sombra
+## dura, pendurada no canto de cima.
+func _draw_fresh() -> void:
+	var p := 0.5 + 0.5 * sin(_fresh_t * 5.0)
+	_rr(Rect2(Vector2.ZERO, Vector2(W, H)).grow(4.0 + 3.0 * p), Color(0, 0, 0, 0), 13, Color(Paper.GOLD.r, Paper.GOLD.g, Paper.GOLD.b, 0.55 + 0.45 * p), 4, false)
+	var f := Paper.display()
+	var tw := f.get_string_size("NOVO", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+	var tag := Vector2(tw + 18.0, 24.0)
+	draw_set_transform(Vector2(-12.0, -10.0 - 2.0 * p), deg_to_rad(-8.0), Vector2.ONE * (1.0 + 0.06 * p))
+	var pts := Paper.skew_rect(tag, 10.0)
+	draw_colored_polygon(Paper.moved(pts, Vector2(-3, 4)), Paper.INK)
+	draw_colored_polygon(pts, Paper.INK)
+	draw_colored_polygon(Paper.inset(pts, 3.0), Paper.PINK)
+	draw_string(f, Vector2(0, 17.5), "NOVO", HORIZONTAL_ALIGNMENT_CENTER, tag.x, 13, Paper.CREAM)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _wrap(t: String, f: Font, px: int, max_w: float) -> Array:

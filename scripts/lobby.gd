@@ -200,6 +200,7 @@ func _refresh() -> void:
 		if filled:
 			s["face"].texture = load("res://assets/portraits/%s_face.png" % Knowledge.HEROES[team[n]]["key"])
 		s["panel"].fill = Paper.CREAM if filled else Color("1A1E52")
+		s["new"].visible = filled and Knowledge.has_new(team[n])
 	count_chip.text = "PARTY  %d / 4" % team.size()
 	ready_btn.disabled = team.size() < 4
 	ready_btn.idle = team.size() == 4
@@ -323,6 +324,17 @@ func _build_heroes() -> void:
 			art.alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
 			art.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			art.position = Vector3(0, tall * 0.5 + 0.05, 0)
+			# sombra gráfica: a mesma silhueta, escura, um pouco pro lado e pra trás da figura
+			var shade := Sprite3D.new()
+			shade.texture = art.texture
+			shade.pixel_size = art.pixel_size
+			shade.billboard = art.billboard
+			shade.shaded = false
+			shade.alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
+			shade.modulate = Color(0.05, 0.05, 0.14)
+			shade.offset = Vector2(0.14, -0.1) / art.pixel_size
+			shade.position = art.position + Vector3(0, 0, -0.12)
+			u.add_child(shade)
 			u.add_child(art)
 			top = tall + 0.3
 		else:
@@ -343,6 +355,12 @@ func _build_heroes() -> void:
 		tag.modulate = Paper.GOLD
 		tag.outline_size = 14
 		tag.outline_modulate = Paper.INK
+		# aviso de carta nova, em cima do nome
+		var news := Fx.label(u, "CARTA NOVA!", Vector3(0, top + 0.42, 0), 30)
+		news.modulate = Paper.PINK
+		news.outline_size = 14
+		news.outline_modulate = Paper.INK
+		news.visible = Knowledge.has_new(hero)
 		marks.append({"focus": f, "in": inn, "tag": tag})
 		figs.append(u)
 
@@ -623,7 +641,21 @@ func _build_ui() -> void:
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nm.clip_text = true
 		panel.add_child(nm)
-		slots.append({"panel": panel, "face": face, "plus": plus, "name": nm})
+		# selo de carta nova do herói que está neste lugar
+		var chip := Chip.new()
+		chip.px = 11
+		chip.pad = 7.0
+		chip.skew = 8.0
+		chip.border = 2.0
+		chip.shadow = Vector2(-2, 3)
+		chip.fill = Paper.PINK
+		chip.ink = Paper.CREAM
+		chip.text = "NOVO"
+		chip.position = Vector2(52, -10)
+		chip.rotation = deg_to_rad(6.0)
+		chip.visible = false
+		panel.add_child(chip)
+		slots.append({"panel": panel, "face": face, "plus": plus, "name": nm, "new": chip})
 
 	# READY TO PLAY, no canto de baixo à direita: só libera com os quatro
 	var ready_box := _anchored(ui, Vector2(1, 1), Vector2(330, 84), Vector2(-28, -26))

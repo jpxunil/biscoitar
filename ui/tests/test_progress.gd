@@ -94,6 +94,7 @@ func _initialize() -> void:
 	Knowledge.money = 300
 	Knowledge.shop_unlocked = true
 	check(Knowledge.buy("potion") and Knowledge.equip(0, "potion"), "save 1 compra e equipa a Poção")
+	Knowledge.fresh = {}  # a compra chega como NOVA; os avisos têm um bloco próprio mais abaixo
 	Knowledge.save()
 	Knowledge.select_slot(2)
 	check(not Knowledge.owned.has("stack") and not Knowledge.owned.has("potion") and Knowledge.money == 0, "save 2 começa sem as cartas, o item e as moedas do save 1")
@@ -175,12 +176,18 @@ func _initialize() -> void:
 	for n in 3:
 		main._master("link")
 	check(Knowledge.owned.has("link") and Knowledge.run_cards() == ["link"], "carta ganha na luta fica como provisória")
+	var equipped := false
+	for h in Knowledge.HEROES.size():
+		if Knowledge.has(h, "link"):
+			equipped = true
+	check(not equipped, "carta nova NÃO é equipada sozinha em ninguém")
+	check(Knowledge.is_new(main.units[main.ctrl].hero, "link") and Knowledge.has_new(main.units[main.ctrl].hero), "ela fica marcada como NOVA pro herói que a conquistou")
 	check(FileAccess.get_file_as_string(Knowledge.save_path(1)) == before, "nada é gravado no meio da run")
 	var tries: int = Knowledge.attempts
 	main.leave_fight("cards")
 	await frames(6)
 	check(not Knowledge.in_run and not Knowledge.owned.has("link") and Knowledge.mastery_of("link") == 0, "sair pelo pause descarta a carta e a maestria da tentativa")
-	check(not Knowledge.has(0, "link"), "e ela sai dos baralhos onde tinha entrado")
+	check(not Knowledge.has(0, "link") and Knowledge.fresh.is_empty(), "e some o aviso de carta nova que ela tinha gerado")
 	check(Knowledge.owned.has("stack") and Knowledge.has(0, "potion"), "o que já era do save continua lá")
 	check(FileAccess.get_file_as_string(Knowledge.save_path(1)) == before, "o arquivo do save fica igual ao de antes da luta")
 	check(Knowledge.attempts == tries + 1, "sair conta uma tentativa")
@@ -225,6 +232,38 @@ func _initialize() -> void:
 	await frames(6)
 	main = current_scene
 	check(Knowledge.owned.has("link"), "a carta continua depois de sair da tela de fim")
+	# ---------------------------------------------------------------- cartas novas: avisos
+	var who: int = Knowledge.start_hero
+	check(Knowledge.is_new(who, "link") and disk(1)["fresh"].has(str(who)), "a carta confirmada continua NOVA, e isso vai pro save")
+	var deck_before: String = JSON.stringify(Knowledge.deck(who))
+	Knowledge.mark_new("pair", who)
+	Knowledge.owned["pair"] = true
+	var other_hero: int = Knowledge.party[0] if Knowledge.party[0] != who else Knowledge.party[1]
+	check(not Knowledge.has_new(other_hero), "só o herói que ganhou tem o aviso")
+	var cs = main.hud.menus.cards
+	main.hud.menus.show_screen("cards")
+	cs.open(who, true)
+	await frames(4)
+	check(cs._tiles[who].fresh and not cs._tiles[other_hero].fresh, "no seletor, o aviso aparece só no rosto dele")
+	check(JSON.stringify(Knowledge.deck(who)) == deck_before, "abrir as cartas não mexe no baralho")
+	var news: Array = []
+	for info in cs._spokes:
+		if info["cv"].fresh:
+			news.append(info)
+	check(news.size() == 2, "as duas cartas novas têm o selo NOVO (%d)" % news.size())
+	check(Knowledge.has_new(who), "abrir a tela não tira o aviso: precisa passar o mouse na carta")
+	news[0]["cv"].mouse_entered.emit()
+	await frames(2)
+	check(not news[0]["cv"].fresh and news[1]["cv"].fresh and cs._tiles[who].fresh, "passar o mouse numa tira o selo dela; o aviso do herói continua pela outra")
+	news[1]["cv"].mouse_entered.emit()
+	await frames(2)
+	check(not Knowledge.has_new(who) and not cs._tiles[who].fresh, "vistas as duas, o aviso do herói some")
+	check(not disk(1)["fresh"].has(str(who)), "e o save guarda que já foram vistas")
+	Knowledge.owned.erase("pair")
+	Knowledge.money = 500
+	Knowledge.buy("sharpen")
+	check(Knowledge.is_new(Knowledge.start_hero, "sharpen") and Knowledge.holder("sharpen") == -1, "carta comprada também chega como NOVA e sem equipar")
+	Knowledge.see_new(Knowledge.start_hero, "sharpen")
 	await fight(main)
 	for n in 3:
 		main._master("pair")
@@ -356,7 +395,8 @@ func _initialize() -> void:
 	var sprites := 0
 	for f in lobby.figs:
 		for c in f.get_children():
-			if c is Sprite3D and not f.visual.visible:
+			# a arte (a outra Sprite3D do herói é a sombra dela, escura)
+			if c is Sprite3D and not f.visual.visible and c.modulate == Color.WHITE:
 				var ts: Vector2 = c.texture.get_size()
 				if c.pixel_size * ts.y <= lobby.FIG_H + 0.01 and c.pixel_size * ts.x <= lobby.FIG_W + 0.01:
 					sprites += 1

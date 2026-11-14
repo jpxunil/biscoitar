@@ -137,6 +137,10 @@ class HeroTile extends BaseButton:
 	var hover_tw: Tween
 	var _face: TextureRect
 	var _hot := false
+	## Este herói tem carta nova ainda não vista: um selo rosa com "!" pisca no canto do rosto.
+	var fresh := false: set = _set_fresh
+	var _mark: Control
+	var _mark_t := 0.0
 
 	func _init() -> void:
 		focus_mode = Control.FOCUS_NONE
@@ -148,8 +152,33 @@ class HeroTile extends BaseButton:
 		_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_face.position = Vector2(3, 3)
 		add_child(_face)
+		_mark = Control.new()
+		_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_mark.visible = false
+		_mark.draw.connect(_draw_mark)
+		add_child(_mark)
+		set_process(false)
 		mouse_entered.connect(_hover.bind(true))
 		mouse_exited.connect(_hover.bind(false))
+
+	func _set_fresh(v: bool) -> void:
+		fresh = v
+		_mark.visible = v
+		set_process(v)
+
+	func _process(delta: float) -> void:
+		_mark_t += delta
+		_mark.queue_redraw()
+
+	func _draw_mark() -> void:
+		# selo no canto de cima do rosto: losango rosa com contorno INK e "!" creme
+		var p := 0.5 + 0.5 * sin(_mark_t * 5.0)
+		var c := Vector2(_face.size.x - 6.0, 12.0)
+		var r := 9.0 + 1.5 * p
+		for spec in [[r + 3.0, Paper.INK], [r, Paper.PINK]]:
+			var rr: float = spec[0]
+			_mark.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -rr), c + Vector2(rr, 0), c + Vector2(0, rr), c + Vector2(-rr, 0)]), spec[1])
+		_mark.draw_string(Paper.display(0.0), c + Vector2(-10, 5), "!", HORIZONTAL_ALIGNMENT_CENTER, 20, 13, Paper.CREAM)
 
 	func _set_hero(v: int) -> void:
 		hero = v
@@ -366,6 +395,7 @@ func refresh(animate := false, dir := 0) -> void:
 	_strip_bar.fill = _th["deep2"]
 	_boss.queue_redraw()
 	_layout_tiles(animate)
+	_mark_new()
 	# arte: ilustração inteira se existir, senão o rosto numa moldura
 	var art := ""
 	for ext in ["webp", "png"]:
@@ -395,6 +425,8 @@ func refresh(animate := false, dir := 0) -> void:
 		_art_tex.texture = tex
 		var ts := tex.get_size()
 		_art_tex.size = Vector2(frame["w"], frame["w"] * ts.y / ts.x)
+		# silhueta colorida atrás da figura, na cor de destaque do tema do herói
+		ArtShadow.attach(_art_tex, _th["acc"])
 		_art.pivot_offset = Vector2(frame["w"] * 0.5, minf(_art_tex.size.y * 0.8, 400.0))
 	else:
 		_face_tex.texture = load("res://assets/portraits/%s_face.png" % h["key"])
@@ -429,6 +461,11 @@ func refresh(animate := false, dir := 0) -> void:
 		if Knowledge.is_owned_by(hero, id):
 			mine += 1
 	_focus = clampi(mine / 2, 0, maxi(0, _hand.size() - 1))
+	# tem carta nova: a roleta abre nela (o selo só sai quando o mouse passar por cima)
+	for k in _hand.size():
+		if Knowledge.is_new(hero, _hand[k]):
+			_focus = k
+			break
 	_ticks.rotation = deg_to_rad(-_focus * STEP)
 	_build_cards(animate)
 	if animate:
@@ -949,6 +986,7 @@ func _build_cards(deal := false, drop := "") -> void:
 		spoke.rotation = deg_to_rad((k - _focus) * STEP)
 		_cards.add_child(spoke)
 		var cv := CardView.make(id, "face" if mine else "back")
+		cv.fresh = mine and Knowledge.is_new(hero, id)
 		if not mine:
 			var key := Knowledge.mastery_key(id)
 			if key != "":
@@ -991,6 +1029,11 @@ func _wire(info: Dictionary) -> void:
 	var cv: CardView = info["cv"]
 	cv.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if info["drag_ok"] else Control.CURSOR_ARROW
 	cv.mouse_entered.connect(func():
+		if cv.fresh:
+			# o jogador achou a carta nova: o selo some dela e, se era a última, do rosto do herói
+			Knowledge.see_new(hero, info["id"])
+			cv.fresh = false
+			_mark_new()
 		info["hover"] = true
 		_peek = info
 		_settle(info)
@@ -1010,6 +1053,12 @@ func _wire(info: Dictionary) -> void:
 		_pend = {"info": info, "start": _mouse_at, "shook": false}
 		info["press"] = true
 		_settle(info))
+
+
+## Liga ou desliga o aviso de carta nova no rosto de cada herói do seletor.
+func _mark_new() -> void:
+	for id in _tiles:
+		_tiles[id].fresh = tutor.is_empty() and Knowledge.has_new(id)
 
 
 ## Duplo clique, o atalho do arrasto: carta da roleta vai pro primeiro slot livre do tipo dela;

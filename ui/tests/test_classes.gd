@@ -803,6 +803,49 @@ func _initialize() -> void:
 	await wait(1.0)
 	check(u.torpor < t0 - 0.8, "acordado, o Torpor cai 1 por segundo")
 
+	# a sequência só começa no Puxar o Lençol
+	for start in [2, 3, 4]:
+		ready(u)
+		main.dream_stacks = 0
+		main.echoes.clear()
+		u.window_slot = -1
+		u.window_t = 0.0
+		u.crumbs = false
+		u.pillow_full = false
+		u.torpor = 0.0
+		before = u.dmg_total
+		sw(main, u, start)
+		check(u.window_slot == -1 and main.glow_slot(u) == -1, "%s solta não abre a janela da próxima" % main.SKILLS["sleepwalker"][start]["name"])
+		check(is_equal_approx(u.torpor, float(main.SW_AWAKE[start]["torpor"])) and not u.crumbs and not u.pillow_full, "e não dá o Torpor extra nem o efeito da sequência")
+		if start < 4:
+			await wait(0.2)
+			sw(main, u, start + 1)
+			check(main.echoes.is_empty() and not u.pillow_full and u.window_slot == -1, "seguir daí também não vale: sem Lençol não tem sequência")
+	ready(u)
+	u.torpor = 0.0
+	main.dream_stacks = 0
+	sw(main, u, 3)
+	sw(main, u, 4)
+	check(is_equal_approx(u.dmg_total - before, 0.0) or main.echoes.is_empty(), "Travesseiro e Cama soltos não ativam os Ecos")
+	# Torpor cheio segura 3 s; Fresta dá Torpor
+	u.torpor = 99.0
+	u.torpor_hold = 0.0
+	ready(u)
+	sw(main, u, 0)
+	check(is_equal_approx(u.torpor, 100.0) and is_equal_approx(u.torpor_hold, main.SW_FULL_HOLD), "chegar em 100 de Torpor segura a barra cheia")
+	await wait(2.5)
+	check(is_equal_approx(u.torpor, 100.0), "com 2,5 s, o Torpor ainda está em 100")
+	await wait(1.5)
+	check(u.torpor < 99.6 and u.torpor > 98.0, "depois de 3 s ele volta a cair (%.1f)" % u.torpor)
+	u.torpor = 10.0
+	u.torpor_hold = 0.0
+	ready(u)
+	main.echoes = [{"wait": 0.0, "open": 0.4, "hit": false, "warned": true}]
+	sw(main, u, 0)
+	check(is_equal_approx(u.torpor, 10.0 + 3.0 + main.SW_ECHO_TORPOR), "acertar a Fresta: +4 de Torpor além do Bocejo")
+	main.echoes.clear()
+	sw(main, u, 1)  # deixa uma recarga do Modo Acordado correndo, pra conferir que ela é guardada
+
 	# Modo Dormindo
 	u.torpor = 100.0
 	main.dream_stacks = 0
@@ -881,6 +924,7 @@ func _initialize() -> void:
 	ready(u)
 	sw(main, u, 5)
 	check(not u.asleep and is_equal_approx(u.silence_t, main.SW_LOCK_BITE), "acordar depois de usar só A Mordida dos Mil: 1 s sem agir")
+	check(is_equal_approx(u.torpor, 100.0 - 5.0 - main.SW_BITE_WAKE), "e perde só 15 de Torpor, não tudo (%.0f)" % u.torpor)
 	# sequência largada no meio: 3 s
 	u.silence_t = 0.0
 	ready(u)

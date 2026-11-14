@@ -144,21 +144,21 @@ static func _desc(g: GDScript, key: String, slot: int, asleep: bool, sk: Diction
 			if asleep:
 				var base := _n(float(sk.get("base", 0.0)) * sc)
 				match slot:
-					0: return ["Ataque", "%s de dano e aplica Pesadelo Persistente (%s por segundo, %s s). Aplicar o DoT dá Perto do Sonho: %s s se renovar nos últimos %s s dele, %s s nos outros casos. Sem Torpor, sai de graça e fraca. Acordar logo depois dela: %s s sem agir." % [base, _n(g.NIGHTMARE_DPS), _n(g.NIGHTMARE_TIME), _n(g.NEAR_PERFECT), _n(g.NEAR_WINDOW), _n(g.NEAR_OTHER), _n(g.SW_LOCK_BITE)]]
+					0: return ["Ataque", "%s de dano e aplica Pesadelo Persistente (%s por segundo, %s s). Aplicar o DoT dá Perto do Sonho: %s s se renovar nos últimos %s s dele, %s s nos outros casos. Sem Torpor, sai de graça e fraca. Acordar logo depois dela custa só %s de Torpor e %s s sem agir." % [base, _n(g.NIGHTMARE_DPS), _n(g.NIGHTMARE_TIME), _n(g.NEAR_PERFECT), _n(g.NEAR_WINDOW), _n(g.NEAR_OTHER), _n(g.SW_BITE_WAKE), _n(g.SW_LOCK_BITE)]]
 					1: return ["Ataque", "Segunda da sequência. %s de dano. Daqui em diante, acordar sem fechar com A Casa que Engole custa %s s sem agir." % [base, _n(g.SW_LOCK_BROKEN)]]
 					2: return ["Ataque", "Terceira da sequência. %s de dano." % base]
 					3: return ["Ataque", "Quarta da sequência. %s de dano." % base]
 					4: return ["Ultimate", "Fecha a sequência: %s de dano e escudo de %s da vida máxima em toda a party por %s s. Você acorda sozinho, sem punição." % [base, _pct(g.HOUSE_SHIELD), _n(g.HOUSE_SHIELD_TIME)]]
-					5: return ["Transformação", "Acorda na hora e perde o Torpor que sobrou. Punição: %s s sem agir se não usou nada, %s s se usou só A Mordida dos Mil, %s s se largou a sequência no meio." % [_n(g.SW_LOCK_NONE), _n(g.SW_LOCK_BITE), _n(g.SW_LOCK_BROKEN)]]
+					5: return ["Transformação", "Acorda na hora. Se usou só A Mordida dos Mil: perde %s de Torpor e fica %s s sem agir. Sem ter usado nada: perde tudo e %s s. Largando a sequência no meio: perde tudo e %s s." % [_n(g.SW_BITE_WAKE), _n(g.SW_LOCK_BITE), _n(g.SW_LOCK_NONE), _n(g.SW_LOCK_BROKEN)]]
 			var a: Dictionary = g.SW_AWAKE[mini(slot, 4)]
 			var hit := _n(float(a["base"]) * sc)
 			var tp := _n(a["torpor"])
-			var win := "Comece a conjurar em até %s s depois da habilidade anterior da sequência pra ganhar +%s de Torpor e o efeito completo." % [_n(g.SW_WINDOW), _n(g.SW_PERFECT_TORPOR)]
+			var win := "Só vale dentro da sequência que começa no Puxar o Lençol: comece a conjurar em até %s s depois da habilidade anterior pra ganhar +%s de Torpor e o efeito completo. Solta, não dá bônus nem abre a próxima." % [_n(g.SW_WINDOW), _n(g.SW_PERFECT_TORPOR)]
 			match slot:
-				0: return ["Básico", "%s de dano, +%s de Torpor. Acerta as Frestas dos Ecos do Pesadelo (+%s de dano). %s" % [hit, tp, _n(g.ECHO_BASE * sc), near]]
+				0: return ["Básico", "%s de dano, +%s de Torpor. Acerta as Frestas dos Ecos do Pesadelo (+%s de dano e +%s de Torpor). %s" % [hit, tp, _n(g.ECHO_BASE * sc), _n(g.SW_ECHO_TORPOR), near]]
 				1: return ["Ataque", "Abre a sequência. %s de dano, +%s de Torpor e +%d de Vulnerabilidade Onírica (cada acúmulo: +%s de dano seu, até %d, por %s s)." % [hit, tp, int(a["stacks"]), _pct(g.DREAM_PER), g.DREAM_MAX, _n(g.DREAM_TIME)]]
 				2: return ["Ataque", "%s de dano, +%s de Torpor. Na janela: +%d de Vulnerabilidade e deixa Migalhas. %s" % [hit, tp, int(a["stacks"]), win]]
 				3: return ["Ataque", "%s de dano, +%s de Torpor. Na janela e com Migalhas: +%d de Vulnerabilidade e fica com o Travesseiro Cheio. %s" % [hit, tp, int(a["stacks"]), win]]
 				4: return ["Ataque", "%s de dano, +%s de Torpor. Na janela e com o Travesseiro Cheio: dano %s e abre os Ecos do Pesadelo (quatro Frestas pro Bocejo). %s" % [hit, tp, _pct(g.SW_BED_BONUS), win]]
-				5: return ["Transformação", "Entra no Modo Dormindo: imóvel, gasta Torpor numa sequência de ordem fixa. Sem Torpor pra próxima, você acorda sozinho. Acordado, o Torpor cai %s por segundo." % _n(g.SW_DECAY)]
+				5: return ["Transformação", "Entra no Modo Dormindo: imóvel, gasta Torpor numa sequência de ordem fixa. Sem Torpor pra próxima, você acorda sozinho. Acordado, o Torpor cai %s por segundo (ao encher, segura cheio por %s s)." % [_n(g.SW_DECAY), _n(g.SW_FULL_HOLD)]]
 	return ["Ataque", ""]

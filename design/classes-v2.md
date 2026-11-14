@@ -220,3 +220,10 @@ Vale o que está aqui quando divergir das fichas acima.
   nas bordas e a arte do personagem à direita (hud.skill_cut). IA não dispara.
 - **Ícones e fichas**: `assets/skills/<chave>_<slot>.svg` (59 arquivos; Modo Dormindo em `<chave>_s<slot>.svg`),
   textos em `scripts/skill_info.gd`, usados pela barra da luta, pelo tooltip e pela tela SKILLS do menu.
+- **Sleepwalker, ajustes seguintes**: a sequência acordada só vale começando no Puxar o Lençol (a janela da
+  próxima só abre depois de um passo acertado; habilidade solta não dá bônus nem acende nada). Acordar depois
+  de usar só a Mordida custa 15 de Torpor, não tudo. Fresta acertada: +4 de Torpor. Ao chegar em 100, o Torpor
+  segura cheio por 3 s antes de voltar a cair.
+- **Cartas novas**: nenhuma carta é equipada sozinha. Ela entra na coleção marcada como NOVA pro herói que a
+  conquistou (`Knowledge.fresh`, salvo no save): selo na carta até passar o mouse nela, aviso no rosto do herói
+  até a última ser vista.

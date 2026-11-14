@@ -227,6 +227,10 @@ static var mastery := {}
 static var money := 0
 static var tickets := 0
 static var shop_unlocked := false
+## Cartas novas ainda não vistas: herói (índice) -> lista de ids. É UM estado só, usado pelo aviso no
+## personagem (has_new) e pelo selo NOVO na carta (is_new). Sai da lista quando o jogador passa o
+## mouse na carta, na tela de cartas daquele herói (see_new). Vai pro save.
+static var fresh := {}
 ## Rotação é de cada herói: chave do herói -> true.
 static var dps_known := {}
 ## Melhor ranking por boss (índice -> índice em RANKS). Boss vencido libera o próximo.
@@ -410,6 +414,49 @@ static func hint(id: String) -> String:
 	return SECRETS[id][1] if SECRETS.has(id) else "Continue jogando."
 
 
+# ---------------------------------------------------------------- cartas novas
+
+## Marca a carta como NOVA pro herói que a conquistou. Carta nova nunca é equipada sozinha: ela
+## entra na coleção e fica esperando o jogador. Sem herói informado (loja, prêmio de boss), vale
+## quem o jogador controla; se esse herói não pode usar a carta, vale o primeiro da party que pode.
+static func mark_new(id: String, hero := -1) -> void:
+	if not CARDS.has(id):
+		return
+	if hero < 0:
+		hero = start_hero
+	if not usable(hero, id):
+		hero = -1
+		for h in fight_party() + range(HEROES.size()):
+			if usable(h, id):
+				hero = h
+				break
+		if hero < 0:
+			return
+	if not fresh.has(hero):
+		fresh[hero] = []
+	if not fresh[hero].has(id):
+		fresh[hero].append(id)
+
+
+static func is_new(hero: int, id: String) -> bool:
+	return fresh.has(hero) and fresh[hero].has(id)
+
+
+## O herói tem alguma carta nova que o jogador ainda não viu?
+static func has_new(hero: int) -> bool:
+	return fresh.has(hero) and not fresh[hero].is_empty()
+
+
+## O jogador viu a carta (passou o mouse nela): sai da lista e o save é atualizado.
+static func see_new(hero: int, id: String) -> void:
+	if not is_new(hero, id):
+		return
+	fresh[hero].erase(id)
+	if fresh[hero].is_empty():
+		fresh.erase(hero)
+	save()
+
+
 # ---------------------------------------------------------------- maestria
 
 static func mastery_of(key: String) -> int:
@@ -463,6 +510,7 @@ static func buy(id: String) -> bool:
 	else:
 		money -= int(c["price"])
 	owned[id] = true
+	mark_new(id)
 	save()
 	return true
 
@@ -493,6 +541,7 @@ static func reward(boss_i: int, rank: int) -> Dictionary:
 		out["ticket"] = 1
 	if mini_boss and not owned.has("breath"):
 		owned["breath"] = true
+		mark_new("breath")
 		out["card"] = "breath"
 	if not best_rank.has(boss_i) or int(best_rank[boss_i]) < rank:
 		best_rank[boss_i] = rank
@@ -513,8 +562,9 @@ static var _kept := {}
 static func enter_sandbox() -> void:
 	if sandbox:
 		return
-	_kept = {"owned": owned, "decks": decks, "mastery": mastery, "dps": dps_known, "hero": start_hero, "party": party}
+	_kept = {"owned": owned, "decks": decks, "mastery": mastery, "dps": dps_known, "hero": start_hero, "party": party, "fresh": fresh}
 	sandbox = true
+	fresh = {}
 	owned = {}
 	decks = {}
 	mastery = {}
@@ -531,6 +581,7 @@ static func leave_sandbox() -> void:
 	dps_known = _kept["dps"]
 	start_hero = _kept["hero"]
 	party = _kept["party"]
+	fresh = _kept["fresh"]
 	_kept = {}
 	sandbox = false
 
@@ -552,7 +603,7 @@ static var practice := false
 static func begin_run() -> void:
 	if in_run:
 		return
-	_run_kept = {"owned": owned.duplicate(), "decks": decks.duplicate(true), "mastery": mastery.duplicate(), "dps": dps_known.duplicate()}
+	_run_kept = {"owned": owned.duplicate(), "decks": decks.duplicate(true), "mastery": mastery.duplicate(), "dps": dps_known.duplicate(), "fresh": fresh.duplicate(true)}
 	in_run = true
 
 
@@ -574,6 +625,7 @@ static func abort_run() -> void:
 	decks = _run_kept["decks"]
 	mastery = _run_kept["mastery"]
 	dps_known = _run_kept["dps"]
+	fresh = _run_kept["fresh"]
 	_run_kept = {}
 	in_run = false
 
@@ -606,6 +658,9 @@ static func save() -> void:
 		"owned": owned.keys(), "decks": {}, "mastery": mastery, "money": money, "tickets": tickets,
 		"shop": shop_unlocked, "dps": dps_known.keys(), "rank": {}, "hero": start_hero, "boss": boss, "party": party,
 	}
+	data["fresh"] = {}
+	for h in fresh:
+		data["fresh"][str(h)] = fresh[h]
 	for i in decks:
 		data["decks"][str(i)] = decks[i]
 	for b in best_rank:
@@ -618,6 +673,7 @@ static func save() -> void:
 ## Progresso zerado, como um save novo.
 static func reset_progress() -> void:
 	owned = {"dodge": true}
+	fresh = {}
 	decks = {}
 	mastery = {}
 	money = 0
@@ -724,6 +780,15 @@ static func _read(path: String) -> void:
 	boss = clampi(int(parsed.get("boss", 1)), 0, BOSS_INFO.size() - 1)
 	if not boss_open(boss):
 		boss = 1
+	# cartas novas ainda não vistas: só as que existem e são do jogador
+	var news: Dictionary = parsed.get("fresh", {})
+	for sh in news:
+		var h := int(sh)
+		if h < 0 or h >= HEROES.size():
+			continue
+		for id in news[sh]:
+			if CARDS.has(str(id)) and is_owned_by(h, str(id)):
+				mark_new(str(id), h)
 	# baralhos: só entra o que ainda existe, é do jogador e cabe no slot
 	var saved: Dictionary = parsed.get("decks", {})
 	for si in saved:

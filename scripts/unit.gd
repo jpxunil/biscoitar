@@ -70,6 +70,7 @@ var mend_t := 0.0      # regeneração da Tanatopraxia
 var mend_rate := 0.0
 # Sleepwalker
 var asleep := false    # Modo Dormindo: imóvel, gasta Torpor
+var torpor_hold := 0.0 # Torpor acabou de encher: uns segundos sem perder nada
 var silence_t := 0.0   # punição de quem acordou mal: anda, mas não ataca nem usa habilidade
 var cast_perfect := false  # a conjuração em curso começou dentro da janela da sequência
 # Ringstar no ar (salto do Nocaute Final): passa por cima de ataque baixo (hazard com "low")
@@ -342,6 +343,7 @@ func die() -> void:
 	guard_t = 0.0
 	asleep = false
 	silence_t = 0.0
+	torpor_hold = 0.0
 	air_t = 0.0
 	torpor = 0.0
 	dream_step = 0

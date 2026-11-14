@@ -31,6 +31,20 @@ func _ready() -> void:
 	gear.size = Vector2(224, 66)
 	gear.pressed.connect(func(): gear_pressed.emit())
 	add_child(gear)
+	# selo no botão CARTAS quando alguém da party tem carta nova pra ver
+	var chip := Chip.new()
+	chip.name = "NewCards"
+	chip.px = 12
+	chip.pad = 8.0
+	chip.border = 3.0
+	chip.shadow = Vector2(-3, 4)
+	chip.fill = Paper.PINK
+	chip.ink = Paper.CREAM
+	chip.text = "NOVO"
+	chip.position = Vector2(1180, 22)
+	chip.rotation = deg_to_rad(8.0)
+	chip.visible = false
+	add_child(chip)
 	_build_practice()
 	if get_tree().current_scene == self:
 		Knowledge.persist = false
@@ -43,6 +57,11 @@ func open() -> void:
 	_last_boss = sel
 	if Knowledge.practice:
 		sel = _practice_at
+	var any_new := false
+	for h in Knowledge.fight_party():
+		if Knowledge.has_new(h):
+			any_new = true
+	$NewCards.visible = any_new
 	_build()
 
 
