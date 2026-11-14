@@ -1839,5 +1839,104 @@ func _initialize() -> void:
 	Knowledge.layouts.erase(2)
 	Knowledge.layout_rev += 1
 
+	# ---------- TROVÃO-KUN: boss que anda, pulo e ventilador de raios
+	Knowledge.boss = 4
+	Knowledge.know = {}
+	main = await fight(2)
+	u = main.units[main.ctrl]
+	check(main.roam and main.boss_def["name"] == "TROVÃO-KUN" and main.boss_pos.length() < 0.1, "TROVÃO-KUN fica no meio da arena")
+	check(main._in_range(u) and u.position.distance_to(main.boss_pos) < 4.5, "a party se arruma em volta dele (%.1f)" % u.position.distance_to(main.boss_pos))
+	check(main.jump(u) and u.airborne() and is_equal_approx(u.hop_t, main.JUMP_AIR), "pulo: fica no ar por um instante")
+	check(not main.jump(u), "não dá pra pular de novo no ar")
+	await wait(0.3)
+	check(u.visual.position.y > 0.6, "o boneco sobe de verdade (%.1f)" % u.visual.position.y)
+	await wait(0.7)
+	check(not u.airborne() and is_equal_approx(u.visual.position.y, 0.0) and main.jump(u), "volta pro chão e pode pular de novo")
+	await wait(0.9)
+	# salto do boss
+	main.step = 0
+	main._next_step()
+	check(main.phase == "leap" and main.hazards.size() == 1 and main.hazards[0]["shape"] == "circle", "Salto Trovejante marca um círculo vermelho no chão")
+	var land: Vector3 = main.leap_to
+	await wait(1.75)
+	check(main.boss_pos.distance_to(land) < 0.7 and main.phase == "chase", "ele cai no ponto marcado e começa a perseguir")
+	var tanky: Unit = main.units[0]
+	for o in main.units:
+		o.enmity = 0.0
+		o.hp = o.max_hp
+	tanky.enmity = 999.0
+	tanky.position = main.boss_pos + Vector3(8.0, 0, 0)
+	var d0: float = main.boss_pos.distance_to(tanky.position)
+	var hp_near: float = u.hp
+	u.position = main.boss_pos + Vector3(0, 0, 1.0)
+	await wait(1.0)
+	check(main.storm_target == tanky and main.boss_pos.distance_to(tanky.position) < d0 - 0.8, "na perseguição ele anda atrás de quem está no topo do aggro")
+	check(is_equal_approx(u.hp, hp_near) or u.hp > hp_near - 0.5, "encostar nele não dá dano: dá pra bater de perto")
+	# faíscas
+	main.step = 4
+	main._next_step()
+	for o in main.units:
+		o.invuln = 9.0  # ninguém estoura as faíscas enquanto o teste olha pra elas
+	await wait(0.7)
+	check(main.phase == "orbs" and main.orbs.size() > 6 and main.orbs.size() < main.ORB_COUNT, "Enxame de Faíscas: uma onda em roda, com buracos (%d)" % main.orbs.size())
+	var spark: Dictionary = main.orbs[0]
+	var s0: Vector3 = spark["node"].position
+	await wait(0.4)
+	check(is_instance_valid(spark["node"]) and (spark["node"].position - s0).normalized().dot(spark["dir"]) > 0.95, "as faíscas andam em linha reta, sem seguir ninguém")
+	main.step = 6
+	main._next_step()
+	check(main.phase == "fan" and main.fan_beams.size() == 3 and not main.fan_on, "Ventilador de Raios: três raios, primeiro só o aviso")
+	check(is_equal_approx(main.arena_r, 13.5) and main.arena_r > main.ARENA_R, "a arena dele é bem maior que a normal")
+	check(not main.boss_focus and main.boss_at(main.cam.unproject_position(main.boss_pos + Vector3(0, 1.8, 0))), "dá pra clicar no boss")
+	main.boss_focus = true
+	await frames_of(2)
+	check(main.range_ring != null and main.range_ring.visible and is_equal_approx(main.range_ring_r, u.atk_range), "com o boss em foco aparece o anel do seu alcance máximo")
+	main.boss_focus = false
+	for o in main.units:
+		o.hp = o.max_hp
+		o.invuln = 0.0
+	main.fan_speed = 0.0
+	await wait(main.FAN_WARN + 0.1)
+	check(main.fan_on, "depois do aviso os raios ligam")
+	# de pé em cima de um raio: apanha
+	u.position = main.boss_pos + main._fan_dir(0) * 4.0
+	u.fan_safe_t = 0.0
+	u.invuln = 0.0
+	u.hp = u.max_hp
+	var hp_fan: float = u.hp
+	await frames_of(3)
+	check(u.hp < hp_fan, "de pé no raio: toma o dano do ventilador")
+	# no ar em cima de um raio: passa, e o herói aprende
+	u.fan_safe_t = 0.0
+	u.hop_cd = 0.0
+	hp_fan = u.hp
+	var k0: float = Knowledge.knowledge(u.hero, "fan")
+	var mate: Unit = main.units[(main.ctrl + 1) % 4]
+	var m0: float = Knowledge.knowledge(mate.hero, "fan")
+	main.jump(u)
+	await frames_of(3)
+	check(is_equal_approx(u.hp, hp_fan), "pulando, o raio passa por baixo")
+	check(is_equal_approx(Knowledge.knowledge(u.hero, "fan"), k0 + main.LEARN_HAND), "passar na mão ensina o herói (+%d)" % main.LEARN_HAND)
+	check(Knowledge.knowledge(mate.hero, "fan") >= m0 + main.LEARN_WATCH, "e quem viu aprende um pouco também")
+	check(is_equal_approx(Knowledge.knowledge(8, "fan"), Knowledge.KNOW_START), "quem não estava na luta continua no começo")
+	# a IA: com pouco conhecimento quase nunca pula; com muito, quase sempre
+	var tries := [0, 0]
+	for pass_i in 2:
+		Knowledge.know[mate.hero] = {"fan": 2.0 if pass_i == 0 else 98.0}
+		for n in 60:
+			mate.ai_fan_decided = false
+			mate.ai_hop_at = -1.0
+			mate.ai_run = false
+			mate.set_meta("fan_eta", 0.0)
+			mate.position = main.boss_pos + main._fan_dir(0).rotated(Vector3.UP, -0.5) * 4.0
+			main.fan_speed = 0.75
+			main._fan_ai(mate, 0.0)
+			if mate.ai_hop_at >= 0.0:
+				tries[pass_i] += 1
+	main.fan_speed = 0.0
+	check(tries[0] < 15 and tries[1] > 50, "o conhecimento muda a CHANCE de a IA tentar o pulo (%d e %d de 60)" % [tries[0], tries[1]])
+	Knowledge.boss = 1
+	Knowledge.know = {}
+
 	print("Results: %d passed, %d failed" % [passed, failed])
 	quit(1 if failed > 0 else 0)

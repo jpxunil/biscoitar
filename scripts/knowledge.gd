@@ -42,8 +42,24 @@ const BOSS_INFO := [
 	{"name": "MINI-CHAN", "mini": false, "blurb": "Desvios, círculos e um grande final."},
 	{"name": "PROTÓTIPO-CHAN", "mini": false, "blurb": "Marca Elemental, zonas e Cataclismo."},
 	{"name": "FUSÃO-CHAN", "mini": false, "blurb": "Tudo junto e mais rápido."},
+	{"name": "TROVÃO-KUN", "mini": true, "blurb": "Mini boss. Salta, solta faíscas e gira um ventilador de raios: pule!"},
 ]
 
+## TRÊS COISAS DIFERENTES, que não competem entre si:
+##   APRENDIZADO — carta que ensina a party a resolver algo. Fica no baralho enquanto o herói aprende
+##                 (progress, 0..100); em 100 vira PASSIVA dele pra sempre e sai do slot.
+##   CRITÉRIO    — carta de preferência (PREF_IDS): uma decisão de como jogar, com custo. Não é
+##                 conhecimento, então nunca vira passiva: disputa slot do baralho sempre.
+##   EQUIPAMENTO — todo buff de número (GEAR_IDS). Não é carta: vai nos GEAR_SLOTS do herói, na tela
+##                 de gear, e é vendido na loja de itens. Os consumíveis (kind "item") seguem no slot
+##                 de item do baralho e são vendidos na mesma loja.
+const GEAR_IDS := ["sharpen", "plate", "breath", "burst", "executor", "secondskin", "spark", "phoenix", "overdrive",
+	"heart", "scope", "boots", "dice"]
+const PREF_IDS := ["eshield", "revive"]
+const GEAR_SLOTS := 4
+## Quanto uma luta vencida e limpa (sem morrer e sem tomar aquela mecânica) rende de aprendizado
+## pra carta equipada: três lutas assim e ela vira passiva.
+const LEARN_WIN := 34.0
 const KINDS := ["purple", "gold", "white", "item"]
 const SLOTS := {"purple": 2, "gold": 3, "white": 4, "item": 1}
 const KIND_NAME := {"purple": "Épica", "gold": "Rara", "white": "Comum", "item": "Item"}
@@ -115,6 +131,15 @@ const CARDS := {
 		"desc": "Uma vez por luta, em vez de morrer, volta com metade da vida."},
 	"overdrive": {"name": "Sobrecarga", "kind": "purple", "cat": "attack", "ticket": 1,
 		"desc": "+20% de dano, mas recebe 15% a mais."},
+	# ---- equipamentos de atributo (GEAR_IDS): nunca vão no baralho, só nos slots de gear
+	"heart": {"name": "Coração de Açúcar", "kind": "white", "cat": "defense", "price": 140,
+		"desc": "+20 de vida máxima."},
+	"scope": {"name": "Luneta", "kind": "white", "cat": "utility", "price": 140,
+		"desc": "+10% de alcance."},
+	"boots": {"name": "Botas Leves", "kind": "white", "cat": "utility", "price": 160,
+		"desc": "+12% de velocidade de movimento."},
+	"dice": {"name": "Dado Viciado", "kind": "gold", "cat": "attack", "price": 240,
+		"desc": "25% de chance de acerto crítico: o golpe dá +50% de dano."},
 	# ---- itens
 	"potion": {"name": "Poção", "kind": "item", "cat": "utility", "price": 80,
 		"desc": "Uma vez por luta, cura 50 quando a vida cai abaixo de 30%."},
@@ -128,6 +153,10 @@ const CARDS := {
 ## todas as letras. Mudou como uma carta é liberada? Mude a pista junto.
 const SECRETS := {
 	"dodge": ["O primeiro reflexo de quem quer ficar de pé.", "Ninguém entra na arena sem isto."],
+	"heart": ["Um doce que bate.", "O ferreiro guarda um desses na vitrine, pra quem quer aguentar mais."],
+	"scope": ["Um tubo com vidro nas pontas.", "Na loja de itens, pra quem prefere bater de mais longe."],
+	"boots": ["Quase não pesam.", "Na loja de itens: quem calça chega antes em qualquer lugar."],
+	"dice": ["Cai sempre do mesmo lado.", "Na loja de itens. De vez em quando, o golpe de quem carrega sai bem mais forte."],
 	# maestria: resolver a mecânica certo, na mão, MASTERY_NEED vezes
 	"stack": ["Um peso que ninguém aguenta sozinho.",
 		"O laranja pesa menos com gente junto. Quem corre pra perto na hora certa, algumas vezes, ensina o caminho."],
@@ -234,6 +263,20 @@ static var fresh := {}
 ## Ordem das habilidades na barra, por herói: layouts[hero][posição] = habilidade do kit. O jogador
 ## arruma na tela SKILLS (arrastando). Quem não mexeu não tem entrada: vale a ordem do kit. As teclas
 ## (Binds skill_1..6) são das POSIÇÕES, então trocar a ordem troca qual tecla solta cada habilidade.
+## CONHECIMENTO: o quanto cada herói sabe resolver cada mecânica, de 0 a 100 (know[hero][mecânica]).
+## Não liga nem desliga comportamento: muda a CHANCE de o herói tentar a coisa certa e a PRECISÃO com
+## que ele acerta o tempo. Sobe com a experiência (ver game.gd, LEARN_*): tomar a mecânica ensina
+## pouco, acertar sozinho ensina mais, e ver o jogador resolver na mão ensina também.
+## Todo mundo começa em KNOW_START: tem uma vaga ideia, não é um zumbi.
+const KNOW_START := 1.0
+static var know := {}
+## Equipamentos por herói (gear[hero] = GEAR_SLOTS ids, "" = vazio), passivas aprendidas
+## (passive[hero] = [ids]) e o progresso de cada carta de aprendizado (progress[hero][id] = 0..100).
+static var gear := {}
+static var passive := {}
+static var progress := {}
+## Cartas que acabaram de virar passiva e ainda não foram comemoradas: [[hero, id], ...].
+static var learned_now: Array = []
 static var layouts := {}
 static var layout_rev := 0
 ## Rotação é de cada herói: chave do herói -> true.
@@ -324,11 +367,72 @@ static func kind_of(id: String) -> String:
 	return CARDS[id]["kind"]
 
 
+static func role(id: String) -> String:
+	if GEAR_IDS.has(id):
+		return "gear"
+	if CARDS[id]["kind"] == "item":
+		return "item"
+	return "pref" if PREF_IDS.has(id) else "learn"
+
+
+static func gear_of(i: int) -> Array:
+	if not gear.has(i):
+		var arr: Array = []
+		for n in GEAR_SLOTS:
+			arr.append("")
+		gear[i] = arr
+	return gear[i]
+
+
+static func is_passive(i: int, id: String) -> bool:
+	return passive.has(i) and passive[i].has(id)
+
+
+static func passives(i: int) -> Array:
+	return passive.get(i, [])
+
+
+## O herói i está valendo dessa carta/equipamento? (equipado, ou já aprendido como passiva)
 static func has(i: int, id: String) -> bool:
 	if not CARDS.has(id):
 		return false
+	if GEAR_IDS.has(id):
+		return gear_of(i).has(id)
+	if is_passive(i, id):
+		return true
 	var arr: Array = deck(i)[CARDS[id]["kind"]]
 	return arr.has(id)
+
+
+## Está no baralho dele agora? (sem contar passiva)
+static func in_deck(i: int, id: String) -> bool:
+	return CARDS.has(id) and not GEAR_IDS.has(id) and deck(i)[CARDS[id]["kind"]].has(id)
+
+
+static func learn_progress(i: int, id: String) -> float:
+	if is_passive(i, id):
+		return 100.0
+	if not progress.has(i):
+		return 0.0
+	return float(progress[i].get(id, 0.0))
+
+
+## Soma aprendizado numa carta do herói. Em 100 ela vira passiva: sai do baralho, entra em passive
+## e fica na fila da comemoração. Devolve true se virou agora.
+static func add_progress(i: int, id: String, amount: float) -> bool:
+	if sandbox or practice or role(id) != "learn" or is_passive(i, id):
+		return false
+	if not progress.has(i):
+		progress[i] = {}
+	progress[i][id] = clampf(learn_progress(i, id) + amount, 0.0, 100.0)
+	if progress[i][id] < 100.0:
+		return false
+	unequip(i, id)
+	if not passive.has(i):
+		passive[i] = []
+	passive[i].append(id)
+	learned_now.append([i, id])
+	return true
 
 
 ## A classe do herói i pode usar essa carta?
@@ -348,7 +452,9 @@ static func is_owned_by(i: int, id: String) -> bool:
 static func equip(i: int, id: String, slot := -1) -> bool:
 	if not is_owned_by(i, id) or not usable(i, id):
 		return false
-	var arr: Array = deck(i)[CARDS[id]["kind"]]
+	if is_passive(i, id):
+		return true  # já é dele pra sempre: não ocupa slot
+	var arr: Array = gear_of(i) if GEAR_IDS.has(id) else deck(i)[CARDS[id]["kind"]]
 	var at := arr.find(id)
 	if slot < 0:
 		if at >= 0:
@@ -370,7 +476,7 @@ static func equip(i: int, id: String, slot := -1) -> bool:
 
 
 static func unequip(i: int, id: String) -> void:
-	var arr: Array = deck(i)[CARDS[id]["kind"]]
+	var arr: Array = gear_of(i) if GEAR_IDS.has(id) else deck(i)[CARDS[id]["kind"]]
 	var at := arr.find(id)
 	if at >= 0:
 		arr[at] = ""
@@ -380,14 +486,14 @@ static func unequip(i: int, id: String) -> void:
 ## usa por vez. As cartas conquistadas jogando (maestria, Rotação, etc.) são conhecimento: valem pra todos.
 static func is_unique(id: String) -> bool:
 	var c: Dictionary = CARDS[id]
-	return c["kind"] == "item" or c.has("price") or c.has("ticket")
+	return c["kind"] == "item" or c.has("price") or c.has("ticket") or GEAR_IDS.has(id)
 
 
 ## Quem está com a carta de cópia única (índice do herói), ou -1 se ela está solta.
 static func holder(id: String) -> int:
 	var kind: String = CARDS[id]["kind"]
 	for j in HEROES.size():
-		if deck(j)[kind].has(id):
+		if (gear_of(j) if GEAR_IDS.has(id) else deck(j)[kind]).has(id):
 			return j
 	return -1
 
@@ -397,9 +503,28 @@ static func inventory(i: int) -> Array:
 	var out: Array = []
 	for kind in KINDS:
 		for id in CARDS:
-			if CARDS[id]["kind"] == kind and is_owned_by(i, id) and usable(i, id) and not has(i, id):
+			if CARDS[id]["kind"] == kind and not GEAR_IDS.has(id) and is_owned_by(i, id) and usable(i, id) and not has(i, id):
 				out.append(id)
 	return out
+
+
+## Equipamentos que o herói i pode pôr e que não estão nele.
+static func gear_bag(i: int) -> Array:
+	var out: Array = []
+	for id in GEAR_IDS:
+		if is_owned_by(i, id) and usable(i, id) and not gear_of(i).has(id):
+			out.append(id)
+	return out
+
+
+## Os atributos do herói i que os equipamentos mudam: [vida a mais, alcance x, velocidade x, crítico].
+static func gear_stats(i: int) -> Dictionary:
+	return {
+		"hp": 20.0 if has(i, "heart") else 0.0,
+		"range": 1.1 if has(i, "scope") else 1.0,
+		"speed": 1.12 if has(i, "boots") else 1.0,
+		"crit": 0.25 if has(i, "dice") else 0.0,
+	}
 
 
 static func grant(id: String) -> bool:
@@ -487,12 +612,17 @@ static func mastery_key(id: String) -> String:
 
 # ---------------------------------------------------------------- loja
 
-static func shop_list(cat := "") -> Array:
+## O que cada loja vende. `shop` "cards": a loja de cartas (critérios e o que mais for carta);
+## "gear": a loja de itens (equipamentos e consumíveis). "" = tudo.
+static func shop_list(cat := "", shop := "") -> Array:
 	var out: Array = []
 	for kind in KINDS:
 		for id in CARDS:
 			var c: Dictionary = CARDS[id]
-			if c["kind"] == kind and (c.has("price") or c.has("ticket")) and (cat == "" or c["cat"] == cat):
+			if c["kind"] != kind or not (c.has("price") or c.has("ticket")) or not (cat == "" or c["cat"] == cat):
+				continue
+			var is_item: bool = GEAR_IDS.has(id) or kind == "item"
+			if shop == "" or (shop == "gear") == is_item:
 				out.append(id)
 	return out
 
@@ -524,7 +654,7 @@ static func buy(id: String) -> bool:
 
 static func boss_open(i: int) -> bool:
 	# o mini boss e o primeiro boss estão sempre abertos; cada vitória abre o seguinte
-	return i <= 1 or best_rank.has(i - 1)
+	return i <= 1 or BOSS_INFO[i]["mini"] or best_rank.has(i - 1)
 
 
 static func rank_for(score: float) -> int:
@@ -556,6 +686,20 @@ static func reward(boss_i: int, rank: int) -> Dictionary:
 
 
 # ---------------------------------------------------------------- save
+
+static func knowledge(hero: int, mech: String) -> float:
+	if not know.has(hero):
+		return KNOW_START
+	return float(know[hero].get(mech, KNOW_START))
+
+
+static func learn(hero: int, mech: String, amount: float) -> void:
+	if sandbox or practice:
+		return
+	if not know.has(hero):
+		know[hero] = {}
+	know[hero][mech] = clampf(knowledge(hero, mech) + amount, 0.0, 100.0)
+
 
 static func layout(hero: int, count := 6) -> Array:
 	var base: Array = range(count)
@@ -617,8 +761,12 @@ static var _kept := {}
 static func enter_sandbox() -> void:
 	if sandbox:
 		return
-	_kept = {"owned": owned, "decks": decks, "mastery": mastery, "dps": dps_known, "hero": start_hero, "party": party, "fresh": fresh}
+	_kept = {"owned": owned, "decks": decks, "mastery": mastery, "dps": dps_known, "hero": start_hero, "party": party, "fresh": fresh,
+		"gear": gear, "passive": passive, "progress": progress}
 	sandbox = true
+	gear = {}
+	passive = {}
+	progress = {}
 	fresh = {}
 	owned = {}
 	decks = {}
@@ -637,6 +785,9 @@ static func leave_sandbox() -> void:
 	start_hero = _kept["hero"]
 	party = _kept["party"]
 	fresh = _kept["fresh"]
+	gear = _kept["gear"]
+	passive = _kept["passive"]
+	progress = _kept["progress"]
 	_kept = {}
 	sandbox = false
 
@@ -658,7 +809,8 @@ static var practice := false
 static func begin_run() -> void:
 	if in_run:
 		return
-	_run_kept = {"owned": owned.duplicate(), "decks": decks.duplicate(true), "mastery": mastery.duplicate(), "dps": dps_known.duplicate(), "fresh": fresh.duplicate(true)}
+	_run_kept = {"owned": owned.duplicate(), "decks": decks.duplicate(true), "mastery": mastery.duplicate(), "dps": dps_known.duplicate(), "fresh": fresh.duplicate(true),
+		"gear": gear.duplicate(true), "passive": passive.duplicate(true), "progress": progress.duplicate(true), "know": know.duplicate(true)}
 	in_run = true
 
 
@@ -681,6 +833,11 @@ static func abort_run() -> void:
 	mastery = _run_kept["mastery"]
 	dps_known = _run_kept["dps"]
 	fresh = _run_kept["fresh"]
+	gear = _run_kept["gear"]
+	passive = _run_kept["passive"]
+	progress = _run_kept["progress"]
+	know = _run_kept["know"]
+	learned_now.clear()
 	_run_kept = {}
 	in_run = false
 
@@ -713,6 +870,17 @@ static func save() -> void:
 		"owned": owned.keys(), "decks": {}, "mastery": mastery, "money": money, "tickets": tickets,
 		"shop": shop_unlocked, "dps": dps_known.keys(), "rank": {}, "hero": start_hero, "boss": boss, "party": party,
 	}
+	for name in ["gear", "passive", "progress"]:
+		data[name] = {}
+	for h in gear:
+		data["gear"][str(h)] = gear[h]
+	for h in passive:
+		data["passive"][str(h)] = passive[h]
+	for h in progress:
+		data["progress"][str(h)] = progress[h]
+	data["know"] = {}
+	for h in know:
+		data["know"][str(h)] = know[h]
 	data["layouts"] = {}
 	for h in layouts:
 		data["layouts"][str(h)] = layouts[h]
@@ -733,6 +901,11 @@ static func reset_progress() -> void:
 	owned = {"dodge": true}
 	fresh = {}
 	layouts = {}
+	know = {}
+	gear = {}
+	passive = {}
+	progress = {}
+	learned_now.clear()
 	layout_rev += 1
 	decks = {}
 	mastery = {}
@@ -840,6 +1013,14 @@ static func _read(path: String) -> void:
 	boss = clampi(int(parsed.get("boss", 1)), 0, BOSS_INFO.size() - 1)
 	if not boss_open(boss):
 		boss = 1
+	var saved_know: Dictionary = parsed.get("know", {})
+	for sh in saved_know:
+		var hk := int(sh)
+		if hk < 0 or hk >= HEROES.size() or not (saved_know[sh] is Dictionary):
+			continue
+		know[hk] = {}
+		for mech in saved_know[sh]:
+			know[hk][str(mech)] = clampf(float(saved_know[sh][mech]), 0.0, 100.0)
 	# ordem das habilidades na barra (layout() confere se é uma permutação válida na hora de usar)
 	var saved_layouts: Dictionary = parsed.get("layouts", {})
 	for sh in saved_layouts:
@@ -876,6 +1057,48 @@ static func _read(path: String) -> void:
 				var id := str(arr[n])
 				if id != "" and CARDS.has(id) and CARDS[id]["kind"] == kind and is_owned_by(i, id) and usable(i, id):
 					d[kind][n] = id
+	# passivas, progresso e equipamentos
+	var saved_passive: Dictionary = parsed.get("passive", {})
+	for sh in saved_passive:
+		var hp := int(sh)
+		if hp < 0 or hp >= HEROES.size() or not (saved_passive[sh] is Array):
+			continue
+		passive[hp] = []
+		for id in saved_passive[sh]:
+			if CARDS.has(str(id)) and role(str(id)) == "learn" and not passive[hp].has(str(id)):
+				passive[hp].append(str(id))
+				unequip(hp, str(id))
+	var saved_progress: Dictionary = parsed.get("progress", {})
+	for sh in saved_progress:
+		var hg := int(sh)
+		if hg < 0 or hg >= HEROES.size() or not (saved_progress[sh] is Dictionary):
+			continue
+		progress[hg] = {}
+		for id in saved_progress[sh]:
+			if CARDS.has(str(id)):
+				progress[hg][str(id)] = clampf(float(saved_progress[sh][id]), 0.0, 100.0)
+	var saved_gear: Dictionary = parsed.get("gear", {})
+	for sh in saved_gear:
+		var he := int(sh)
+		if he < 0 or he >= HEROES.size() or not (saved_gear[sh] is Array):
+			continue
+		var slots := gear_of(he)
+		for n in mini(GEAR_SLOTS, saved_gear[sh].size()):
+			var id := str(saved_gear[sh][n])
+			slots[n] = id if (GEAR_IDS.has(id) and owned.has(id) and usable(he, id)) else ""
+	# save de antes dos equipamentos: o que era carta de buff no baralho passa pros slots de gear
+	for i in HEROES.size():
+		if not decks.has(i):
+			continue
+		for kind in KINDS:
+			var cards: Array = decks[i][kind]
+			for n in cards.size():
+				if GEAR_IDS.has(cards[n]):
+					var moved: String = cards[n]
+					cards[n] = ""
+					var free := gear_of(i).find("")
+					if free >= 0 and holder(moved) < 0:
+						gear_of(i)[free] = moved
 	# saves antigos podem ter a mesma carta de cópia única em mais de um herói: fica com o primeiro
 	var held := {}
 	for i in HEROES.size():

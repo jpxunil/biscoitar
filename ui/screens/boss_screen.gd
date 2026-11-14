@@ -12,8 +12,10 @@ signal back_pressed
 signal gear_pressed
 ## Abrir a loja do save ativo (só depois da primeira vitória).
 signal shop_pressed
+signal items_pressed
+signal equip_pressed
 
-const HAIR := [Color(0.86, 0.6, 0.3), Color(0.25, 0.8, 0.9), Color(1.0, 0.38, 0.66), Color(0.75, 0.45, 1.0)]
+const HAIR := [Color(0.86, 0.6, 0.3), Color(0.25, 0.8, 0.9), Color(1.0, 0.38, 0.66), Color(0.75, 0.45, 1.0), Color(0.4, 0.8, 1.0)]
 
 var sel := 1
 var _panels: Array = []
@@ -27,18 +29,31 @@ func _ready() -> void:
 	_practice_at = Knowledge.BOSS_INFO.size()
 	$BtnBack.pressed.connect(func(): back_pressed.emit())
 	$BtnConfirm.pressed.connect(_confirm)
-	var gear := Ink.button("CARTAS", Ink.CREAM, Ink.OUT, 26, 11)
+	# quatro botões no topo: as duas lojas (cartas e itens) e as duas telas do herói (cartas e gear)
+	var gear := Ink.button("CARTAS", Ink.CREAM, Ink.OUT, 22, 11)
 	gear.name = "BtnGear"
-	gear.position = Vector2(1010, 36)
-	gear.size = Vector2(224, 66)
+	gear.position = Vector2(884, 40)
+	gear.size = Vector2(170, 60)
 	gear.pressed.connect(func(): gear_pressed.emit())
 	add_child(gear)
-	var shop := Ink.button("LOJA", Ink.GRAPE, Ink.CREAM, 26, 13)
+	var shop := Ink.button("LOJA", Ink.GRAPE, Ink.CREAM, 22, 13)
 	shop.name = "BtnShop"
-	shop.position = Vector2(770, 36)
-	shop.size = Vector2(224, 66)
+	shop.position = Vector2(516, 40)
+	shop.size = Vector2(170, 60)
 	shop.pressed.connect(func(): shop_pressed.emit())
 	add_child(shop)
+	var items := Ink.button("ITENS", Ink.GRAPE, Ink.CREAM, 22, 17)
+	items.name = "BtnItems"
+	items.position = Vector2(700, 40)
+	items.size = Vector2(170, 60)
+	items.pressed.connect(func(): items_pressed.emit())
+	add_child(items)
+	var equip := Ink.button("GEAR", Ink.COIN, Ink.OUT, 22, 19)
+	equip.name = "BtnEquip"
+	equip.position = Vector2(1068, 40)
+	equip.size = Vector2(170, 60)
+	equip.pressed.connect(func(): equip_pressed.emit())
+	add_child(equip)
 	# selo no botão CARTAS quando alguém da party tem carta nova pra ver
 	var chip := Chip.new()
 	chip.name = "NewCards"
@@ -49,7 +64,7 @@ func _ready() -> void:
 	chip.fill = Paper.PINK
 	chip.ink = Paper.CREAM
 	chip.text = "NOVO"
-	chip.position = Vector2(1180, 22)
+	chip.position = Vector2(1006, 24)
 	chip.rotation = deg_to_rad(8.0)
 	chip.visible = false
 	add_child(chip)
@@ -71,6 +86,7 @@ func open() -> void:
 			any_new = true
 	$NewCards.visible = any_new
 	$BtnShop.disabled = not Knowledge.shop_unlocked
+	$BtnItems.disabled = not Knowledge.shop_unlocked
 	_build()
 
 
@@ -146,18 +162,20 @@ func _build() -> void:
 		$List.remove_child(c)
 		c.queue_free()
 	_panels.clear()
+	# com mais de quatro lutas os painéis estreitam pra caber todos na tela
+	var w := 283.0 if Knowledge.BOSS_INFO.size() <= 4 else 222.0
 	for i in Knowledge.BOSS_INFO.size():
 		var info: Dictionary = Knowledge.BOSS_INFO[i]
 		var open_now := Knowledge.boss_open(i)
 		var slot := Control.new()
-		slot.custom_minimum_size = Vector2(283, 420)
+		slot.custom_minimum_size = Vector2(w, 420)
 		slot.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if open_now else Control.CURSOR_ARROW
 		var p := Ink.panel(Ink.NAVY, 30 + i * 7)
-		p.size = Vector2(283, 400)
+		p.size = Vector2(w, 400)
 		p.position = Vector2(0, 16)
 		slot.add_child(p)
 		var emblem := Control.new()
-		emblem.position = Vector2(51, 22)
+		emblem.position = Vector2((w - 180.0) * 0.5, 22)
 		emblem.size = Vector2(180, 170)
 		emblem.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		emblem.draw.connect(_draw_emblem.bind(emblem, i, open_now))
@@ -171,21 +189,21 @@ func _build() -> void:
 			var tl := Ink.title("MINI BOSS", 15, Ink.OUT)
 			tl.position = Vector2(10, 4)
 			tag.add_child(tl)
-		var nm := Ink.title(info["name"], 25, Ink.CREAM if open_now else Ink.CREAM.darkened(0.45))
+		var nm := Ink.title(info["name"], 25 if w > 250.0 else 20, Ink.CREAM if open_now else Ink.CREAM.darkened(0.45))
 		nm.position = Vector2(10, 204)
-		nm.size = Vector2(263, 36)
+		nm.size = Vector2(w - 20.0, 36)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		p.add_child(nm)
 		var bl := Ink.text(info["blurb"] if open_now else "Vença o anterior pra abrir.", 15, Color(0.8, 0.82, 0.95) if open_now else Color(0.55, 0.56, 0.7))
 		bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		bl.position = Vector2(22, 246)
-		bl.size = Vector2(240, 70)
+		bl.size = Vector2(w - 44.0, 90)
 		bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		p.add_child(bl)
 		if Knowledge.best_rank.has(i):
 			# melhor ranking: letra grande num carimbo
 			var stamp := Ink.panel(Ink.CREAM, 11)
-			stamp.position = Vector2(86, 322)
+			stamp.position = Vector2((w - 112.0) * 0.5, 322)
 			stamp.size = Vector2(112, 62)
 			stamp.rotation_degrees = 4
 			p.add_child(stamp)
@@ -233,6 +251,16 @@ func _draw_emblem(e: Control, i: int, open_now: bool) -> void:
 	var c := e.size * 0.5
 	var col: Color = HAIR[i] if open_now else HAIR[i].darkened(0.6)
 	var ink := Ink.OUT
+	if Knowledge.BOSS_INFO[i]["name"] == "TROVÃO-KUN":
+		# nuvem de tempestade com um raio no meio
+		for p in [Vector2(-34, 6), Vector2(34, 6), Vector2(0, -22), Vector2(-20, -8), Vector2(22, -10), Vector2(0, 14)]:
+			e.draw_circle(c + p, 44, ink)
+		for p in [Vector2(-34, 6), Vector2(34, 6), Vector2(0, -22), Vector2(-20, -8), Vector2(22, -10), Vector2(0, 14)]:
+			e.draw_circle(c + p, 38, col)
+		var bolt := PackedVector2Array([c + Vector2(10, -34), c + Vector2(-22, 10), c + Vector2(-2, 10), c + Vector2(-14, 48), c + Vector2(24, -4), c + Vector2(4, -4)])
+		e.draw_colored_polygon(bolt, Color(1.0, 0.92, 0.3) if open_now else Color(0.4, 0.37, 0.15))
+		e.draw_polyline(PackedVector2Array([bolt[0], bolt[1], bolt[2], bolt[3], bolt[4], bolt[5], bolt[0]]), ink, 4.0, true)
+		return
 	if Knowledge.BOSS_INFO[i]["mini"]:
 		e.draw_circle(c, 74, ink)
 		e.draw_circle(c, 68, col)

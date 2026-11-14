@@ -32,6 +32,10 @@ var ring_w := 4.0
 var badge: Texture2D: set = _set_badge
 ## Carta nova que o jogador ainda não viu: selo NOVO no canto e contorno dourado pulsando.
 var fresh := false: set = _set_fresh
+## Carta de APRENDIZADO: o quanto o herói já aprendeu dela (0..100). Desenha uma barrinha no pé da
+## carta. -1 = não mostra. `tag` é uma etiqueta pequena no topo ("CRITÉRIO", "PASSIVA"...).
+var learn := -1.0: set = _set_learn
+var tag := "": set = _set_tag
 var _fresh_t := 0.0
 
 
@@ -86,6 +90,16 @@ func _set_state(v: String) -> void:
 
 func _set_price(v: String) -> void:
 	price_tag = v
+	queue_redraw()
+
+
+func _set_learn(v: float) -> void:
+	learn = v
+	queue_redraw()
+
+
+func _set_tag(v: String) -> void:
+	tag = v
 	queue_redraw()
 
 
@@ -223,6 +237,20 @@ func _draw() -> void:
 	if badge != null:
 		draw_rect(Rect2(W - 24, -12, 32, 41), ink)
 		draw_texture_rect(badge, Rect2(W - 21, -9, 26, 35), false)
+	if learn >= 0.0 and state != "back" and state != "empty":
+		# barra de aprendizado: enche até virar passiva
+		var bar := Rect2(8, H - 17, W - 16, 9)
+		draw_rect(bar.grow(2), Paper.INK)
+		draw_rect(bar, Color(0.16, 0.17, 0.3))
+		draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(learn / 100.0, 0.0, 1.0), bar.size.y)), Paper.GOLD)
+		draw_string(Paper.body(800), Vector2(bar.position.x, bar.position.y + 8), "%d%%" % roundi(learn), HORIZONTAL_ALIGNMENT_CENTER, bar.size.x, 9, Paper.CREAM if learn < 55.0 else Paper.INK)
+	if tag != "" and state != "empty":
+		var fd := Paper.display()
+		var tw := fd.get_string_size(tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x + 10.0
+		var tr := Rect2(W - tw + 4, 30, tw, 14)
+		draw_rect(tr.grow(2), Paper.INK)
+		draw_rect(tr, Paper.PINK if tag == "CRITÉRIO" else Paper.GOLD)
+		draw_string(fd, Vector2(tr.position.x + 5, tr.position.y + 11), tag, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Paper.CREAM if tag == "CRITÉRIO" else Paper.INK)
 	if fresh:
 		_draw_fresh()
 

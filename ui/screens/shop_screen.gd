@@ -17,6 +17,21 @@ const LINES := {
 	"bought": ["Boa escolha! Vai lá equipar.", "Vendido! Usa com carinho.", "Isso, leva. Depois me conta se funcionou."],
 }
 
+## Falas do balcão de itens (mode "gear"): a Latinha, ferreira de equipamentos e consumíveis.
+const LINES_GEAR := {
+	"hello": ["Equipamento não ensina nada. Só deixa o que você já sabe mais forte.", "Tudo aqui é pra vestir, calçar ou beber."],
+	"attack": ["Esse faz o número subir.", "Bate igual, dói mais."],
+	"defense": ["Pra aguentar mais um golpe.", "Quem fica de pé ganha a luta."],
+	"utility": ["Pequeno, mas você sente a diferença.", "Coisa de quem pensa em tudo."],
+	"special": ["Esse é do fundo da oficina.", "Peça rara. Cuida bem."],
+	"ticket": ["Esse eu só troco por ticket roxo. Tira SSS numa boss.", "Moeda não paga esse aqui."],
+	"poor": ["Faltou moeda. Volta depois.", "Junta mais um pouco que eu guardo pra você."],
+	"owned": ["Esse já é seu.", "Você já levou um desses."],
+	"bought": ["Fechado! Vai lá no GEAR equipar.", "Boa. Põe num slot e sente a diferença."],
+}
+
+## "cards": a loja de cartas do Farelo. "gear": o balcão de itens (equipamentos e consumíveis).
+var mode := "cards"
 var cat := ""
 var sel := ""
 var _dialog: Control
@@ -40,18 +55,24 @@ func _ready() -> void:
 		open()
 
 
-func open() -> void:
+func open(shop_mode := "cards") -> void:
+	mode = shop_mode
 	cat = ""
 	sel = ""
+	$TitlePanel/Title.text = "ITENS" if mode == "gear" else "LOJA"
+	# o mesmo balcão, outra vendedora (por enquanto ela é o Farelo de outra cor)
+	$Vendor.modulate = Color(0.7, 0.95, 1.3) if mode == "gear" else Color.WHITE
 	_build_tabs()
 	_build_grid()
 	_refresh_wallet()
-	_select(Knowledge.shop_list()[0])
+	var all := Knowledge.shop_list("", mode)
+	if not all.is_empty():
+		_select(all[0])
 	_say("hello")
 
 
 func _say(key: String, mood := "idle") -> void:
-	var opts: Array = LINES[key]
+	var opts: Array = (LINES_GEAR if mode == "gear" else LINES)[key]
 	$Bubble/BubbleText.text = opts[randi() % opts.size()]
 	$Vendor.mood = mood
 	var b: Control = $Bubble
@@ -99,7 +120,7 @@ func _build_grid() -> void:
 		grid.remove_child(c)
 		c.queue_free()
 	var n := 0
-	for id in Knowledge.shop_list(cat):
+	for id in Knowledge.shop_list(cat, mode):
 		var cv := CardView.make(id, "dim" if Knowledge.owned.has(id) else "face")
 		cv.price_tag = _price_text(id)
 		cv.selected = id == sel

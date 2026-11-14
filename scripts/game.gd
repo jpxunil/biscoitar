@@ -57,6 +57,9 @@ const START_POS := [
 ]
 ## A party é livre (quaisquer 4 heróis), então o lugar de atacar depende de quem ocupa o lugar:
 ## quem luta de perto usa MELEE_POS e quem luta de longe usa RANGED_POS, pelo índice na party.
+const ROAM_MELEE := 3.3        # boss que anda: distância de quem luta de perto ...
+const ROAM_RANGED := 6.2       # ... e de quem luta de longe
+const ROAM_FX_H := 0.42        # ... e a altura dos efeitos dos golpes (ela é bem mais baixa que as outras)
 const MELEE_POS := [Vector3(1.3, 0, -6.2), Vector3(3.1, 0, -6.3), Vector3(-1.9, 0, -6.0), Vector3(-3.2, 0, -6.3)]
 const RANGED_POS := [Vector3(1.6, 0, 1.2), Vector3(3.6, 0, 0.6), Vector3(-1.6, 0, 1.4), Vector3(-3.6, 0, 0.2)]
 
@@ -650,6 +653,55 @@ const STEPS_COOKIE := [
 	{"t": "knives", "n": 2, "dur": 2.6},
 	{"t": "idle", "dur": 2.5},
 ]
+## TROVÃO-KUN (mini boss, "roam"): fica no meio da arena e anda. O ciclo dele:
+##   leap  — escolhe alguém, marca um círculo vermelho e salta ali (dano em área na queda);
+##   chase — anda devagar atrás de quem está com a atenção dele (o topo do aggro). Não dá dano de
+##           contato: quem luta de perto bate nele do limite do alcance, sem tomar nada por isso;
+##   orbs  — para e solta ondas de faíscas em linha reta (bullet hell), mais os círculos vermelhos;
+##   fan   — para e gira um ventilador de raios rentes ao chão (PULE na hora que o raio passa),
+##           enquanto bolas caem em cima da party.
+const STEPS_STORM := [
+	{"t": "idle", "dur": 2.5},
+	{"t": "leap", "dur": 1.6},
+	{"t": "chase", "dur": 3.5},
+	{"t": "leap", "dur": 1.6},
+	{"t": "chase", "dur": 3.5},
+	{"t": "orbs", "dur": 7.0},
+	{"t": "idle", "dur": 1.5},
+	{"t": "fan", "dur": 14.0},
+	{"t": "idle", "dur": 2.0},
+]
+const JUMP_AIR := 0.55         # o pulo: tempo no ar ...
+const JUMP_CD := 0.8           # ... recarga (do começo de um pulo ao próximo) ...
+const JUMP_H := 1.7            # ... e altura
+const LEAP_R := 3.2
+const LEAP_DMG := 38.0
+const CHASE_SPEED := 1.7
+## Faíscas (bullet hell): ondas de ORB_COUNT bolinhas em roda, com ORB_GAPS buracos pra passar;
+## cada onda sai um pouco girada em relação à anterior. Andam em linha reta e não seguem ninguém.
+const ORB_COUNT := 12
+const ORB_GAPS := 3
+const ORB_WAVE := 0.95         # intervalo entre ondas
+const ORB_SPEED := 4.2
+const ORB_DMG := 8.0
+const ORB_R := 0.4
+const ORB_RED_AT := [2.2, 4.6] # nesses instantes da fase também caem os círculos vermelhos de sempre
+const FAN_WARN := 1.6          # o ventilador aparece fino e parado por esse tempo antes de girar
+const FAN_W := 0.45            # meia largura de cada raio
+const FAN_DMG := 10.0
+const FAN_INNER := 0.9         # colado no boss os raios ainda não pegam
+const FAN_DROP := 3.2          # de quanto em quanto tempo cai uma bola na party
+## [raios, velocidade em rad/s] conforme a vida do boss: acima de 66%, acima de 33%, e o resto.
+const FAN_STAGES := [[3, 0.75], [4, 0.95], [5, 1.15]]
+## Sem a carta de um ataque, a chance de o herói perceber (com conhecimento zero) e o atraso dele.
+const AWARE_MIN := 0.3
+const AWARE_LATE := 1.0
+const LEARN_DODGED := 2.0      # estava dentro de um ataque e saiu a tempo, sem a carta: aprende
+## Aprendizado do ventilador (Knowledge.learn, mecânica "fan"): quanto cada experiência ensina.
+const LEARN_HIT := 1.0         # tomou o raio: aprende um pouco, de tanto apanhar
+const LEARN_OWN := 3.0         # pulou e passou sozinho: repete o que deu certo
+const LEARN_HAND := 6.0        # o jogador pulou e passou controlando este herói
+const LEARN_WATCH := 1.5       # viu o jogador passar
 ## Mesma ordem de Knowledge.BOSS_INFO.
 const BOSSES := [
 	{"name": "BISCOITO-KUN", "hp": 2600.0, "enrage": 100.0, "steps": STEPS_COOKIE, "look": "cookie", "hair": Color(0.86, 0.6, 0.3), "scale": 0.8},
@@ -657,6 +709,7 @@ const BOSSES := [
 	{"name": "PROTÓTIPO-CHAN", "hp": 10400.0, "enrage": 150.0, "steps": STEPS_ELEMENT, "elements": true, "hair": Color(1.0, 0.38, 0.66), "scale": 1.2},
 	# haste: tudo dela (passos, avisos, casts) corre esse tanto mais rápido
 	{"name": "FUSÃO-CHAN", "hp": 11500.0, "enrage": 165.0, "steps": STEPS_FUSION, "elements": true, "haste": 1.2, "hair": Color(0.75, 0.45, 1.0), "scale": 1.3},
+	{"name": "TROVÃO-KUN", "hp": 3600.0, "enrage": 130.0, "steps": STEPS_STORM, "look": "storm", "roam": true, "arena": 13.5, "hair": Color(0.4, 0.8, 1.0), "scale": 1.0},
 ]
 
 ## Treino livre (Knowledge.practice): um boneco no lugar da boss. Não ataca, não tem mecânica,
@@ -680,6 +733,36 @@ var order := "atk"  # atk | gather | spread | hold
 
 var boss: Node3D
 var boss_def: Dictionary
+## Onde a boss está pra tudo que mira nela (alcance, golpes, efeitos). Nas bosses de sempre é o ponto
+## fixo no fundo da arena (BOSS_POINT). Numa boss que anda (boss_def "roam") ele muda durante a luta.
+var boss_pos := BOSS_POINT
+var roam := false
+## Raio da arena desta luta (boss_def "arena"; o normal é ARENA_R).
+var arena_r := ARENA_R
+## Boss em foco (clique nela): mostra no chão até onde o herói que você controla alcança.
+## Aprendizado das cartas: nesta luta, quem morreu (died[hero]) e quem tomou a mecânica de uma carta
+## (card_fail[hero][id]). Na vitória, a carta de aprendizado equipada só rende se a luta foi limpa.
+var died := {}
+var card_fail := {}
+var boss_focus := false
+var range_ring: MeshInstance3D
+var range_ring_r := -1.0
+## Estado do TROVÃO-KUN.
+var storm_target: Unit = null
+var leap_from := Vector3.ZERO
+var leap_to := Vector3.ZERO
+var orbs: Array = []       # {"node", "dir": Vector3}
+var orb_wave_t := 0.0
+var orb_spin := 0.0
+var orb_reds := 0
+var fan_rig: Node3D
+var fan_beams: Array = []  # MeshInstance3D, um por raio
+var fan_mat: StandardMaterial3D
+var fan_angle := 0.0
+var fan_speed := 0.0       # rad/s com sinal (o sentido)
+var fan_on := false
+var fan_drop_t := 0.0
+var fan_flip_done := false
 var steps: Array
 var boss_max := 1.0
 var boss_hp := 1.0
@@ -800,6 +883,10 @@ func _ready() -> void:
 	Knowledge.load_save()
 	Settings.boot()  # volume e atalhos do jogador
 	for a in args:
+		if a.begins_with("--know="):
+			# só pra teste: todo mundo já entra sabendo esse tanto (0..100) do ventilador de raios
+			for h in Knowledge.HEROES.size():
+				Knowledge.know[h] = {"fan": float(a.trim_prefix("--know="))}
 		if a.begins_with("--party="):
 			# só pra teste: os quatro heróis da luta (índices de HEROES), sem tocar no save
 			var picks: Array = []
@@ -813,6 +900,8 @@ func _ready() -> void:
 	if args.has("--practice"):
 		Knowledge.practice = true
 	boss_def = DUMMY if Knowledge.practice else BOSSES[Knowledge.boss]
+	roam = boss_def.get("roam", false)
+	arena_r = float(boss_def.get("arena", ARENA_R))
 	steps = boss_def["steps"]
 	boss_max = boss_def["hp"]
 	enrage = boss_def["enrage"]
@@ -925,15 +1014,17 @@ func _build_world() -> void:
 	cam = Camera3D.new()
 	cam.fov = 52.0
 	add_child(cam)
-	cam.look_at_from_position(Vector3(0, 12, 23), Vector3(0, 5.0, -3))
+	# arena maior: a câmera recua e sobe na mesma proporção, olhando mais pro chão (a boss de lá é baixa)
+	var wide := arena_r / ARENA_R - 1.0
+	cam.look_at_from_position(Vector3(0, 12.0 + wide * 11.0, 23.0 + wide * 14.0), Vector3(0, 5.0 - minf(wide, 1.0) * 4.0, -3.0 + wide * 2.0))
 	cam_home = cam.position
 
 	floor_mat = ShaderMaterial.new()
 	floor_mat.shader = preload("res://shaders/floor.gdshader")
-	floor_mat.set_shader_parameter("arena_r", ARENA_R + 0.35)
-	floor_mat.set_shader_parameter("melee_center", Vector2(BOSS_POINT.x, BOSS_POINT.z))
+	floor_mat.set_shader_parameter("arena_r", arena_r + 0.35)
+	floor_mat.set_shader_parameter("melee_center", Vector2(boss_pos.x, boss_pos.z))
 	floor_mat.set_shader_parameter("melee_r", MELEE_RANGE)
-	Fx.inst(self, Fx.disc(ARENA_R + 0.7, 0.5), floor_mat, Vector3(0, -0.25, 0))
+	Fx.inst(self, Fx.disc(arena_r + 0.7, 0.5), floor_mat, Vector3(0, -0.25, 0))
 
 	# colunas de luz no fundo, só pra dar profundidade
 	for i in 9:
@@ -947,7 +1038,8 @@ func _build_world() -> void:
 	boss = preload("res://scripts/boss.gd").new()
 	boss.hair_color = boss_def["hair"]
 	boss.look = boss_def.get("look", "girl")
-	boss.position = Vector3(0, 0, -13.3)
+	boss_pos = Vector3.ZERO if roam else BOSS_POINT
+	boss.position = boss_pos if roam else Vector3(0, 0, -13.3)
 	boss.scale = Vector3.ONE * float(boss_def["scale"])
 	add_child(boss)
 
@@ -979,7 +1071,7 @@ func _build_units() -> void:
 		u.setup(i, UNIT_DEFS[Knowledge.hero_at(i)])
 		u.hero = Knowledge.hero_at(i)
 		u.position = _atk_pos(u) + Vector3(0, 0, 0.6 if u.melee else 0.9)
-		u.face(BOSS_POINT - u.position)
+		u.face(boss_pos - u.position)
 		units.append(u)
 	ctrl = maxi(0, Knowledge.slot_of(Knowledge.start_hero))
 	units[ctrl].set_controlled(true)
@@ -1002,6 +1094,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			click_unit(hit, event.double_click)
 			get_viewport().set_input_as_handled()
 			return
+		if boss_at(event.position):
+			# clique na boss: foca nela e mostra no chão o alcance de quem você controla
+			boss_focus = not boss_focus
+			get_viewport().set_input_as_handled()
+			return
 	var id := _pressed_action(event)
 	if id == "":
 		return
@@ -1014,6 +1111,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	match id:
 		"swap": _cycle_ctrl()
 		"dash": _try_dash()
+		"jump": jump(units[ctrl])
 		"limit": use_lb()
 		"order_gather": give_order("gather")
 		"order_spread": give_order("spread")
@@ -1090,6 +1188,12 @@ func start_fight() -> void:
 func _fight_setup() -> void:
 	for u in units:
 		_spawn_cards(u)
+		# equipamentos de atributo (tela de gear)
+		var gs := Knowledge.gear_stats(u.hero)
+		u.max_hp += float(gs["hp"])
+		u.base_hp = u.max_hp
+		u.hp = u.max_hp
+		u.atk_range *= float(gs["range"])
 		if Knowledge.has(u.hero, "cookie"):
 			lb = minf(1.0, lb + 0.25)
 
@@ -1140,7 +1244,22 @@ func _test_decks() -> void:
 
 ## Onde este herói fica pra atacar: perto da boss se luta de perto, mais atrás se luta de longe.
 func _atk_pos(u: Unit) -> Vector3:
+	if roam:
+		# boss que anda: cada um tem o seu lugar numa roda em volta dela (de perto ou de longe)
+		var a := PI * 0.5 + (u.idx - 1.5) * 0.9
+		var p := boss_pos + Vector3(cos(a), 0, sin(a)) * (ROAM_MELEE if u.melee else ROAM_RANGED)
+		var flat := Vector2(p.x, p.z).limit_length(arena_r - 0.7)
+		return Vector3(flat.x, 0, flat.y)
 	return MELEE_POS[u.idx] if u.melee else RANGED_POS[u.idx]
+
+
+## Um ponto de efeito pensado pra boss do fundo, levado pra onde a boss está agora. Nas bosses de
+## sempre não muda nada; numa boss que anda (pequena, no meio da arena) o efeito vai junto e encolhe.
+func _bp(v: Vector3) -> Vector3:
+	if not roam:
+		return v
+	var o := v - BOSS_POINT
+	return boss_pos + Vector3(o.x * 0.45, o.y * ROAM_FX_H, o.z * 0.2)
 
 
 ## `i` é o herói (índice em Knowledge.HEROES) que o jogador vai controlar no começo da luta.
@@ -1199,6 +1318,34 @@ func click_unit(i: int, twice: bool) -> void:
 
 ## Qual boneco da party está embaixo desse ponto da tela (-1 = nenhum). Mede na tela, em volta do
 ## meio do corpo; com dois sobrepostos, vale o mais perto do clique.
+## O clique caiu em cima da boss?
+func boss_at(screen: Vector2) -> bool:
+	var at := boss_pos + Vector3(0, 1.8 if roam else 6.0, 0)
+	if cam.is_position_behind(at):
+		return false
+	return cam.unproject_position(at).distance_to(screen) < (95.0 if roam else 210.0)
+
+
+## Boss em foco: um marcador de alvo embaixo dela, e (na boss que anda) o arco do alcance máximo do
+## herói que você controla aparece no chão, centrado nela. Dentro do arco você bate; fora, não.
+func _tick_range_ring() -> void:
+	var me := units[ctrl]
+	var on := boss_focus and me.alive and not prep and not ended
+	if range_ring != null:
+		range_ring.visible = on
+	if not on:
+		return
+	if range_ring == null or not is_equal_approx(range_ring_r, me.atk_range):
+		if range_ring != null:
+			range_ring.queue_free()
+		range_ring_r = me.atk_range
+		# marcador de alvo embaixo da boss; o arco do alcance em si é desenhado pelo chão (shader)
+		var mark := 2.0 if roam else 3.9
+		range_ring = Fx.inst(self, Fx.torus(mark, mark + 0.12), Fx.mat(Color(1.0, 0.3, 0.4, 0.9), 0.0, true))
+	range_ring.position = Vector3(boss_pos.x, 0.05, boss.position.z if not roam else boss_pos.z)
+	range_ring.rotate_y(0.02)
+
+
 func unit_at(screen: Vector2) -> int:
 	var best := -1
 	var best_d := 52.0
@@ -1260,6 +1407,17 @@ func give_order(o: String) -> void:
 		u.hold_pos = u.position if o == "hold" else null
 	var names := {"atk": "ATACAR", "gather": "REUNIR", "spread": "ESPALHAR", "hold": "MANTER POSIÇÃO"}
 	hud.toast(names[o], 1.0)
+
+
+## O pulo: um instante no ar, passando por cima de ataques rentes ao chão (o ventilador de raios).
+## Não é invulnerabilidade: qualquer outro golpe acerta normalmente. Dá pra pular andando e conjurando.
+func jump(u: Unit) -> bool:
+	if not u.alive or u.asleep or u.hop_t > 0.0 or u.hop_cd > 0.0 or u.air_t > 0.0 or u.lock_t > 0.0:
+		return false
+	u.hop_t = JUMP_AIR
+	u.hop_cd = JUMP_CD
+	u.hop(JUMP_AIR, JUMP_H)
+	return true
 
 
 func _try_dash() -> void:
@@ -1341,6 +1499,9 @@ func _process(delta: float) -> void:
 		if shake_t <= 0.0:
 			cam.position = cam_home
 	_tick_boss(delta)
+	if roam:
+		_tick_storm(delta)
+	_tick_range_ring()
 	_tick_hazards(delta)
 	_tick_stacks(delta)
 	_tick_spreads(delta)
@@ -1433,6 +1594,10 @@ func _process(delta: float) -> void:
 			u.shield_hp = 0.0
 		_shield_fx(u)
 		u.dash_cd = maxf(0.0, u.dash_cd - delta)
+		u.hop_t = maxf(0.0, u.hop_t - delta)
+		u.hop_cd = maxf(0.0, u.hop_cd - delta)
+		u.fan_safe_t = maxf(0.0, u.fan_safe_t - delta)
+		u.fan_cross_t = maxf(0.0, u.fan_cross_t - delta)
 		var before := u.position
 		if u.controlled and not autoplay:
 			if u.air_t <= 0.0 and u.lock_t <= 0.0:
@@ -1461,7 +1626,9 @@ func _process(delta: float) -> void:
 	# arco no chão = até onde o personagem controlado alcança o boss
 	var me := units[ctrl]
 	floor_mat.set_shader_parameter("melee_r", me.atk_range)
-	floor_mat.set_shader_parameter("melee_on", 1.0 if me.alive else 0.0)
+	# boss que anda: o arco acompanha ela, e só aparece com ela em foco (clique nela)
+	floor_mat.set_shader_parameter("melee_center", Vector2(boss_pos.x, boss_pos.z))
+	floor_mat.set_shader_parameter("melee_on", 1.0 if me.alive and (not roam or boss_focus) else 0.0)
 	floor_mat.set_shader_parameter("melee_in", 1.0 if _in_range(me) else 0.0)
 	_tick_side_mark()
 
@@ -1480,8 +1647,8 @@ func _print_report() -> void:
 
 func _clamp_to_arena(u: Unit) -> void:
 	var flat := Vector2(u.position.x, u.position.z)
-	if flat.length() > ARENA_R:
-		flat = flat.normalized() * ARENA_R
+	if flat.length() > arena_r:
+		flat = flat.normalized() * arena_r
 		u.position = Vector3(flat.x, 0, flat.y)
 
 
@@ -1773,12 +1940,14 @@ func _tick_cast(u: Unit, delta: float, moving: bool) -> bool:
 
 
 func _in_range(u: Unit) -> bool:
-	return u.position.distance_to(BOSS_POINT) <= u.atk_range
+	return u.position.distance_to(boss_pos) <= u.atk_range
 
 
 # ---------------------------------------------------------------- IA da party
 
 func _tick_ai(u: Unit, delta: float) -> void:
+	if roam:
+		_fan_ai(u, delta)
 	# conjurando (a Cura da IA também tem cast): fica parado até soltar
 	var i := u.idx
 	var caster := u.key == "healer" or u.key == "maga"
@@ -1830,6 +1999,12 @@ func _tick_ai(u: Unit, delta: float) -> void:
 			kind = 2
 
 	# Desvio: cada personagem só enxerga os ataques pros quais tem a carta amarela.
+	if roam:
+		var storm = _storm_goal(u)
+		if storm != null:
+			goal = storm[0]
+			text = storm[1]
+			kind = 1
 	var in_danger := _danger_at(u.position, u, true, 0.1)
 	if u.dodge_goal != null and not in_danger and (hazards.is_empty() or u.position.distance_to(u.dodge_goal) <= 0.15):
 		u.dodge_goal = null  # chegou na saída (ou o ataque já passou)
@@ -1877,7 +2052,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 			u.position += to / dist * minf(move_speed(u) * delta, dist)
 			u.face(to)
 		elif _in_range(u):
-			u.face(BOSS_POINT - u.position)
+			u.face(boss_pos - u.position)
 
 	var hs: Dictionary = HEAL_SLOTS.get(u.key, {})
 	if not hs.is_empty() and not (careful and in_danger):
@@ -2104,7 +2279,7 @@ func _tick_auto(delta: float) -> void:
 		return
 	auto_t = 0.0
 	var victim := target
-	var from := Vector3(randf_range(-2.5, 2.5), 6.0, -11.5)
+	var from := _bp(Vector3(randf_range(-2.5, 2.5), 6.0, -11.5))
 	var mi := Fx.inst(fx_root, Fx.sphere(0.3), Fx.mat(DANGER, 3.0, true), from)
 	var tw := mi.create_tween()
 	tw.tween_property(mi, "position", victim.position + Vector3(0, 1.0, 0), 0.14)
@@ -2242,7 +2417,7 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 			u.face(u.cast_target.position - u.position)
 			_beam(u.position, u.cast_target.position, Color(0.4, 1.0, 0.6, 0.7), cast + 0.15)
 		elif sk.has("dmg") or u.key == "sleepwalker":
-			u.face(BOSS_POINT - u.position)
+			u.face(boss_pos - u.position)
 		# cast curto já gasta a recarga ao começar; cast longo só gasta se sair
 		# (as conjurações do Sleepwalker sempre podem ser interrompidas andando, sem gastar nada)
 		if sk.has("cast") and sk["cast"] < LOCKED_CAST:
@@ -2264,7 +2439,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			4: u.dagger_anim("raise", MERCY_WINDOW if not by_ai else 0.25)
 	if u.key == "ringstar":
 		# as luvas acompanham cada habilidade (o SUPERSTAR! e o Nocaute animam por conta própria)
-		u.face(BOSS_POINT - u.position)
+		u.face(boss_pos - u.position)
 		match slot:
 			0: u.glove_anim("jab")
 			1: u.glove_anim("straight")
@@ -2331,7 +2506,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_burst(u.position, BLOOD, 2.4)
 		"Emergency Response":
 			# avança até encostar na boss (no máximo RUSH_DIST) e puxa ela pra si
-			var to_boss := BOSS_POINT - u.position
+			var to_boss := boss_pos - u.position
 			to_boss.y = 0.0
 			var go := clampf(to_boss.length() - (MELEE_RANGE - 1.0), 0.0, RUSH_DIST)
 			u.face(to_boss)
@@ -2411,7 +2586,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 		"Marca do Zênite":
 			add_dot("zenite", "Marca do Zênite", FIRE, ZENITH_TIME, ZENITH_DPS, u)
 			_zenith_halo()
-			_burst(Vector3(0, 7.5, -12.5), Color(1.0, 0.9, 0.45), 3.0)
+			_burst(_bp(Vector3(0, 7.5, -12.5)), Color(1.0, 0.9, 0.45), 3.0)
 		"Lança Serafim":
 			_lance(u)
 		"Rasante Incandescente":
@@ -2420,7 +2595,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			add_dot("chuva", "Chuva de Brasas", FIRE, RAIN_TIME, RAIN_DPS, u)
 			_rain_start()
 			for n in 8:
-				_burst(Vector3(randf_range(-3.0, 3.0), randf_range(1.0, 5.0), -11.5), FIRE, 1.0)
+				_burst(_bp(Vector3(randf_range(-3.0, 3.0), randf_range(1.0, 5.0), -11.5)), FIRE, 1.0)
 		"Juízo Solar":
 			_solar(u)
 		"Contagem Regressiva":
@@ -2440,7 +2615,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 		"Dança Carmesim":
 			_crimson_dance(u, sk["dmg"])
 		"Golpe de Misericórdia":
-			u.face(BOSS_POINT - u.position)
+			u.face(boss_pos - u.position)
 			if by_ai:
 				_mercy_hit(u)
 			else:
@@ -2509,7 +2684,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				u.set_action("Longe demais", 2)
 				return
 			var big := slot > 0
-			u.face(BOSS_POINT - u.position)
+			u.face(boss_pos - u.position)
 			u.punch()
 			if u.key == "maga":
 				_maga_basic_fx(u, slot)
@@ -2518,7 +2693,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			else:
 				_attack_fx(u, big)
 			if sk.has("cast") and sk["cast"] >= LOCKED_CAST and slot != 0:
-				_burst(Vector3(0, 4, -11.5), u.color.lightened(0.3), 6.0)
+				_burst(_bp(Vector3(0, 4, -11.5)), u.color.lightened(0.3), 6.0)
 			var amount: float = sk["dmg"]
 			if slot == BIG_SLOT.get(u.key, -1) and Knowledge.has(u.hero, "burst"):
 				amount *= 1.3 if u.key == "assassina" else 1.15
@@ -2538,7 +2713,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					amount *= PIERCE_MULT
 					amount += _use_aim(u)  # com a boss marcada pelo Tiro Perfurante: estoura a marca
 					big = true
-					_beam(u.position, Vector3(0, 2.0, -13.0), Color(1, 1, 1, 0.9), 0.25)
+					_beam(u.position, _bp(Vector3(0, 2.0, -13.0)), Color(1, 1, 1, 0.9), 0.25)
 				if u.dash_next:
 					u.dash_next = false
 					_knock_back(u, 3.0)
@@ -2566,7 +2741,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				_aim_mark(u)
 			if sk["name"] == "Baque do Escudo":
 				# golpe de escudo: mais pesado na tela. (Interromper fica pra quando existir cast interrompível.)
-				_burst(BOSS_POINT + Vector3(0, 1.2, 2.0), Color(1.0, 0.95, 0.8), 2.6)
+				_burst(boss_pos + Vector3(0, 1.2, 2.0), Color(1.0, 0.95, 0.8), 2.6)
 				boss.hit_flash()
 			if sk["name"] == "Syringe Poke":
 				# o roubo é em cima da vida ATUAL da boss: vai rendendo menos conforme a luta anda
@@ -2601,9 +2776,11 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 
 ## De que lado da boss o herói está: 1 = direita (x positivo), -1 = esquerda, 0 = no meio.
 func _side_of(u: Unit) -> int:
-	if u.position.x > SIDE_MIN:
+	if roam:
+		return u.side_need  # boss que anda: não existe "lado" dela; o Talho vale sempre
+	if u.position.x - boss_pos.x > SIDE_MIN:
 		return 1
-	if u.position.x < -SIDE_MIN:
+	if u.position.x - boss_pos.x < -SIDE_MIN:
 		return -1
 	return 0
 
@@ -2629,8 +2806,8 @@ func _dash_cut(u: Unit, dmg: float) -> void:
 	if absf(from.x) < SIDE_MIN + 0.4:
 		to.x = u.side_need * 2.6  # estava no meio: vai pro lado que está valendo
 	var flat := Vector2(to.x, to.z)
-	if flat.length() > ARENA_R:
-		flat = flat.normalized() * ARENA_R
+	if flat.length() > arena_r:
+		flat = flat.normalized() * arena_r
 		to = Vector3(flat.x, 0, flat.y)
 	u.face(to - from)
 	u.dash_fx()
@@ -2640,7 +2817,7 @@ func _dash_cut(u: Unit, dmg: float) -> void:
 	var tw := u.create_tween()
 	tw.tween_property(u, "position", to, 0.1)
 	tw.tween_callback(func():
-		u.face(BOSS_POINT - u.position)
+		u.face(boss_pos - u.position)
 		if u.alive:
 			_damage_boss(u, dmg, true, true))
 
@@ -2718,7 +2895,7 @@ func _mercy_hit(u: Unit, part := 0) -> void:
 		amount *= 1.0 - MERCY_FIRST
 	u.punch()
 	_attack_fx(u, true)
-	var at := BOSS_POINT + Vector3(0, 1.6, 1.6)
+	var at := boss_pos + Vector3(0, 1.6, 1.6)
 	var col := Color(0.75, 0.2, 1.0) if strong else Color(1.0, 0.95, 0.9)
 	_burst(at, Color(1, 1, 1), 3.0)
 	_burst(at, col, 4.2 if strong else 3.0)
@@ -2810,7 +2987,7 @@ func _mercy_leap(u: Unit) -> void:
 	u.parry_hit = false
 	u.lock_t = MERCY_WINDOW
 	var from := u.position
-	var to_boss := BOSS_POINT - from
+	var to_boss := boss_pos - from
 	to_boss.y = 0.0
 	var dist := maxf(0.0, to_boss.length() - (MELEE_RANGE - 1.2))
 	var fwd := to_boss.normalized()
@@ -2912,7 +3089,7 @@ func _mercy_leap(u: Unit) -> void:
 		u.visual.rotation.z = 0.0
 		if saw != null and is_instance_valid(saw):
 			saw.queue_free()
-		u.face(BOSS_POINT - u.position))
+		u.face(boss_pos - u.position))
 	# rastro: silhuetas pelo caminho; em Frenesi, mais delas e anéis de corte
 	var ghosts := 12 if strong else 6
 	for n in ghosts:
@@ -2941,10 +3118,10 @@ func _last_dance(u: Unit) -> void:
 	var purple := Color(0.8, 0.25, 1.0)
 	var pink := Color(1.0, 0.3, 0.7)
 	var green := SIDE_COL
-	var center := Vector3(0, 4.2, -11.2)
-	var home := BOSS_POINT + Vector3(0, 0, MELEE_RANGE - 1.2)
+	var center := _bp(Vector3(0, 4.2, -11.2))
+	var home := boss_pos + Vector3(0, 0, MELEE_RANGE - 1.2)
 	# o preparo: ela se agacha em posição de ataque, as adagas cruzadas, a energia juntando nos pés
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	u.dagger_anim("both", FINISH_WINDUP)
 	var crouch := u.visual.create_tween()
 	crouch.tween_property(u.visual, "scale", Vector3(1.2, 0.62, 1.2), FINISH_WINDUP * 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -3028,7 +3205,7 @@ func _last_dance(u: Unit) -> void:
 		if not is_instance_valid(u) or not u.alive:
 			return
 		u.visual.visible = true
-		u.face(BOSS_POINT - u.position)
+		u.face(boss_pos - u.position)
 		u.visual.position.y = 6.5
 		u.dagger_anim("raise", FINISH_TIME - storm - 0.4)
 		_burst(u.position + Vector3(0, 6.5, 0), Color(1, 1, 1), 2.6)
@@ -3080,7 +3257,7 @@ func _last_dance(u: Unit) -> void:
 		_wound(u)
 		_damage_boss(u, FINISH_END, true, true)
 		# ela pousa de costas pra boss, adagas baixas: o corte já foi dado, falta ele "chegar"
-		u.face(u.position - BOSS_POINT)
+		u.face(u.position - boss_pos)
 		u.dagger_anim("both", 0.3)
 		# as duas linhas finas do X ficam riscadas no ar até o estouro
 		for k in 2:
@@ -3113,7 +3290,7 @@ func _last_dance(u: Unit) -> void:
 		_burst(center, pink, 20.0)
 		for k in 8:
 			_impact_ring(center, [Color(1, 1, 1), purple, pink, green][k % 4], 5.0 + k * 3.0)
-		_impact_ring(BOSS_POINT + Vector3(0, 0.2, 0), purple, 12.0)
+		_impact_ring(boss_pos + Vector3(0, 0.2, 0), purple, 12.0)
 		# a boss "abre" em quatro: quatro lascas de luz voando do centro
 		for k in 4:
 			var a := PI / 4.0 + k * PI / 2.0 + PI / 4.0
@@ -3138,14 +3315,14 @@ func _last_dance(u: Unit) -> void:
 		shake_t = 0.9
 		shake_amp = 1.1
 		boss.hit_flash()
-		u.face(BOSS_POINT - u.position)
+		u.face(boss_pos - u.position)
 		_raw_hit(u, echo))
 
 
 ## Garras Cruzadas: abre o Ferimento na boss. Enquanto dura, a party inteira dá mais dano nela.
 func _wound(u: Unit) -> void:
 	add_dot("ferida", "Ferimento", WOUND_COL, WOUND_TIME, 0.0, u)
-	var at := BOSS_POINT + Vector3(0, 2.2, 1.8)
+	var at := boss_pos + Vector3(0, 2.2, 1.8)
 	for k in 3:
 		# três rasgos vermelhos
 		var cut := BoxMesh.new()
@@ -3257,7 +3434,7 @@ func _crimson_dance(u: Unit, dmg: float) -> void:
 ## está jogando de Assassina.
 func _tick_side_mark() -> void:
 	var me := units[ctrl]
-	var on: bool = me.key == "assassina" and me.alive and not prep and not ended
+	var on: bool = me.key == "assassina" and me.alive and not prep and not ended and not roam
 	side_mark.visible = on
 	if not on:
 		return
@@ -3272,13 +3449,13 @@ func _tick_side_mark() -> void:
 
 ## Empurra o herói pra longe da boss (recuo do tiro forte, dash da bala amarela).
 func _knock_back(u: Unit, dist: float) -> void:
-	var away := u.position - BOSS_POINT
+	var away := u.position - boss_pos
 	away.y = 0.0
 	away = away.normalized() if away.length() > 0.1 else Vector3(0, 0, 1)
 	var to := u.position + away * dist
 	var flat := Vector2(to.x, to.z)
-	if flat.length() > ARENA_R:
-		flat = flat.normalized() * ARENA_R
+	if flat.length() > arena_r:
+		flat = flat.normalized() * arena_r
 		to = Vector3(flat.x, 0, flat.y)
 	u.dash_fx()
 	u.invuln = maxf(u.invuln, 0.25)
@@ -3305,7 +3482,7 @@ func _shot_fx(u: Unit, col: Color, big: bool, size := 1.0) -> void:
 		size = maxf(size, 1.7)
 	u.kick(size)
 	var from := u.position + Vector3(0, 1.25, 0)
-	var to := Vector3(randf_range(-0.8, 0.8), randf_range(2.5, 4.0), -11.0)
+	var to := _bp(Vector3(randf_range(-0.8, 0.8), randf_range(2.5, 4.0), -11.0))
 	# clarão na boca da arma
 	var muzzle_m := Fx.mat(Color(col.r, col.g, col.b, 0.9).lightened(0.4), 8.0, true)
 	var muzzle := Fx.inst(fx_root, Fx.sphere(0.3 * size), muzzle_m, from)
@@ -3344,7 +3521,7 @@ func _maga_basic_fx(u: Unit, slot: int) -> void:
 		return
 	u.kick(2.2)
 	var from := u.position + Vector3(0, 1.25, 0)
-	var hit := Vector3(0, 3.2, -11.0)
+	var hit := _bp(Vector3(0, 3.2, -11.0))
 	var through := from + (hit - from).normalized() * (from.distance_to(hit) + 9.0)
 	var lance_m := Fx.mat(Color(0.8, 0.98, 1.0), 9.0, true)
 	var lance := Fx.inst(fx_root, Fx.capsule(0.2, 3.4), lance_m, from)
@@ -3375,7 +3552,7 @@ func _aim_mark(u: Unit) -> void:
 	if aim_node != null and is_instance_valid(aim_node):
 		aim_node.queue_free()
 	aim_node = Node3D.new()
-	aim_node.position = Vector3(0, 5.2, -11.0)
+	aim_node.position = _bp(Vector3(0, 5.2, -11.0))
 	fx_root.add_child(aim_node)
 	for spec in [[2.3, 2.5], [1.5, 1.62]]:
 		var ring := Fx.inst(aim_node, Fx.torus(spec[0], spec[1]), Fx.mat(AIM_COL, 6.0, true))
@@ -3418,7 +3595,7 @@ func _aim_clear() -> void:
 func _use_aim(u: Unit) -> float:
 	if aim_t <= 0.0:
 		return 0.0
-	var at := Vector3(0, 5.2, -11.0)
+	var at := _bp(Vector3(0, 5.2, -11.0))
 	_aim_clear()
 	# ruptura arcana: a mira se parte em estilhaços e um clarão
 	_impact_ring(at, Color(1, 1, 1), 5.0)
@@ -3446,7 +3623,7 @@ func _rainbow(u: Unit) -> void:
 	if u.bullets.is_empty():
 		u.set_action("Sem balas", 2)
 		return
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	if u.bullets.size() == 3:
 		# tiro triplo: as três cores saem juntas, num disparo pesado
 		for n in 3:
@@ -3476,11 +3653,11 @@ func _rainbow(u: Unit) -> void:
 ## Com o escudo da Salva Astral de pé (unit.salvo_t) e perto da boss: a bala fica indo e voltando
 ## entre a boss e a Maga, batendo numa e curando a outra. Sem esse escudo, nunca volta nela.
 func _ricochet(u: Unit) -> void:
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	u.kick(1.2)
 	if fairy_t > 0.0:
 		# com a Fada Astral em campo, a bala fica ricocheteando entre a boss e ela, de qualquer distância
-		_rico_leg(u.position + Vector3(0, 1.25, 0), Vector3(0, 3.0, -11.5))
+		_rico_leg(u.position + Vector3(0, 1.25, 0), _bp(Vector3(0, 3.0, -11.5)))
 		u.ricochet_t = RICO_TIME
 		u.ricochet_tick = 0.16
 		u.ricochet_out = true
@@ -3489,8 +3666,8 @@ func _ricochet(u: Unit) -> void:
 			hud.toast("RICOCHETE NA FADA", 0.9)
 		return
 	u.set_meta("rico_fairy", false)
-	if u.salvo_t <= 0.0 or u.position.distance_to(BOSS_POINT) > MELEE_RANGE:
-		var hit := Vector3(randf_range(-0.6, 0.6), 2.6, -11.0)
+	if u.salvo_t <= 0.0 or u.position.distance_to(boss_pos) > MELEE_RANGE:
+		var hit := _bp(Vector3(randf_range(-0.6, 0.6), 2.6, -11.0))
 		_rico_leg(u.position + Vector3(0, 1.25, 0), hit)
 		get_tree().create_timer(0.16, false).timeout.connect(_rico_leg.bind(hit, hit + Vector3(2.4, 2.2, 0.5)))
 		_damage_boss(u, RICO_DMG * 2.5, true, false)
@@ -3523,20 +3700,20 @@ func _tick_ricochet(u: Unit, delta: float) -> void:
 	if u.ricochet_tick > 0.0:
 		return
 	u.ricochet_tick = RICO_STEP
-	var boss_at := Vector3(0, 3.0, -11.5)
+	var boss_at := _bp(Vector3(0, 3.0, -11.5))
 	if u.get_meta("rico_fairy", false):
 		if fairy_t <= 0.0:
 			u.ricochet_t = 0.0  # a fada foi embora: acabou o vai e volta
 			return
 		if u.ricochet_out:
-			_rico_leg(FAIRY_AT, boss_at)
+			_rico_leg(_bp(FAIRY_AT), boss_at)
 			_damage_boss(u, RICO_DMG, true, false)
 		else:
-			_rico_leg(boss_at, FAIRY_AT)
+			_rico_leg(boss_at, _bp(FAIRY_AT))
 			_fairy_heal()
 		u.ricochet_out = not u.ricochet_out
 		return
-	if u.position.distance_to(BOSS_POINT) > MELEE_RANGE or u.salvo_t <= 0.0:
+	if u.position.distance_to(boss_pos) > MELEE_RANGE or u.salvo_t <= 0.0:
 		u.ricochet_t = 0.0  # saiu de perto, ou o escudo da Salva caiu: a bala se perde
 		return
 	var me := u.position + Vector3(0, 1.2, 0)
@@ -3560,7 +3737,7 @@ func _salvo(u: Unit) -> void:
 	if u.bullets.size() < SALVO_COST:
 		u.set_action("Precisa de %d balas" % SALVO_COST, 2)
 		return
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	# com EXATAMENTE 6 balas (o botão brilha): gasta as seis e solta a Fada Astral
 	var fairy := u.bullets.size() == SALVO_FAIRY
 	var cost := SALVO_FAIRY if fairy else SALVO_COST
@@ -3619,7 +3796,7 @@ func _fairy_spawn(u: Unit) -> void:
 	fairy_node.add_child(wand)
 	Fx.inst(wand, Fx.cyl(0.025, 0.025, 0.5), Fx.mat(Color(1.0, 0.95, 0.6), 3.0, true), Vector3(0, 0.25, 0))
 	Fx.inst(wand, Fx.sphere(0.09), Fx.mat(Color(1.0, 0.9, 0.35), 8.0, true), Vector3(0, 0.52, 0))
-	fairy_node.create_tween().tween_property(fairy_node, "position", FAIRY_AT, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	fairy_node.create_tween().tween_property(fairy_node, "position", _bp(FAIRY_AT), 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_burst(u.position + Vector3(0, 1.6, 0), FAIRY_COL, 2.4)
 
 
@@ -3634,7 +3811,7 @@ func _tick_fairy(delta: float) -> void:
 		return
 	var t := Time.get_ticks_msec() * 0.001
 	# paira num oito pequeno e bate as asas
-	fairy_node.position = fairy_node.position.lerp(FAIRY_AT + Vector3(sin(t * 1.7) * 0.5, sin(t * 3.1) * 0.3, 0), delta * 6.0)
+	fairy_node.position = fairy_node.position.lerp(_bp(FAIRY_AT) + Vector3(sin(t * 1.7) * 0.5, sin(t * 3.1) * 0.3, 0), delta * 6.0)
 	fairy_node.get_node("WingL").rotation.y = sin(t * 26.0) * 0.7
 	fairy_node.get_node("WingR").rotation.y = -sin(t * 26.0) * 0.7
 	# nos últimos 2 s ela pisca: está indo embora
@@ -3644,7 +3821,7 @@ func _tick_fairy(delta: float) -> void:
 		fairy_shot = 1.0
 		# o tiro da varinha (só o desenho: o dano é o DoT)
 		var from: Vector3 = fairy_node.position + Vector3(-0.5, 0.3, -0.1)
-		var to := Vector3(randf_range(-0.8, 0.8), randf_range(4.5, 7.5), -11.4)
+		var to := _bp(Vector3(randf_range(-0.8, 0.8), randf_range(4.5, 7.5), -11.4))
 		var bolt := Fx.inst(fx_root, Fx.sphere(0.11), Fx.mat(Color(1.0, 0.9, 0.5), 8.0, true), from)
 		var tw := bolt.create_tween()
 		tw.tween_property(bolt, "position", to, 0.16)
@@ -3668,8 +3845,8 @@ func _fairy_clear() -> void:
 ## A fada foi atingida por uma bala do Ricochete: ela entrega a cura pra party toda, em área.
 ## FAIRY_HEAL da vida máxima de cada um; o que passar da vida cheia vira escudo.
 func _fairy_heal() -> void:
-	_burst(FAIRY_AT, Color(0.6, 1.0, 0.75), 2.6)
-	_impact_ring(FAIRY_AT, Color(0.6, 1.0, 0.75), 2.2)
+	_burst(_bp(FAIRY_AT), Color(0.6, 1.0, 0.75), 2.6)
+	_impact_ring(_bp(FAIRY_AT), Color(0.6, 1.0, 0.75), 2.2)
 	for o in units:
 		if not o.alive:
 			continue
@@ -3679,7 +3856,7 @@ func _fairy_heal() -> void:
 		if room < amount:
 			o.shield_hp += amount - room
 			o.shield_t = maxf(o.shield_t, SHIELD_TIME)
-		_beam(FAIRY_AT - Vector3(0, 1.0, 0), o.position, Color(0.6, 1.0, 0.75, 0.6), 0.3)
+		_beam(_bp(FAIRY_AT) - Vector3(0, 1.0, 0), o.position, Color(0.6, 1.0, 0.75, 0.6), 0.3)
 		_popup(int(round(amount)), Color(0.5, 1.0, 0.65), 34, o.position + Vector3(0, 2.6, 0), "+")
 
 
@@ -3691,11 +3868,11 @@ func _fairy_heal() -> void:
 func _cannon_charge(u: Unit, time: float) -> void:
 	_cannon_drop(u)
 	u.cannon_bonus = _use_aim(u)  # a marca do Tiro Perfurante é usada já no começo do preparo
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	var rig := Node3D.new()
 	u.add_child(rig)
 	rig.position = Vector3(0, 1.7, 0)
-	rig.look_at(Vector3(0, 4.0, -11.5), Vector3.UP)
+	rig.look_at(_bp(Vector3(0, 4.0, -11.5)), Vector3.UP)
 	u.set_meta("cannon", rig)
 	var super_shot := u.bullets.size() == BULLET_MAX
 	var metal := Fx.mat(Color(0.85, 0.88, 1.0, 0.92), 1.2)
@@ -3747,7 +3924,7 @@ func _cannon_drop(u: Unit) -> void:
 ## O disparo. Gasta TODAS as balas guardadas; cada uma vale bem mais aqui do que solta.
 ## Com exatamente BULLET_MAX balas vira o supercanhão arco-íris (_cannon_super).
 func _cannon(u: Unit) -> void:
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	var loaded := u.bullets.size()
 	u.bullets.clear()
 	var amount := CANNON_DMG + CANNON_PER_BULLET * loaded + u.cannon_bonus
@@ -3762,7 +3939,7 @@ func _cannon(u: Unit) -> void:
 		_cannon_super(u, amount + CANNON_SUPER_BONUS, rig)
 		return
 	var from := u.position + Vector3(0, 1.7, 0)
-	var hit := Vector3(0, 4.0, -11.5)
+	var hit := _bp(Vector3(0, 4.0, -11.5))
 	# feixe grosso, branco com a cor dela em volta
 	_cannon_beam(from, hit, [Color(1, 1, 1), u.color.lightened(0.3)], 0.55, 0.45)
 	_impact_ring(hit, u.color.lightened(0.4), 6.0 + loaded * 0.5)
@@ -3805,7 +3982,7 @@ func _cannon_super(u: Unit, total: float, rig: Node3D) -> void:
 	u.lock_t = CANNON_SUPER_TIME
 	u.invuln = maxf(u.invuln, 0.0)
 	var from := u.position + Vector3(0, 1.7, 0)
-	var hit := Vector3(0, 4.0, -11.5)
+	var hit := _bp(Vector3(0, 4.0, -11.5))
 	var length := from.distance_to(hit)
 	hud.toast("SUPERCANHÃO ARCO-ÍRIS", 2.0)
 	hud.flash(Color(1, 1, 1), 0.35)
@@ -3911,7 +4088,7 @@ func lance_damage() -> float:
 ## Ataque básico: uma brasa celestial pequena (estrela comprimida), rastro ciano e um flash branco na batida.
 func _ember_fx(u: Unit) -> void:
 	var from := u.position + Vector3(0, 1.3, 0)
-	var to := Vector3(randf_range(-1.0, 1.0), randf_range(2.4, 4.2), -11.0)
+	var to := _bp(Vector3(randf_range(-1.0, 1.0), randf_range(2.4, 4.2), -11.0))
 	var star := Node3D.new()
 	fx_root.add_child(star)
 	star.position = from
@@ -3956,7 +4133,7 @@ func _zenith_halo() -> void:
 	_zenith_clear()
 	zenith_node = Node3D.new()
 	# na altura da cabeça da boss e um pouco à frente: acima disso a barra de vida dela esconde
-	zenith_node.position = Vector3(0, 10.4, -11.6)
+	zenith_node.position = _bp(Vector3(0, 10.4, -11.6))
 	zenith_node.rotation.x = 0.4
 	fx_root.add_child(zenith_node)
 	zenith_mats = []
@@ -3985,7 +4162,7 @@ func _zenith_halo() -> void:
 	core.visible = false
 	zenith_node.scale = Vector3.ONE * 0.2
 	zenith_node.create_tween().tween_property(zenith_node, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_burst(Vector3(0, 10.4, -11.6), FIRE, 3.0)
+	_burst(_bp(Vector3(0, 10.4, -11.6)), FIRE, 3.0)
 
 
 func _tick_zenith(delta: float) -> void:
@@ -4053,11 +4230,11 @@ func _lance_charge(u: Unit, time: float) -> void:
 		var aged: float = 1.0 - mk["t"] / mk["total"]
 		grade = 2 if aged >= LANCE_PERFECT else (1 if aged >= LANCE_GOOD else 0)
 	u.set_meta("lance_grade", grade)
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	u.visual.scale = Vector3(0.92, 1.12, 0.92)  # braço pra cima
 	var rig := Node3D.new()
 	fx_root.add_child(rig)
-	rig.position = Vector3(0, 0, -12.0)
+	rig.position = _bp(Vector3(0, 0, -12.0))
 	u.set_meta("lance", rig)
 	var circle := Node3D.new()
 	circle.position = Vector3(0, 12.2, 0)
@@ -4102,14 +4279,14 @@ func _lance_charge(u: Unit, time: float) -> void:
 			tr.tween_property(ring, "scale", Vector3.ONE * 1.6, 0.2)
 			tr.parallel().tween_property(ring, "position:y", lance.position.y - 3.0, time * 0.5)
 			tr.tween_callback(ring.queue_free)
-		_burst(Vector3(0, 11.0, -10.6), Color(1, 1, 1), 4.0)
+		_burst(_bp(Vector3(0, 11.0, -10.6)), Color(1, 1, 1), 4.0)
 		if u.controlled:
 			hud.toast("LANÇA PERFEITA!", 1.2)
 			hud.flash(FIRE_MINT, 0.12)
 	elif grade == 1 and u.controlled:
 		hud.toast("BOA LANÇA", 0.9)
 	# fagulhas subindo da mão dele até o céu
-	_beam(u.position + Vector3(0, 1.2, 0), Vector3(0, 10.0, -10.6), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.5), time)
+	_beam(u.position + Vector3(0, 1.2, 0), _bp(Vector3(0, 10.0, -10.6)), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.5), time)
 
 
 func _lance_drop(u: Unit) -> void:
@@ -4150,7 +4327,7 @@ func _lance(u: Unit) -> void:
 func _lance_hit(u: Unit, amount: float, marked: bool, grade := 0) -> void:
 	if ended:
 		return
-	var at := Vector3(0, 3.4, -11.5)
+	var at := _bp(Vector3(0, 3.4, -11.5))
 	if grade == 2:
 		# perfeito: coluna de fogo celestial no ponto do impacto, mais ondas e o aviso em cima do dano
 		for k in 2:
@@ -4189,13 +4366,13 @@ func _lance_hit(u: Unit, amount: float, marked: bool, grade := 0) -> void:
 func _swoop(u: Unit) -> void:
 	var d := _input_dir() if u.controlled else Vector3.ZERO
 	if d == Vector3.ZERO:
-		d = (u.position - BOSS_POINT).normalized()
+		d = (u.position - boss_pos).normalized()
 		d.y = 0.0
 	var from := u.position
 	var to := from + d.normalized() * SWOOP_DIST
 	var flat := Vector2(to.x, to.z)
-	if flat.length() > ARENA_R:
-		flat = flat.normalized() * ARENA_R
+	if flat.length() > arena_r:
+		flat = flat.normalized() * arena_r
 		to = Vector3(flat.x, 0, flat.y)
 	u.wings_open(true, 0.08)
 	u.dash_fx()
@@ -4236,7 +4413,7 @@ func _rain_start() -> void:
 	if rain_node != null and is_instance_valid(rain_node):
 		rain_node.queue_free()
 	rain_node = Node3D.new()
-	rain_node.position = Vector3(0, 10.6, -10.5)
+	rain_node.position = _bp(Vector3(0, 10.6, -10.5))
 	rain_node.rotation.x = 0.3
 	fx_root.add_child(rain_node)
 	Fx.inst(rain_node, Fx.torus(4.6, 4.8), Fx.mat(FIRE, 5.0, true))
@@ -4290,7 +4467,7 @@ func _tick_rain(delta: float) -> void:
 func _solar(u: Unit) -> void:
 	var marked := not get_dot("zenite").is_empty()
 	u.lock_t = SOLAR_RISE
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	u.wings_open(true, 0.35)
 	if u.controlled:
 		hud.toast("JUÍZO SOLAR", 1.6)
@@ -4314,7 +4491,7 @@ func _solar(u: Unit) -> void:
 		rings.append(ring)
 		ring.create_tween().set_loops().tween_property(ring, "rotation:y", TAU, 1.1 + k * 0.4).as_relative()
 	sun.scale = Vector3.ONE * 0.1
-	var hit := Vector3(0, 5.0, -11.5)
+	var hit := _bp(Vector3(0, 5.0, -11.5))
 	var ts := sun.create_tween()
 	ts.tween_property(sun, "scale", Vector3.ONE * 1.3, SOLAR_RISE).set_ease(Tween.EASE_OUT)
 	ts.tween_property(sun, "position", hit, SOLAR_TRAVEL).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -4379,7 +4556,7 @@ func _combo_hit(u: Unit, slot: int, full: float) -> float:
 	elif slot == u.chain:
 		u.chain = 2 if slot == 1 else 0  # fortalecido: dano cheio e passa a vez
 		if slot == 2:
-			_burst(BOSS_POINT + Vector3(0, 1.6, 1.8), STAR, 3.4)
+			_burst(boss_pos + Vector3(0, 1.6, 1.8), STAR, 3.4)
 	else:
 		amount = WEAK_HIT  # fora de ordem: dano mínimo e a sequência se perde
 		u.chain = 0
@@ -4390,7 +4567,7 @@ func _combo_hit(u: Unit, slot: int, full: float) -> float:
 
 ## Contagem Regressiva: avança até a boss e abre uma arena de luz em volta dela mesma.
 func _countdown(u: Unit) -> void:
-	var to_boss := BOSS_POINT - u.position
+	var to_boss := boss_pos - u.position
 	to_boss.y = 0.0
 	var go := maxf(0.0, to_boss.length() - (MELEE_RANGE - 1.0))
 	u.face(to_boss)
@@ -4408,7 +4585,7 @@ func _countdown(u: Unit) -> void:
 ## SUPERSTAR_SHOTS disparos ao longo de SUPERSTAR_FIRE. É oGCD: ela continua andando e batendo
 ## enquanto isso, e a sequência Jab/Direto/Gancho não quebra. Se ela cair no meio, a rajada para.
 func _superstar(u: Unit) -> void:
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	u.glove_anim("mic", SUPERSTAR_WIND)
 	if u.controlled:
 		hud.toast("SUPERSTAR!", 1.0)
@@ -4437,7 +4614,7 @@ func _superstar_shot(u: Unit, n: int) -> void:
 		return
 	# estrela gigante saindo dela até a boss
 	var from := u.position + Vector3(0, 1.8, 0)
-	var to := Vector3(randf_range(-2.2, 2.2), randf_range(2.5, 6.0), -11.0)
+	var to := _bp(Vector3(randf_range(-2.2, 2.2), randf_range(2.5, 6.0), -11.0))
 	var m := Fx.mat([STAR, Color(1.0, 0.9, 0.35), Color(0.45, 0.8, 1.0)][n % 3].lightened(0.2), 8.0, true)
 	var star := Fx.inst(fx_root, Fx.sphere(0.55), m, from)
 	var tw := star.create_tween()
@@ -4452,7 +4629,7 @@ func _superstar_shot(u: Unit, n: int) -> void:
 ## (_knockout_land), em área. Enquanto air_t > 0 ela está no ar: não age e passa por cima de
 ## ataque baixo (hazard com "low": true).
 func _knockout_jump(u: Unit) -> void:
-	var to_boss := BOSS_POINT - u.position
+	var to_boss := boss_pos - u.position
 	to_boss.y = 0.0
 	var go := maxf(0.0, to_boss.length() - (MELEE_RANGE - 1.0))
 	u.face(to_boss)
@@ -4540,9 +4717,9 @@ func _knockout_land(u: Unit) -> void:
 	shake_t = 0.45
 	shake_amp = 0.55
 	# dano: a boss leva se o ponto de ataque dela está dentro da onda
-	if at.distance_to(BOSS_POINT) <= KNOCKOUT_R:
+	if at.distance_to(boss_pos) <= KNOCKOUT_R:
 		_damage_boss(u, KNOCKOUT_DMG, true, true)
-		_burst(Vector3(0, 4.5, -11.5), hot, 8.0)
+		_burst(_bp(Vector3(0, 4.5, -11.5)), hot, 8.0)
 
 
 # ---------------------------------------------------------------- Apotecário
@@ -4582,6 +4759,8 @@ func buffs_of(u: Unit) -> Array:
 ## Velocidade de andar do herói agora: base x a da classe x a pressa, se tiver.
 func move_speed(u: Unit) -> float:
 	var haste := HASTE_MULT if u.haste_t > 0.0 else 1.0
+	if Knowledge.has(u.hero, "boots"):
+		haste *= 1.12  # Botas Leves
 	if u.count_t > 0.0:
 		haste *= COUNT_SPEED  # Contagem Regressiva da Ringstar
 	# A lentidão de classe é pra quem o JOGADOR controla (é o peso do personagem na mão). A IA anda na
@@ -4629,7 +4808,7 @@ func _necropsy(u: Unit) -> void:
 		_burst(u.position + Vector3(0, 2.2, 0), CHEM, 1.2)
 		if u.controlled:
 			hud.toast("VESTÍGIO %d/%d" % [u.vestiges, VESTIGE_MAX], 0.9)
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	u.punch()
 	_attack_fx(u, true)
 	_damage_boss(u, SKILLS["apothecary"][1]["dmg"], true, true)
@@ -4643,7 +4822,7 @@ func _hemostatic(u: Unit) -> void:
 	if ally == null:
 		if u.vestiges >= VESTIGE_MAX and not get_dot("decomp").is_empty():
 			add_dot("contam", "Contaminação", Color(0.75, 0.3, 0.9), CONTAM_TIME, 0.0, u)
-			_beam(u.position, Vector3(0, 3.0, -11.5), Color(0.75, 0.3, 0.9, 0.95), 0.4)
+			_beam(u.position, _bp(Vector3(0, 3.0, -11.5)), Color(0.75, 0.3, 0.9, 0.95), 0.4)
 			hud.toast("CONTAMINAÇÃO", 1.2)
 			return
 		ally = u
@@ -4661,7 +4840,7 @@ func _thanato(u: Unit) -> void:
 	if not get_dot("contam").is_empty():
 		remove_dot("contam")
 		u.vestiges = 0
-		_burst(Vector3(0, 3, -11.5), Color(0.6, 0.85, 0.2), 7.0)
+		_burst(_bp(Vector3(0, 3, -11.5)), Color(0.6, 0.85, 0.2), 7.0)
 		hud.flash(Color(0.6, 0.85, 0.2, 0.3))
 		hud.toast("NUVEM TÓXICA", 1.6)
 		_damage_boss(u, TOXIC_DMG, true, true)
@@ -4725,7 +4904,7 @@ func _dream_add(n: int) -> void:
 
 
 func _sw_hit(u: Unit, base: float, big: bool) -> void:
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	_attack_fx(u, big)
 	_damage_boss(u, base * SW_SCALE, true, big)
 
@@ -4763,7 +4942,7 @@ func _sleep_skill(u: Unit, slot: int) -> void:
 				e["hit"] = true
 				amount += ECHO_BASE
 				gain += SW_ECHO_TORPOR
-				_burst(Vector3(0, 3.5, -11.5), Color(1, 1, 1), 3.4)
+				_burst(_bp(Vector3(0, 3.5, -11.5)), Color(1, 1, 1), 3.4)
 				if u.controlled:
 					hud.toast("FRESTA!", 0.6)
 				break
@@ -5155,13 +5334,13 @@ func _phoenix(u: Unit, from: Vector3) -> void:
 	for k in wings.size():
 		var s := -1.0 if k == 0 else 1.0
 		tw.parallel().tween_property(wings[k], "rotation:z", s * 0.25, REBIRTH_BIRTH).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	bird.look_at_from_position(bird.position, Vector3(0, 5.0, -11.5), Vector3.UP)
+	bird.look_at_from_position(bird.position, _bp(Vector3(0, 5.0, -11.5)), Vector3.UP)
 	# 2. o grito
 	tw.tween_callback(_phoenix_cry.bind(hover, gold))
 	tw.tween_property(bird, "scale", Vector3.ONE * 1.85, REBIRTH_CRY * 0.35)
 	tw.tween_property(bird, "scale", Vector3.ONE * 1.6, REBIRTH_CRY * 0.65)
 	# 3. o voo lento até a boss
-	var hit := Vector3(0, 5.2, -11.5)
+	var hit := _bp(Vector3(0, 5.2, -11.5))
 	tw.tween_property(bird, "position", hit, REBIRTH_FLY).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_callback(_phoenix_hit.bind(u, hit, gold))
 	tw.tween_property(bird, "scale", Vector3.ONE * 0.1, 0.25)
@@ -5179,7 +5358,7 @@ func _phoenix(u: Unit, from: Vector3) -> void:
 	var patches := 6
 	for n in patches:
 		var t := float(n + 1) / (patches + 1.0)
-		var ground := Vector3(from.x, 0, from.z).lerp(Vector3(0, 0, -9.5), t) + Vector3(randf_range(-1.4, 1.4), 0, randf_range(-0.8, 0.8))
+		var ground := Vector3(from.x, 0, from.z).lerp(_bp(Vector3(0, 0, -9.5)), t) + Vector3(randf_range(-1.4, 1.4), 0, randf_range(-0.8, 0.8))
 		get_tree().create_timer(REBIRTH_BIRTH + REBIRTH_CRY + REBIRTH_FLY * t, false).timeout.connect(_fire_patch.bind(ground, gold))
 		# e penas de fogo caindo dela
 		get_tree().create_timer(REBIRTH_BIRTH + REBIRTH_CRY + REBIRTH_FLY * t - 0.1, false).timeout.connect(func():
@@ -5360,8 +5539,8 @@ func _tick_holy(delta: float) -> void:
 		if h["tick"] <= 0.0:
 			h["tick"] = HOLY_TICK
 			var owner: Unit = h["owner"]
-			if owner.alive and node.position.distance_to(BOSS_POINT) <= HOLY_R + 1.4:
-				_burst(BOSS_POINT + Vector3(0, 0.6, 1.6), GOLD, 1.8)
+			if owner.alive and node.position.distance_to(boss_pos) <= HOLY_R + 1.4:
+				_burst(boss_pos + Vector3(0, 0.6, 1.6), GOLD, 1.8)
 				_damage_boss(owner, HOLY_DMG, true, false)
 		if h["t"] <= 0.0:
 			node.queue_free()
@@ -5412,10 +5591,10 @@ func _provoke(u: Unit, by_ai: bool) -> void:
 		_master("provoke")
 	u.enmity = maxf(u.enmity, top) + PROVOKE_BONUS
 	_burst(u.position, Color(1.0, 0.35, 0.6), 3.2)
-	_beam(u.position, Vector3(0, 5.0, -11.5), Color(1.0, 0.35, 0.6, 0.95), 0.45)
+	_beam(u.position, _bp(Vector3(0, 5.0, -11.5)), Color(1.0, 0.35, 0.6, 0.95), 0.45)
 	boss.rage()
 	# confirmação de que a boss foi provocada: uma etiqueta pequena ao lado dela
-	hud.provoke_tag(cam.unproject_position(Vector3(4.6, 8.4, -12.0)))
+	hud.provoke_tag(cam.unproject_position(_bp(Vector3(4.6, 8.4, -12.0))))
 
 
 func _add_stacks(u: Unit, n: int) -> void:
@@ -5445,7 +5624,7 @@ func _party_heal(u: Unit, amount: float) -> void:
 ## Gotas de sangue voltando da boss até ela (toda cura que vem de sangue roubado), com uma cruzinha
 ## médica subindo em cima dela.
 func _blood_return(u: Unit, count: int) -> void:
-	var from := BOSS_POINT + Vector3(0, 2.2, 1.6)
+	var from := boss_pos + Vector3(0, 2.2, 1.6)
 	for n in count:
 		var drop := Fx.inst(fx_root, Fx.sphere(0.11), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), from + Vector3(randf_range(-0.8, 0.8), randf_range(-0.6, 0.8), 0))
 		var tw := drop.create_tween()
@@ -5469,7 +5648,7 @@ func _blood_return(u: Unit, count: int) -> void:
 ## Syringe Poke: estocada rápida, uma perfuração pequena e um fio de sangue puxado da boss pra seringa.
 func _poke_fx(u: Unit) -> void:
 	u.syringe_stab(1.1)
-	var at := BOSS_POINT + Vector3(randf_range(-0.6, 0.6), 2.0, 1.7)
+	var at := boss_pos + Vector3(randf_range(-0.6, 0.6), 2.0, 1.7)
 	_impact_ring(at, BLOOD.lightened(0.2), 0.9)
 	_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.9), 0.28)
 	u.set_fill(0.55, 0.08)
@@ -5482,7 +5661,7 @@ func _poke_fx(u: Unit) -> void:
 func _consumed_fx(u: Unit) -> void:
 	u.syringe_stab(1.5, 0.35)
 	u.set_fill(1.0, 0.35)
-	var at := BOSS_POINT + Vector3(0, 2.2, 1.7)
+	var at := boss_pos + Vector3(0, 2.2, 1.7)
 	for n in 8:
 		# o sangue sendo sugado: gotas correndo da boss pra seringa
 		var drop := Fx.inst(fx_root, Fx.sphere(0.1), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-1.2, 1.2), randf_range(-0.8, 1.2), 0))
@@ -5544,7 +5723,7 @@ func _parry_guard(u: Unit) -> void:
 func _taunt_mark() -> void:
 	var node := Node3D.new()
 	fx_root.add_child(node)
-	node.position = Vector3(0, 9.6, -10.8)
+	node.position = _bp(Vector3(0, 9.6, -10.8))
 	var m := Fx.mat(Color(2.0, 0.2, 0.35, 0.95), 0.0, true)
 	Fx.inst(node, Fx.cyl(0.0, 0.7, 1.1), m, Vector3(0, -0.2, 0)).rotation.x = PI
 	Fx.inst(node, Fx.cyl(0.24, 0.24, 0.9), m, Vector3(0, 0.75, 0))
@@ -5675,11 +5854,11 @@ func _extract_big(u: Unit) -> void:
 	u.channel_total = EXTRACT_BIG_TIME
 	u.channel_slot = 1
 	u.set_meta("extracting", true)
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	u.syringe_stab(1.5, EXTRACT_BIG_TIME - 0.1)
 	u.set_fill(0.05, 0.0)
 	u.set_fill(1.0, EXTRACT_BIG_TIME)
-	var at := BOSS_POINT + Vector3(0, 2.4, 1.7)
+	var at := boss_pos + Vector3(0, 2.4, 1.7)
 	if u.controlled:
 		hud.toast("EXTRAÇÃO TOTAL", 1.6)
 	# a esfera de sangue crescendo na boss
@@ -5753,11 +5932,11 @@ func _extract(u: Unit, big := false) -> void:
 		return
 	u.skill_cd[1] = EXTRACT_CD
 	u.lock_t = EXTRACT_TIME
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	u.syringe_stab(1.5, EXTRACT_TIME - 0.1)
 	u.set_fill(0.05, 0.0)
 	u.set_fill(1.0, EXTRACT_TIME)
-	var at := BOSS_POINT + Vector3(0, 2.2, 1.7)
+	var at := boss_pos + Vector3(0, 2.2, 1.7)
 	if u.controlled:
 		hud.toast("EXTRAÇÃO", 1.0)
 	var steps := 10
@@ -5879,7 +6058,7 @@ func use_lb() -> void:
 	u.channel_total = LB_CAST
 	u.channel_slot = -1
 	u.cast_ai = false
-	u.face(BOSS_POINT - u.position)
+	u.face(boss_pos - u.position)
 	_burst(u.position, u.color, 3.0)
 
 
@@ -5907,8 +6086,8 @@ func _resolve_lb(u: Unit) -> void:
 			u.dmg_total += dmg
 			u.dmg_bucket += dmg
 			boss.hit_flash()
-			_beam(u.position, Vector3(0, 5.0, -11.5), Color(1.0, 1.0, 1.0, 0.98), 0.6)
-			_burst(Vector3(0, 5, -11.5), u.color.lightened(0.4), 10.0)
+			_beam(u.position, _bp(Vector3(0, 5.0, -11.5)), Color(1.0, 1.0, 1.0, 0.98), 0.6)
+			_burst(_bp(Vector3(0, 5, -11.5)), u.color.lightened(0.4), 10.0)
 			_popup(int(dmg), Color(1.0, 0.95, 0.5), 110)
 			if boss_hp <= 0.0:
 				boss_hp = 0.0
@@ -5976,8 +6155,8 @@ func _add_hazard(h: Dictionary) -> void:
 			fill.scale = Vector3(0.01, 1, 1)
 		"donut":
 			node.position = Vector3(0, 0.03, 0)
-			var mid: float = (h["r"] + ARENA_R + 0.3) * 0.5
-			var ring := Fx.inst(node, Fx.torus(h["r"], ARENA_R + 0.3), soft)
+			var mid: float = (h["r"] + arena_r + 0.3) * 0.5
+			var ring := Fx.inst(node, Fx.torus(h["r"], arena_r + 0.3), soft)
 			ring.scale = Vector3(1, 0.02, 1)
 			Fx.inst(node, Fx.torus(h["r"], h["r"] + 0.08), hard)
 			fill = Fx.inst(node, Fx.torus(mid - 0.02, mid + 0.02), fill_mat, Vector3(0, 0.01, 0))
@@ -6012,14 +6191,34 @@ func _hit_test(h: Dictionary, p: Vector3, margin: float) -> bool:
 
 
 ## Tem perigo em p? Com `known`, só conta os ataques pros quais a unidade tem carta.
+## Este herói percebeu este ataque? Com a carta (ou a passiva) dele, sempre e na hora. Sem ela, ele
+## não fica mais parado feito zumbi: TENTA, com o que sabe (Knowledge.knowledge da carta daquele
+## ataque). O conhecimento dá a chance de ele perceber e o atraso até reagir; no começo percebe pouco
+## e tarde, e apanha tentando. Cada ataque é decidido uma vez por herói.
+## No tutorial (sandbox) vale a regra antiga: sem carta, não sabe e pronto, que é o que a aula mostra.
+func _aware(u: Unit, h: Dictionary) -> bool:
+	if Knowledge.has(u.hero, h["card"]):
+		return true
+	if Knowledge.sandbox:
+		return false
+	if not h.has("aware"):
+		h["aware"] = {}
+	if not h["aware"].has(u.idx):
+		var k := Knowledge.knowledge(u.hero, h["card"]) / 100.0
+		# [percebeu?, quanto demora pra reagir]
+		h["aware"][u.idx] = [randf() < lerpf(AWARE_MIN, 0.96, k), lerpf(AWARE_LATE, 0.15, k)]
+	var seen: Array = h["aware"][u.idx]
+	return seen[0] and float(h["total"]) - float(h["t"]) >= float(seen[1])
+
+
 func _danger_at(p: Vector3, u: Unit, known: bool, margin: float) -> bool:
 	for h in hazards:
 		# quem tem o Protocolo Final já sabe pra qual quadrado ir: não foge pro mais perto
 		if h["shape"] == "void" and Knowledge.has(u.hero, "final"):
 			continue
-		if known and not Knowledge.has(u.hero, h["card"]):
+		if known and not _aware(u, h):
 			continue
-		if not known and Knowledge.has(u.hero, h["card"]):
+		if not known and _aware(u, h):
 			continue
 		if _hit_test(h, p, margin):
 			return true
@@ -6035,7 +6234,7 @@ func _safe_point(u: Unit, goal, margin := 0.45):
 		for k in 16:
 			var a := k * TAU / 16.0
 			var p := u.position + Vector3(cos(a), 0, sin(a)) * r
-			if Vector2(p.x, p.z).length() > ARENA_R - 0.2 or _danger_at(p, u, true, margin):
+			if Vector2(p.x, p.z).length() > arena_r - 0.2 or _danger_at(p, u, true, margin):
 				continue
 			var cost := r
 			if goal != null:
@@ -6056,7 +6255,7 @@ func _tick_hazards(delta: float) -> void:
 			"circle": h["fill"].scale = Vector3(f, 1, f)
 			"rect": h["fill"].scale = Vector3(f, 1, 1)
 			"donut":
-				var half: float = (ARENA_R + 0.3 - h["r"]) * 0.5 * f
+				var half: float = (arena_r + 0.3 - h["r"]) * 0.5 * f
 				var tm: TorusMesh = h["fill"].mesh
 				tm.inner_radius = h["mid"] - half
 				tm.outer_radius = h["mid"] + half
@@ -6070,12 +6269,26 @@ func _tick_hazards(delta: float) -> void:
 		for u in units:
 			# "low": ataque rente ao chão. Quem está no ar (unit.air_t, salto do Nocaute Final) passa
 			# por cima; qualquer outro ataque acerta normalmente: o salto não é invulnerabilidade.
-			if h.get("low", false) and u.air_t > 0.0:
+			if h.get("low", false) and u.airborne():
 				continue
 			if h["dmg"] > 0.0 and u.alive and u.invuln <= 0.0 and _hit_test(h, u.position, 0.0):
+				if not card_fail.has(u.hero):
+					card_fail[u.hero] = {}
+				card_fail[u.hero][h["card"]] = true
+				if not Knowledge.has(u.hero, h["card"]) and not autoplay:
+					Knowledge.learn(u.hero, h["card"], LEARN_HIT)
 				if u == player:
 					player_hit = true
 				hurt(u, h["dmg"], h["why"])
+		# quem estava dentro quando o ataque apareceu e saiu a tempo, sem ter a carta: aprendeu um pouco
+		if h["dmg"] > 0.0 and not autoplay:
+			for u in units:
+				if u.alive and h["inside"].has(u.idx) and not Knowledge.has(u.hero, h["card"]) and not _hit_test(h, u.position, 0.0):
+					Knowledge.learn(u.hero, h["card"], LEARN_HAND if (u == player) else LEARN_DODGED)
+					if u == player:
+						for o in units:
+							if o != u and o.alive and not Knowledge.has(o.hero, h["card"]):
+								Knowledge.learn(o.hero, h["card"], LEARN_WATCH)
 		# golpes de meia arena: passar ileso pelos dois, lendo a mão, conta pra maestria
 		if h.has("cleave"):
 			if player_hit:
@@ -6377,7 +6590,7 @@ func _spawn_grid(total: float) -> void:
 	for c in [-4.5, 0.0, 4.5]:
 		for dir in [Vector3(1, 0, 0), Vector3(0, 0, 1)]:
 			var pos := Vector3(0, 0, c) if dir.x > 0.5 else Vector3(c, 0, 0)
-			var half_l := sqrt(ARENA_R * ARENA_R - c * c)
+			var half_l := sqrt(arena_r * arena_r - c * c)
 			_add_hazard({"shape": "rect", "pos": pos, "dir": dir, "half_l": half_l, "half_w": 0.8,
 				"total": total, "dmg": 26.0, "card": "dodge", "why": "ficou na grade"})
 
@@ -6447,12 +6660,12 @@ func _spawn_lines(n: int, half_w: float, total: float, dmg: float, why: String) 
 
 
 func _line_at(u: Unit, half_w: float, total: float, dmg: float, why: String) -> void:
-	var from := Vector3(0, 0, -ARENA_R - 1.0)
+	var from := Vector3(0, 0, -arena_r - 1.0)
 	var dir := Vector3(u.position.x, 0, u.position.z) - from
 	dir = dir.normalized()
 	# a faixa cobre só o trecho que cruza a arena, sem sobrar pra fora do chão
 	var b := from.dot(dir)
-	var disc := b * b - (from.length_squared() - ARENA_R * ARENA_R)
+	var disc := b * b - (from.length_squared() - arena_r * arena_r)
 	if disc <= 0.0:
 		return
 	var t1 := -b - sqrt(disc)
@@ -6465,7 +6678,7 @@ func _line_at(u: Unit, half_w: float, total: float, dmg: float, why: String) -> 
 
 func _raidwide(ratio: float, why: String) -> void:
 	hud.flash(Color(1.0, 0.2, 0.35) * Color(1, 1, 1, 0.5))
-	_burst(Vector3(0, 0.2, 0), DANGER, ARENA_R)
+	_burst(Vector3(0, 0.2, 0), DANGER, arena_r)
 	for u in units:
 		if u.alive:
 			hurt(u, u.max_hp * ratio, why)
@@ -6559,8 +6772,8 @@ func _tick_cleaves(delta: float) -> void:
 	if c0["t"] <= 0.5 and not c0["shown"]:
 		c0["shown"] = true
 		# a marca no chão só aparece agora: quem esperou por ela quase não tem tempo
-		_add_hazard({"shape": "rect", "pos": Vector3(c0["side"] * ARENA_R * 0.5, 0, 0), "dir": Vector3(0, 0, 1),
-			"half_l": ARENA_R, "half_w": ARENA_R * 0.5, "total": maxf(c0["t"], 0.05) * haste, "dmg": CLEAVE_DMG, "card": "dodge",
+		_add_hazard({"shape": "rect", "pos": Vector3(c0["side"] * arena_r * 0.5, 0, 0), "dir": Vector3(0, 0, 1),
+			"half_l": arena_r, "half_w": arena_r * 0.5, "total": maxf(c0["t"], 0.05) * haste, "dmg": CLEAVE_DMG, "card": "dodge",
 			"why": "tomou o golpe de meia arena", "cleave": "last" if c0["last"] else "first"})
 	if c0["t"] <= 0.0:
 		cleaves.pop_front()
@@ -6681,7 +6894,7 @@ func _tick_count(delta: float) -> void:
 				"total": 1.0, "dmg": 45.0, "card": "dodge", "why": "ficou no corte da Contagem"})
 		else:
 			_line_at(u, 1.3, 1.0, 45.0, "ficou na investida da Contagem")
-			_beam(Vector3(0, 5.0, -11.5), u.position, Color(1.0, 0.35, 0.4, 0.9), 0.35)
+			_beam(_bp(Vector3(0, 5.0, -11.5)), u.position, Color(1.0, 0.35, 0.4, 0.9), 0.35)
 	if is_instance_valid(count_labels[count_i]):
 		count_labels[count_i].queue_free()
 	count_i += 1
@@ -6714,6 +6927,9 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 		dmg *= 0.5
 	if Knowledge.has(u.hero, "sharpen"):
 		dmg *= 1.08
+	if show and Knowledge.has(u.hero, "dice") and randf() < 0.25:
+		dmg *= 1.5  # Dado Viciado: acerto crítico
+		big = true
 	if Knowledge.has(u.hero, "overdrive"):
 		dmg *= 1.2
 	if boss_hp / boss_max < 0.3 and Knowledge.has(u.hero, "executor"):
@@ -6756,7 +6972,7 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 ## Golpe do jogador: um risco de luz do personagem até o boss, pra o ataque "sair" de alguém.
 func _attack_fx(u: Unit, big: bool) -> void:
 	var from := u.position + Vector3(0, 1.1, 0)
-	var to := Vector3(randf_range(-1.2, 1.2), randf_range(2.0, 4.0), -11.0)
+	var to := _bp(Vector3(randf_range(-1.2, 1.2), randf_range(2.0, 4.0), -11.0))
 	var m := Fx.mat(u.color.lightened(0.4), 7.0 if big else 5.0, true)
 	var mi := Fx.inst(fx_root, Fx.sphere(0.34 if big else 0.2), m, from)
 	var tw := mi.create_tween()
@@ -6768,7 +6984,7 @@ func _attack_fx(u: Unit, big: bool) -> void:
 func _popup(value: int, col: Color, size: int, at = null, prefix := "") -> void:
 	if value <= 0:
 		return
-	var p := Vector3(randf_range(-2.2, 2.2), randf_range(2.5, 5.0), -9.5)
+	var p := _bp(Vector3(randf_range(-2.2, 2.2), randf_range(2.5, 5.0), -9.5))
 	if at != null:
 		p = at
 	var l := Fx.label(fx_root, prefix + str(value), p, size)
@@ -6864,6 +7080,7 @@ func kill(u: Unit, reason: String, force := false) -> void:
 	if u.controlled and not fury:
 		hud.flash(Color(1.0, 0.1, 0.2) * Color(1, 1, 1, 0.6))
 	deaths += 1
+	died[u.hero] = true
 	u.die()
 	_sfx(SFX_DEATH, -4.0)
 	log_lines.append(u.unit_name + ": " + reason)
@@ -6899,10 +7116,26 @@ func _end(victory: bool) -> void:
 		rank = Knowledge.rank_for(_score())
 		if not autoplay:
 			prize = Knowledge.reward(Knowledge.boss, rank)
+			_learn_cards()
 	# a run terminou (vitória ou wipe): o que foi ganho nela passa a valer e é gravado no save
 	prize["cards"] = [] if Knowledge.practice else Knowledge.run_cards()
 	Knowledge.commit_run()
 	hud.show_end(victory, log_lines, rank, prize)
+
+
+## Vitória: cada carta de aprendizado no baralho de quem lutou ganha progresso, se o herói provou que
+## aprendeu: não morreu nesta luta e não tomou a mecânica daquela carta.
+func _learn_cards() -> void:
+	for u in units:
+		if died.has(u.hero):
+			continue
+		for kind in Knowledge.KINDS:
+			for id in Knowledge.deck(u.hero)[kind].duplicate():
+				if id == "" or Knowledge.role(id) != "learn":
+					continue
+				if card_fail.has(u.hero) and card_fail[u.hero].has(id):
+					continue
+				Knowledge.add_progress(u.hero, id, Knowledge.LEARN_WIN)
 
 
 ## Nota de 0 a 100 da vitória: rapidez (40), dano tomado (40) e mortes (20).
@@ -6956,6 +7189,8 @@ func _next_step() -> void:
 	for key in ["dur", "volley_at"]:
 		if s.has(key):
 			s[key] = s[key] / haste
+	if roam:
+		_storm_end_phase()
 	cur_step = s
 	phase = s["t"]
 	phase_t = 0.0
@@ -6994,6 +7229,10 @@ func _next_step() -> void:
 		"towers":
 			cast_name = "Torres"
 			_start_towers(s["dur"])
+		"leap": _storm_leap(s["dur"])
+		"chase": _storm_chase()
+		"orbs": _storm_orbs()
+		"fan": _storm_fan()
 		"window":
 			vulnerable = true
 		"count":
@@ -7085,6 +7324,325 @@ func _tick_boss(delta: float) -> void:
 		_next_step()
 
 
+# ---------------------------------------------------------------- TROVÃO-KUN (boss que anda)
+
+func _storm_pick() -> Unit:
+	var pool := _alive_shuffled()
+	return pool[0] if not pool.is_empty() else null
+
+
+## Salto: marca o chão onde o alvo está e cai ali. O círculo é um ataque vermelho comum (carta Desvio).
+func _storm_leap(dur: float) -> void:
+	cast_name = "Salto Trovejante"
+	boss.casting = true
+	storm_target = _storm_pick()
+	leap_from = boss_pos
+	leap_to = boss_pos
+	if storm_target != null:
+		var flat := Vector2(storm_target.position.x, storm_target.position.z).limit_length(arena_r - 1.6)
+		leap_to = Vector3(flat.x, 0, flat.y)
+	_add_hazard({"shape": "circle", "pos": leap_to, "r": LEAP_R, "total": dur, "dmg": LEAP_DMG, "card": "dodge", "why": "ficou embaixo do salto"})
+
+
+## Perseguição: anda devagar atrás de quem está no topo do aggro (como qualquer boss atrás do tanque).
+func _storm_chase() -> void:
+	cast_name = ""
+	storm_target = _aggro_target()
+	if storm_target == null or not storm_target.alive:
+		storm_target = _storm_pick()
+
+
+## Faíscas: ondas de bolinhas de raio em roda, em linha reta. É pra desviar passando pelos buracos.
+func _storm_orbs() -> void:
+	cast_name = "Enxame de Faíscas"
+	boss.casting = true
+	orb_wave_t = 0.5
+	orb_spin = randf() * TAU
+	orb_reds = 0
+
+
+func _orb_wave() -> void:
+	orb_spin += 0.37
+	var gap_every := maxi(1, ORB_COUNT / ORB_GAPS)
+	for n in ORB_COUNT:
+		if n % gap_every == 0:
+			continue  # buraco
+		var a := orb_spin + n * TAU / ORB_COUNT
+		var dir := Vector3(cos(a), 0, sin(a))
+		var node := Fx.inst(fx_root, Fx.sphere(0.3), Fx.mat(Color(0.6, 1.15, 1.7), 0.0, true), boss_pos + dir * 1.4 + Vector3(0, 0.7, 0))
+		Fx.inst(node, Fx.torus(0.4, 0.5), Fx.mat(Color(DANGER.r * 1.4, DANGER.g, DANGER.b, 0.9), 0.0, true))
+		orbs.append({"node": node, "dir": dir})
+
+
+## Ventilador: os raios aparecem finos e parados (aviso), depois engrossam e giram.
+func _storm_fan() -> void:
+	cast_name = "Ventilador de Raios"
+	boss.casting = true
+	var ratio := boss_hp / boss_max
+	var stage: Array = FAN_STAGES[0] if ratio > 0.66 else (FAN_STAGES[1] if ratio > 0.33 else FAN_STAGES[2])
+	var count: int = stage[0]
+	fan_speed = float(stage[1]) * (1.0 if randf() < 0.5 else -1.0)
+	fan_angle = randf() * TAU
+	fan_on = false
+	fan_drop_t = FAN_WARN + FAN_DROP * 0.6
+	fan_flip_done = ratio > 0.5  # abaixo de metade da vida, o giro inverte no meio
+	fan_rig = Node3D.new()
+	fan_rig.position = boss_pos + Vector3(0, 0.22, 0)
+	fx_root.add_child(fan_rig)
+	fan_mat = Fx.mat(Color(0.5, 1.0, 1.6, 0.3), 0.0, true)
+	fan_beams.clear()
+	for n in count:
+		var box := BoxMesh.new()
+		box.size = Vector3(arena_r * 2.2, 0.16, 1.0)
+		var beam := Fx.inst(fan_rig, box, fan_mat)
+		beam.scale = Vector3(1, 1, 0.12)
+		fan_beams.append(beam)
+	_fan_place()
+	hud.toast("PULE OS RAIOS!", 1.6)
+
+
+func _fan_dir(n: int) -> Vector3:
+	var a := fan_angle + n * TAU / fan_beams.size()
+	return Vector3(cos(a), 0, sin(a))
+
+
+func _fan_place() -> void:
+	for n in fan_beams.size():
+		var dir := _fan_dir(n)
+		var beam: MeshInstance3D = fan_beams[n]
+		beam.position = dir * (arena_r * 1.1 + FAN_INNER * 0.5)
+		beam.rotation.y = -atan2(dir.z, dir.x)
+
+
+## Quanto falta (em segundos) pro próximo raio passar por este herói. INF se não vem nenhum.
+func fan_eta(u: Unit) -> float:
+	if fan_beams.is_empty() or absf(fan_speed) < 0.01:
+		return INF
+	var rel := u.position - boss_pos
+	if Vector2(rel.x, rel.z).length() < FAN_INNER:
+		return INF
+	var ua := atan2(rel.z, rel.x)
+	var best := INF
+	for n in fan_beams.size():
+		var ba := fan_angle + n * TAU / fan_beams.size()
+		var gap := fposmod((ua - ba) * signf(fan_speed), TAU)
+		best = minf(best, gap / absf(fan_speed))
+	# durante o aviso, conta também o tempo que falta pra ele começar a girar
+	return best + (maxf(0.0, FAN_WARN - phase_t) if not fan_on else 0.0)
+
+
+func _storm_end_phase() -> void:
+	boss.position = boss_pos
+	if fan_rig != null and is_instance_valid(fan_rig):
+		fan_rig.queue_free()
+	fan_rig = null
+	fan_beams.clear()
+	fan_on = false
+	for u in units:
+		u.ai_fan_decided = false
+		u.ai_hop_at = -1.0
+		u.ai_run = false
+
+
+func _tick_storm(delta: float) -> void:
+	match phase:
+		"leap":
+			# agacha no começo, depois o arco até o ponto marcado; chega junto com o círculo
+			var k := clampf(phase_t / phase_dur, 0.0, 1.0)
+			var fly := clampf((k - 0.45) / 0.55, 0.0, 1.0)
+			boss_pos = leap_from.lerp(leap_to, fly * fly * (3.0 - 2.0 * fly))
+			boss.position = boss_pos + Vector3(0, sin(fly * PI) * 4.5, 0)
+			boss.scale = Vector3.ONE * float(boss_def["scale"]) * (1.0 - 0.18 * sin(clampf(k / 0.45, 0.0, 1.0) * PI))
+			if k >= 1.0:
+				shake_t = 0.4
+				shake_amp = 0.5
+		"chase":
+			var top := _aggro_target()
+			if top != null and top.alive:
+				storm_target = top
+			if storm_target != null and storm_target.alive:
+				var to := storm_target.position - boss_pos
+				to.y = 0.0
+				# para no limite do corpo a corpo: não precisa subir em cima de ninguém
+				if to.length() > ROAM_MELEE - 0.6:
+					boss_pos += to.normalized() * CHASE_SPEED * delta
+			boss.position = boss_pos
+		"orbs":
+			orb_wave_t -= delta
+			if orb_wave_t <= 0.0 and phase_t < phase_dur - 1.2:
+				orb_wave_t = ORB_WAVE
+				_orb_wave()
+			if orb_reds < ORB_RED_AT.size() and phase_t >= ORB_RED_AT[orb_reds]:
+				orb_reds += 1
+				_spawn_circles(2)
+		"fan":
+			_tick_fan(delta)
+	# as faíscas seguem reto até sair da arena (mesmo depois que a fase acaba)
+	for o in orbs.duplicate():
+		var node: MeshInstance3D = o["node"]
+		node.position += (o["dir"] as Vector3) * ORB_SPEED * delta
+		node.rotate_y(delta * 6.0)
+		if Vector2(node.position.x, node.position.z).length() > arena_r + 0.5:
+			node.queue_free()
+			orbs.erase(o)
+			continue
+		for u in units:
+			if u.alive and u.invuln <= 0.0 and Vector2(u.position.x - node.position.x, u.position.z - node.position.z).length() <= ORB_R + 0.3:
+				_burst(node.position, Color(0.6, 0.95, 1.0), 1.4)
+				hurt(u, ORB_DMG, "tomou uma faísca")
+				node.queue_free()
+				orbs.erase(o)
+				break
+
+
+func _tick_fan(delta: float) -> void:
+	if fan_rig == null:
+		return
+	if not fan_on and phase_t >= FAN_WARN:
+		fan_on = true
+		fan_mat.albedo_color = Color(0.55, 1.15, 1.9, 0.9)
+		for beam in fan_beams:
+			beam.create_tween().tween_property(beam, "scale:z", FAN_W * 2.0, 0.15)
+		shake_t = 0.2
+		shake_amp = 0.25
+	if not fan_on:
+		return
+	# abaixo de metade da vida: no meio da fase ele freia e inverte o sentido
+	if not fan_flip_done and phase_t >= phase_dur * 0.5:
+		fan_flip_done = true
+		var now := fan_speed
+		var tw := create_tween()
+		tw.tween_property(self, "fan_speed", 0.0, 0.5)
+		tw.tween_property(self, "fan_speed", -now, 0.5)
+	fan_angle += fan_speed * delta
+	_fan_place()
+	fan_drop_t -= delta
+	if fan_drop_t <= 0.0:
+		fan_drop_t = FAN_DROP
+		_spawn_circles(1)
+	var player := units[ctrl]
+	for u in units:
+		if not u.alive:
+			continue
+		var rel := u.position - boss_pos
+		rel.y = 0.0
+		var under := false
+		for n in fan_beams.size():
+			var dir := _fan_dir(n)
+			var along := rel.dot(dir)
+			if along > FAN_INNER and (rel - dir * along).length() <= FAN_W:
+				under = true
+		if not under:
+			continue
+		if u.airborne():
+			if u.fan_cross_t <= 0.0:
+				u.fan_cross_t = 0.7
+				_fan_passed(u, u == player and not autoplay)
+		elif u.fan_safe_t <= 0.0 and u.invuln <= 0.0:
+			u.fan_safe_t = 0.9
+			hurt(u, FAN_DMG, "tomou um raio do ventilador")
+			if not (u == player and not autoplay):
+				Knowledge.learn(u.hero, "fan", LEARN_HIT)
+
+
+## Alguém passou por cima de um raio. É daí que o conhecimento do ventilador mais cresce.
+func _fan_passed(u: Unit, by_hand: bool) -> void:
+	_impact_ring(u.position + Vector3(0, 0.2, 0), Color(0.6, 0.95, 1.0), 1.4)
+	if by_hand:
+		Knowledge.learn(u.hero, "fan", LEARN_HAND)
+		for o in units:
+			if o != u and o.alive:
+				Knowledge.learn(o.hero, "fan", LEARN_WATCH)
+	else:
+		Knowledge.learn(u.hero, "fan", LEARN_OWN)
+
+
+## Um pensamento em cima do boneco ("?" quando não sabe, "!" quando tenta algo).
+func _think(u: Unit, text: String, col: Color) -> void:
+	var l := Fx.label(u, text, Vector3(0, 2.7, 0), 56)
+	l.modulate = col
+	var tw := l.create_tween().set_parallel(true)
+	tw.tween_property(l, "position:y", 3.4, 0.7)
+	tw.tween_property(l, "modulate:a", 0.0, 0.7).set_delay(0.25)
+	tw.chain().tween_callback(l.queue_free)
+
+
+## A IA no ventilador. O conhecimento (0..100) não liga o pulo: ele dá a CHANCE de ela tentar pular
+## e a PRECISÃO do tempo. Com pouco, quase sempre ela corre do raio (e apanha); de vez em quando
+## arrisca um pulo, cedo ou tarde demais. Com muito, pula quase sempre, quase na hora.
+func _fan_ai(u: Unit, delta: float) -> void:
+	if phase != "fan" or fan_rig == null:
+		return
+	if u.ai_hop_at >= 0.0:
+		u.ai_hop_at -= delta
+		if u.ai_hop_at <= 0.0:
+			u.ai_hop_at = -1.0
+			jump(u)
+	var eta := fan_eta(u)
+	# o raio acabou de passar (o tempo até o próximo deu um salto pra cima): hora de decidir de novo
+	var before: float = u.get_meta("fan_eta", INF)
+	u.set_meta("fan_eta", eta)
+	if eta > before + 0.2:
+		u.ai_fan_decided = false
+		u.ai_run = false
+	if u.ai_fan_decided or eta > 1.0:
+		return
+	u.ai_fan_decided = true
+	var k := Knowledge.knowledge(u.hero, "fan") / 100.0
+	if randf() < lerpf(0.05, 0.97, k):
+		# vai tentar pular: o ideal é estar no meio do pulo quando o raio passa
+		var miss := randfn(0.0, lerpf(0.36, 0.04, k))
+		u.ai_hop_at = maxf(0.0, eta - JUMP_AIR * 0.5 + miss)
+		if k < 0.5:
+			_think(u, "!", Color(1.0, 0.9, 0.3))
+	else:
+		u.ai_run = true
+		if randf() < 0.5:
+			_think(u, "?", Color(0.8, 0.85, 1.0))
+
+
+## Pra onde a IA vai nas mecânicas do TROVÃO-KUN (null = segue a vida normal).
+func _storm_goal(u: Unit):
+	# faísca vindo na direção dele: dá um passo pro lado, pro buraco mais perto
+	for o in orbs:
+		var rel: Vector3 = u.position - o["node"].position
+		rel.y = 0.0
+		var dir: Vector3 = o["dir"]
+		var along := rel.dot(dir)
+		if along < 0.0 or along > ORB_SPEED * 0.9:
+			continue
+		var side := rel - dir * along
+		if side.length() < ORB_R + 0.75:
+			# vai pro meio do vão entre esta faísca e a vizinha (o vão abre conforme elas se afastam)
+			var step := side.normalized() if side.length() > 0.05 else Vector3(-dir.z, 0, dir.x)
+			var spacing: float = TAU * maxf(1.5, (u.position - boss_pos).length()) / ORB_COUNT
+			var p := u.position + step * maxf(0.6, spacing * 0.5 - side.length() + 0.2)
+			var flat := Vector2(p.x, p.z).limit_length(arena_r - 0.6)
+			return [Vector3(flat.x, 0, flat.y), "Desviando da faísca"]
+	if phase == "fan" and u.ai_run and fan_on:
+		# sem saber o que fazer, corre na frente do raio (e ele alcança)
+		var rel := u.position - boss_pos
+		var side := Vector3(-rel.z, 0, rel.x).normalized() * signf(fan_speed)
+		var p := u.position + side * 2.0
+		var flat := Vector2(p.x, p.z).limit_length(arena_r - 0.6)
+		return [Vector3(flat.x, 0, flat.y), "Fugindo do raio"]
+	return null
+
+
+func _flee_from(u: Unit, from: Vector3) -> Vector3:
+	var away := u.position - from
+	away.y = 0.0
+	if away.length() < 0.05:
+		away = Vector3(1, 0, 0)
+	away = away.normalized()
+	var p := u.position + away * 2.6
+	if Vector2(p.x, p.z).length() > arena_r - 0.8:
+		# encurralado na borda: escorrega pelo lado em vez de parar
+		p = u.position + away.rotated(Vector3.UP, 1.25) * 2.6
+	var flat := Vector2(p.x, p.z).limit_length(arena_r - 0.6)
+	return Vector3(flat.x, 0, flat.y)
+
+
 func _assign_elements() -> void:
 	var els := [0, 1, 2, 3]
 	els.shuffle()
@@ -7155,7 +7713,7 @@ func _tick_pairs(delta: float) -> void:
 			shield = false
 			boss.set_shield(false)
 			_burst(mid, Color(0.9, 0.95, 1.0), 4.0)
-			_burst(Vector3(0, 5, -12), Color(0.5, 0.9, 1.0), 9.0)
+			_burst(_bp(Vector3(0, 5, -12)), Color(0.5, 0.9, 1.0), 9.0)
 		else:
 			shelter_pos = mid
 			_build_shelter(mid)
@@ -7214,7 +7772,7 @@ func _start_fury() -> void:
 	boss.casting = true
 	boss.six_seven = false
 	hud.flash(Color(1.0, 0.2, 0.35) * Color(1, 1, 1, 0.45))
-	var say := Fx.label(fx_root, "BORA BISCOITAR!", Vector3(0, 6.4, -9.5), 120)
+	var say := Fx.label(fx_root, "BORA BISCOITAR!", _bp(Vector3(0, 6.4, -9.5)), 120)
 	say.modulate = COOKIE_COL.lightened(0.45)
 	say.outline_modulate = Color(0.16, 0.08, 0.04)
 	say.outline_size = 28
@@ -7234,7 +7792,7 @@ func _start_fury() -> void:
 	# e uma chuva pelo resto da arena
 	for n in 16:
 		var a := randf() * TAU
-		var r := sqrt(randf()) * ARENA_R
+		var r := sqrt(randf()) * arena_r
 		_drop_cookie(Vector3(cos(a) * r, 0, sin(a) * r), randf_range(0.7, delay + 0.6), randf_range(0.7, 1.1), null)
 
 

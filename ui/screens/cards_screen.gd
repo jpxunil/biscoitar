@@ -953,6 +953,16 @@ func _tile_done(t: HeroTile, n: int) -> void:
 
 # ---------------------------------------------------------------- cartas
 
+## Mostra na carta o papel dela: APRENDIZADO tem a barrinha (o quanto este herói já aprendeu);
+## CRITÉRIO tem a etiqueta, e nunca vira passiva.
+func _mark_role(cv: CardView, id: String) -> void:
+	if id == "" or not Knowledge.CARDS.has(id):
+		return
+	match Knowledge.role(id):
+		"learn": cv.learn = Knowledge.learn_progress(hero, id)
+		"pref": cv.tag = "CRITÉRIO"
+
+
 ## Cartas do herói que não estão equipadas, e depois as que ele ainda não tem (de verso, com a maestria).
 func _hand_list() -> Array:
 	var out: Array = []
@@ -962,7 +972,7 @@ func _hand_list() -> Array:
 		return out  # aula: só o que o jogador já ganhou, sem as cartas "?"
 	for kind in Knowledge.KINDS:
 		for id in Knowledge.CARDS:
-			if Knowledge.CARDS[id]["kind"] == kind and Knowledge.usable(hero, id) and not Knowledge.is_owned_by(hero, id):
+			if Knowledge.CARDS[id]["kind"] == kind and not Knowledge.GEAR_IDS.has(id) and Knowledge.usable(hero, id) and not Knowledge.is_owned_by(hero, id):
 				out.append(id)
 	return out
 
@@ -993,6 +1003,7 @@ func _build_cards(deal := false, drop := "") -> void:
 		for n in Knowledge.SLOTS[kind]:
 			var id: String = deck[kind][n]
 			var cv := CardView.make(id) if id != "" else CardView.empty(kind)
+			_mark_role(cv, id)
 			cv.position = SLOT_AT[kind][n]
 			_cards.add_child(cv)
 			var idx := _slots.size()
@@ -1012,6 +1023,8 @@ func _build_cards(deal := false, drop := "") -> void:
 		spoke.rotation = deg_to_rad((k - _focus) * STEP)
 		_cards.add_child(spoke)
 		var cv := CardView.make(id, "face" if mine else "back")
+		if mine:
+			_mark_role(cv, id)
 		cv.fresh = mine and Knowledge.is_new(hero, id)
 		if not mine:
 			var key := Knowledge.mastery_key(id)

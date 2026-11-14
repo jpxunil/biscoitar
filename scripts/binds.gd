@@ -30,6 +30,7 @@ const ACTIONS := [
 	{"id": "move_left", "name": "Andar pra esquerda", "group": "MOVIMENTO", "keys": [KEY_A, KEY_LEFT], "need": true},
 	{"id": "move_right", "name": "Andar pra direita", "group": "MOVIMENTO", "keys": [KEY_D, KEY_RIGHT], "need": true},
 	{"id": "dash", "name": "Desvio", "group": "MOVIMENTO", "keys": [KEY_SPACE, 0]},
+	{"id": "jump", "name": "Pulo", "group": "MOVIMENTO", "keys": [KEY_C, 0]},
 	{"id": "target_1", "name": "Alvo: herói 1", "group": "ALVO DE SUPORTE", "keys": [KEY_F1, 0]},
 	{"id": "target_2", "name": "Alvo: herói 2", "group": "ALVO DE SUPORTE", "keys": [KEY_F2, 0]},
 	{"id": "target_3", "name": "Alvo: herói 3", "group": "ALVO DE SUPORTE", "keys": [KEY_F3, 0]},

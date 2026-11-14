@@ -113,6 +113,16 @@ var silence_t := 0.0   # punição de quem acordou mal: anda, mas não ataca nem
 var cast_perfect := false  # a conjuração em curso começou dentro da janela da sequência
 # Ringstar no ar (salto do Nocaute Final): passa por cima de ataque baixo (hazard com "low")
 var air_t := 0.0
+## Pulo (tecla própria): fica no ar por hop_t, passando por cima de ataques rentes ao chão.
+var hop_t := 0.0
+var hop_cd := 0.0
+var _hop_tw: Tween
+var fan_safe_t := 0.0   # acabou de tomar um raio do ventilador: não toma outro por um instante
+var fan_cross_t := 0.0  # acabou de passar por cima de um raio (pra não contar duas vezes)
+## IA no ventilador de raios: já decidiu o que fazer com o raio que vem, quando vai pular, e se corre.
+var ai_fan_decided := false
+var ai_hop_at := -1.0
+var ai_run := false
 var torpor := 0.0      # 0..100
 var dream_step := 0    # qual habilidade da sequência Dormindo é a próxima (0..4)
 var window_slot := -1  # Acordado: slot que está na janela de 1 s (-1 = nenhuma)
@@ -760,6 +770,24 @@ func punch() -> void:
 
 ## Levou dano: pisca branco e treme, com força proporcional ao golpe (frac = dano / vida máxima).
 ## Esquiva: o corpo achata e fica translúcido enquanto dura a invulnerabilidade.
+## No ar? (salto de habilidade ou o pulo): ataques rentes ao chão passam por baixo.
+func airborne() -> bool:
+	return air_t > 0.0 or hop_t > 0.0
+
+
+## O pulo: sobe e desce em `time`, com um agachar na saída e um amassar na chegada.
+func hop(time: float, height: float) -> void:
+	if _hop_tw != null:
+		_hop_tw.kill()
+	_hop_tw = create_tween()
+	visual.scale = Vector3(1.15, 0.8, 1.15)
+	_hop_tw.tween_property(visual, "position:y", height, time * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_hop_tw.parallel().tween_property(visual, "scale", Vector3(0.9, 1.15, 0.9), time * 0.3)
+	_hop_tw.tween_property(visual, "position:y", 0.0, time * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_hop_tw.tween_property(visual, "scale", Vector3(1.2, 0.82, 1.2), 0.04)
+	_hop_tw.tween_property(visual, "scale", Vector3.ONE, 0.12)
+
+
 func dash_fx() -> void:
 	visual.scale = Vector3(0.7, 1.25, 0.7)
 	body_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

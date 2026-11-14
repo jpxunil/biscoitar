@@ -291,3 +291,24 @@ Vale o que está aqui quando divergir das fichas acima.
   (R restaura). Fica em `Knowledge.layouts`, por herói e por save; teclas são das posições.
 - **Soulburner**: Brasas com 1 s de cast e 2 s de recarga contando do começo do cast; Juízo Solar brilha
   verde quando está pronto e a boss tem a Marca do Zênite. Meta de DPS da Rotação dele: 34 -> 26.
+
+## Rodada: boss que anda, pulo, conhecimento, passivas, gear e duas lojas
+
+- **Boss que anda**: `boss_pos` (variável) no lugar do ponto fixo; `_bp()` leva os efeitos dos golpes pra onde
+  a boss está; `arena_r` por boss; `_atk_pos` vira uma roda em volta dela. Clique na boss = foco
+  (`boss_focus`): marcador de alvo e o arco do alcance máximo do herói no chão.
+- **Pulo** (tecla C, `jump`): 0,55 s no ar, passa por cima de ataques rentes ao chão.
+- **TROVÃO-KUN** (mini boss, índice 4, sempre aberto, arena 13,5): salto com círculo vermelho, perseguição
+  de quem está no topo do aggro (sem dano de contato), ondas de faíscas em linha reta com buracos mais
+  círculos vermelhos, e o ventilador de raios (3/4/5 raios conforme a vida, inverte abaixo de 50%).
+- **Conhecimento** (`Knowledge.know[hero][mecânica]`, 0..100, começa em 1): não liga comportamento, muda a
+  chance de tentar e a precisão do tempo. Vale pro pulo do ventilador ("fan") e pra perceber ataques
+  vermelhos sem ter a carta (`_aware`). Sobe apanhando (pouco), acertando sozinho, na mão do jogador
+  (mais) e vendo o jogador acertar.
+- **Papéis das cartas** (`Knowledge.role`): aprendizado (barra 0..100, +34 por vitória limpa, em 100 vira
+  passiva do herói e sai do slot), critério (`PREF_IDS`, nunca vira passiva) e equipamento (`GEAR_IDS`,
+  4 slots por herói, fora do baralho). Itens de atributo novos: Coração de Açúcar, Luneta, Botas Leves,
+  Dado Viciado (crítico).
+- **Telas**: `ui/screens/gear_screen.gd` (GEAR: atributos, slots, mochila, consumível, passivas); a loja
+  tem dois modos (LOJA de cartas, ITENS); a tela de bosses tem LOJA, ITENS, CARTAS e GEAR; carta que vira
+  passiva é comemorada ao voltar pros bosses (`menus._celebrate`).

@@ -429,6 +429,70 @@ func _initialize() -> void:
 					sprites += 1
 	check(sprites == Knowledge.HEROES.size(), "cafeteria: os %d personagens usam a arte nova, sem esticar (%d)" % [Knowledge.HEROES.size(), sprites])
 
+	# ---------- aprendizado, passivas, equipamentos e as duas lojas
+	Knowledge.select_slot(1)
+	Knowledge.decks = {}
+	Knowledge.gear = {}
+	Knowledge.passive = {}
+	Knowledge.progress = {}
+	Knowledge.learned_now.clear()
+	Knowledge.owned["stack"] = true
+	Knowledge.owned["eshield"] = true
+	Knowledge.owned["sharpen"] = true
+	Knowledge.owned["heart"] = true
+	check(Knowledge.role("stack") == "learn" and Knowledge.role("eshield") == "pref" and Knowledge.role("sharpen") == "gear" and Knowledge.role("potion") == "item", "cada carta tem um papel: aprendizado, critério, equipamento ou item")
+	check(Knowledge.equip(2, "sharpen") and Knowledge.gear_of(2).has("sharpen") and not Knowledge.deck(2)["white"].has("sharpen") and Knowledge.has(2, "sharpen"), "buff é equipamento: vai pro slot de gear, não pro baralho")
+	check(not Knowledge.inventory(2).has("heart") and Knowledge.gear_bag(2).has("heart"), "equipamento não aparece na mão de cartas, só na mochila do gear")
+	Knowledge.equip(2, "heart")
+	check(is_equal_approx(Knowledge.gear_stats(2)["hp"], 20.0) and is_equal_approx(Knowledge.gear_stats(0)["hp"], 0.0), "Coração de Açúcar: +20 de vida só pra quem equipou")
+	check(Knowledge.shop_list("", "gear").has("dice") and Knowledge.shop_list("", "gear").has("potion") and not Knowledge.shop_list("", "gear").has("eshield"), "a loja de itens vende equipamentos e consumíveis")
+	check(Knowledge.shop_list("", "cards").has("eshield") and not Knowledge.shop_list("", "cards").has("sharpen"), "a loja de cartas não vende buff")
+	Knowledge.equip(2, "stack")
+	Knowledge.equip(2, "eshield")
+	check(Knowledge.in_deck(2, "stack") and is_equal_approx(Knowledge.learn_progress(2, "stack"), 0.0), "carta de aprendizado começa em 0%")
+	check(not Knowledge.add_progress(2, "stack", Knowledge.LEARN_WIN) and not Knowledge.add_progress(2, "stack", Knowledge.LEARN_WIN), "duas lutas limpas ainda não bastam")
+	check(Knowledge.learn_progress(2, "stack") > 60.0 and Knowledge.in_deck(2, "stack"), "a barra sobe e a carta continua no slot")
+	check(Knowledge.add_progress(2, "stack", Knowledge.LEARN_WIN), "na terceira ela chega em 100%")
+	check(Knowledge.is_passive(2, "stack") and not Knowledge.in_deck(2, "stack") and Knowledge.has(2, "stack"), "virou passiva: saiu do baralho e continua valendo")
+	check(not Knowledge.is_passive(0, "stack") and not Knowledge.has(0, "stack"), "a passiva é do herói que aprendeu")
+	check(not Knowledge.add_progress(2, "eshield", 100.0) and not Knowledge.is_passive(2, "eshield"), "carta de critério nunca vira passiva")
+	check(Knowledge.learned_now == [[2, "stack"]], "a carta aprendida entra na fila da comemoração")
+	Knowledge.save()
+	Knowledge.select_slot(2)
+	check(not Knowledge.is_passive(2, "stack") and Knowledge.gear_of(2) == ["", "", "", ""], "passivas e gear são de cada save")
+	Knowledge.select_slot(1)
+	check(Knowledge.is_passive(2, "stack") and Knowledge.gear_of(2).has("sharpen") and Knowledge.gear_of(2).has("heart"), "e ficam gravados no save")
+	# os menus: botões novos, tela de gear e a comemoração
+	Knowledge.learned_now = [[2, "stack"]]
+	main = load("res://main.tscn").instantiate()
+	root.add_child(main)
+	current_scene = main
+	await frames(3)
+	menus = main.hud.menus
+	menus.show_screen("bosses")
+	await frames(3)
+	check(menus.bosses.has_node("BtnItems") and menus.bosses.has_node("BtnEquip"), "a tela de bosses tem os botões ITENS e GEAR")
+	check(menus._pop != null and is_instance_valid(menus._pop), "voltando da luta, a carta que virou passiva é comemorada")
+	menus._pop.queue_free()
+	menus._pop = null
+	menus.bosses.get_node("BtnEquip").pressed.emit()
+	await frames(3)
+	check(menus.gear_screen.visible and menus.gear_screen.hero == Knowledge.start_hero, "GEAR abre a tela de equipamentos do herói")
+	menus.gear_screen.back_pressed.emit()
+	await frames(2)
+	Knowledge.shop_unlocked = true
+	menus.bosses.open()
+	menus.bosses.get_node("BtnItems").pressed.emit()
+	await frames(3)
+	check(menus.shop.visible and menus.shop.mode == "gear" and menus.shop.get_node("TitlePanel/Title").text == "ITENS", "ITENS abre o balcão de equipamentos")
+	menus.shop.back_pressed.emit()
+	await frames(2)
+	menus.bosses.get_node("BtnShop").pressed.emit()
+	await frames(3)
+	check(menus.shop.visible and menus.shop.mode == "cards", "LOJA abre a loja de cartas")
+	main.queue_free()
+	await frames(2)
+
 	clean()
 	print("Results: %d passed, %d failed" % [passed, failed])
 	quit(1 if failed > 0 else 0)

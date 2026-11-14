@@ -22,6 +22,7 @@ var eye_mat: StandardMaterial3D
 var dress_mat: StandardMaterial3D
 var shield: MeshInstance3D
 var core: Node3D
+var orbit: Node3D  # mini boss da tempestade: as esferas de raio que giram em volta dele
 
 
 func _ready() -> void:
@@ -32,6 +33,9 @@ func _ready() -> void:
 		return
 	if look == "dummy":
 		_build_dummy()
+		return
+	if look == "storm":
+		_build_storm()
 		return
 	var skin := Fx.mat(Color(0.95, 0.8, 0.74))
 	var hair := Fx.mat(hair_color, 0.35)
@@ -68,6 +72,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	t += delta
 	core.position.y = sin(t * 1.2) * 0.22
+	if orbit != null:
+		orbit.rotate_y(delta * (4.2 if casting else 1.8))
+		orbit.position.y = 1.7 + sin(t * 2.4) * 0.15
 	halo.rotate_y(delta * (5.0 if casting else 1.0))
 	for i in hands.size():
 		var s := -1.0 if i == 0 else 1.0
@@ -134,6 +141,39 @@ func _build_cookie() -> void:
 	mouth.rotation.z = PI / 2.0 + 0.18
 	halo = Fx.inst(core, Fx.torus(0.5, 0.62), Fx.mat(Color(1.0, 0.85, 0.35), 2.0), Vector3(0, 10.6, 0))
 	shield = Fx.inst(self, Fx.sphere(7.2), Fx.mat(Color(0.35, 0.9, 1.0, 0.16), 1.2), Vector3(0, 6.0, 0))
+	shield.visible = false
+
+
+## Mini boss da tempestade: uma nuvem carrancuda e baixinha, com chifres de raio e esferas elétricas
+## girando em volta. Fica no meio da arena (e anda): por isso é pequeno, pra não tampar a party.
+func _build_storm() -> void:
+	_dress_base = Color(0.2, 0.24, 0.42)
+	dress_mat = Fx.mat(_dress_base, 0.5)
+	dress_mat.emission = Color(0.1, 0.2, 0.4)
+	Fx.inst(core, Fx.sphere(1.35), dress_mat, Vector3(0, 1.6, 0))
+	for p in [Vector3(-1.1, 1.3, 0.2), Vector3(1.1, 1.3, 0.2), Vector3(0, 2.5, -0.2), Vector3(-0.7, 2.3, 0.4), Vector3(0.8, 2.2, 0.3), Vector3(0, 1.0, 0.9)]:
+		Fx.inst(core, Fx.sphere(0.8), dress_mat, p)
+	eye_mat = Fx.mat(Color(1.0, 0.95, 0.3), 1.2)
+	for s in [-1.0, 1.0]:
+		var eye := Fx.inst(core, Fx.sphere(0.26), eye_mat, Vector3(s * 0.5, 1.9, 1.2))
+		eye.scale = Vector3(1.0, 0.55, 0.5)
+		eye.rotation.z = s * -0.45
+		# chifres de raio
+		var bolt := Fx.mat(Color(1.1, 1.0, 0.35), 0.0, true)
+		var h1 := Fx.inst(core, Fx.cyl(0.0, 0.26, 1.0), bolt, Vector3(s * 0.8, 3.2, 0))
+		h1.rotation.z = s * -0.5
+		var h2 := Fx.inst(core, Fx.cyl(0.0, 0.2, 0.8), bolt, Vector3(s * 1.25, 3.75, 0))
+		h2.rotation.z = s * 0.4
+	var frown := Fx.inst(core, Fx.capsule(0.1, 0.9), Fx.mat(Color(0.05, 0.05, 0.1)), Vector3(0, 1.25, 1.3))
+	frown.rotation.z = PI / 2.0
+	orbit = Node3D.new()
+	orbit.position = Vector3(0, 1.7, 0)
+	add_child(orbit)
+	for n in 4:
+		var a := n * TAU / 4.0
+		Fx.inst(orbit, Fx.sphere(0.3), Fx.mat(Color(0.55, 1.05, 1.5), 0.0, true), Vector3(cos(a) * 2.0, sin(a * 2.0) * 0.3, sin(a) * 2.0))
+	halo = Fx.inst(core, Fx.torus(0.55, 0.68), Fx.mat(Color(0.6, 0.95, 1.0), 3.0), Vector3(0, 4.3, 0))
+	shield = Fx.inst(self, Fx.sphere(3.4), Fx.mat(Color(0.35, 0.9, 1.0, 0.16), 1.2), Vector3(0, 1.8, 0))
 	shield.visible = false
 
 
