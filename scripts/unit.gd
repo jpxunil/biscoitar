@@ -49,6 +49,37 @@ var frenzy_t := 0.0    # Frenesi da Fera
 var parry_t := 0.0     # Golpe de Misericórdia: janela em que o golpe vira parry
 var parry_hit := false
 var frenzy_ring: MeshInstance3D
+# Maga: balas Rainbow (passiva). Cada bala é um índice em game.BULLETS; a próxima a sair é a [0].
+var bullets: Array = []
+var bullet_t := 0.0
+var power_t := 0.0     # bala vermelha: mais dano
+var ward_t := 0.0      # bala azul: toma menos dano
+var pierce_next := false  # depois de uma bala, o próximo Disparo Rúnico sai fortalecido
+var dash_next := false    # bala amarela: o próximo Disparo dá um dash pra trás
+var ricochet_t := 0.0
+var ricochet_tick := 0.0
+var ricochet_out := true
+# Ringstar: sequência Jab -> Direto -> Gancho (0 = começo, 1 = Direto fortalecido, 2 = Gancho fortalecido)
+var chain := 0
+var count_t := 0.0     # Contagem Regressiva
+# Apotecário
+var vestiges := 0      # Vestígios (0..3): renovar a Decomposição na hora certa
+var patient: Unit      # Paciente: último aliado que recebeu Sutura
+var patient_t := 0.0
+var mend_t := 0.0      # regeneração da Tanatopraxia
+var mend_rate := 0.0
+# Sleepwalker
+var asleep := false    # Modo Dormindo: imóvel, gasta Torpor
+var torpor := 0.0      # 0..100
+var dream_step := 0    # qual habilidade da sequência Dormindo é a próxima (0..4)
+var window_slot := -1  # Acordado: slot que está na janela de 1 s (-1 = nenhuma)
+var window_t := 0.0
+var crumbs := false    # Migalhas Oníricas (deixadas pelos Visitantes na janela)
+var pillow_full := false  # Travesseiro Cheio
+var near_t := 0.0      # Perto do Sonho: todas as recargas -1 s
+var wake_t := 0.0      # acordando sozinho por falta de Torpor
+var bite_cd := 0.0     # recarga da Mordida dos Mil, guardada enquanto está acordado
+var awake_cd := [0.0, 0.0, 0.0, 0.0, 0.0]  # recargas do Modo Acordado, que continuam correndo enquanto dorme
 var frenzy_was := false
 var wall_ring: MeshInstance3D
 ## Índice do herói em Knowledge.HEROES (baralho dele) e se é quem segura a boss.
@@ -305,6 +336,19 @@ func die() -> void:
 	immortal_t = 0.0
 	enmity = 0.0  # morrer zera a enmity, como no FFXIV
 	guard_t = 0.0
+	asleep = false
+	torpor = 0.0
+	dream_step = 0
+	window_slot = -1
+	near_t = 0.0
+	wake_t = 0.0
+	vestiges = 0
+	mend_t = 0.0
+	chain = 0
+	count_t = 0.0
+	ricochet_t = 0.0
+	power_t = 0.0
+	ward_t = 0.0
 	frenzy_t = 0.0
 	parry_t = 0.0
 	regen_t = 0.0

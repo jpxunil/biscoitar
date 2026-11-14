@@ -67,6 +67,10 @@ const UNIT_DEFS := [
 	{"name": "Maga", "range": RANGED_RANGE, "key": "maga", "color": Color(1.0, 0.72, 0.25), "hp": 90.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
 	# os quatro da luta vêm de Knowledge.fight_party(): qualquer combinação destes heróis
 	{"name": "Malpractice", "range": MELEE_RANGE, "key": "nurse", "color": Color(0.36, 0.4, 0.95), "hp": 80.0, "melee": true, "ai_dps": 6.0, "hit": 8.0, "tank": true},
+	{"name": "Soulburner", "range": RANGED_RANGE, "key": "burner", "color": Color(1.0, 0.55, 0.25), "hp": 90.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
+	{"name": "Ringstar", "range": MELEE_RANGE, "key": "ringstar", "color": Color(1.0, 0.45, 0.75), "hp": 110.0, "melee": true, "ai_dps": 9.0, "hit": 14.0},
+	{"name": "Apotecário", "range": RANGED_RANGE, "key": "apothecary", "color": Color(0.35, 0.8, 0.66), "hp": 90.0, "melee": false, "ai_dps": 5.0, "hit": 8.0},
+	{"name": "Sleepwalker", "range": RANGED_RANGE, "key": "sleepwalker", "color": Color(0.55, 0.58, 1.0), "hp": 85.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
 ]
 
 ## Cada passo: t = tipo, dur = quanto dura até o próximo. Ataques de desvio:
@@ -196,14 +200,59 @@ const SKILLS := {
 		{"name": "Dança Carmesim", "cd": 12.0, "dmg": 65.0},
 		{"name": "Golpe de Misericórdia", "cd": 15.0, "dmg": 120.0},
 		{"name": "Frenesi da Fera", "cd": 60.0}],
-	"maga": [{"name": "Raio", "cd": 1.0, "dmg": 34.0, "cast": 0.5},
-		{"name": "Meteoro", "cd": 7.0, "dmg": 55.0, "cast": 0.5}, {"name": "Ruína", "cd": 20.0, "dmg": 240.0, "cast": 2.0}, null],
+	# Maga: atiradora. Nada de cast: ela dispara, junta balas Rainbow (passiva) e decide onde gastar.
+	# "pow" = dano de habilidade que não exige o alcance normal de ataque.
+	"maga": [{"name": "Disparo Rúnico", "cd": 1.0, "dmg": 26.0},
+		{"name": "Rainbow Shots", "cd": 0.3},
+		{"name": "Ricochete Prismático", "cd": 8.0},
+		{"name": "Tiro Perfurante", "cd": 12.0, "dmg": 95.0},
+		{"name": "Salva Astral", "cd": 20.0},
+		{"name": "Canhão Estelar", "cd": 60.0}],
+	# Soulburner: marcar (Marca do Zênite) e estourar a marca (Lança Serafim) o mais tarde possível.
+	"burner": [{"name": "Brasas do Firmamento", "cd": 1.0, "dmg": 24.0},
+		{"name": "Marca do Zênite", "cd": 12.0},
+		{"name": "Lança Serafim", "cd": 8.0},
+		{"name": "Rasante Incandescente", "cd": 10.0},
+		{"name": "Chuva de Brasas", "cd": 20.0},
+		{"name": "Juízo Solar", "cd": 60.0}],
+	# Ringstar: Jab -> Direto -> Gancho, cada um fortalece o seguinte (unit.chain). Os três dividem
+	# a recarga (GCD); os slots 4 e 5 são oGCD e não quebram a sequência.
+	"ringstar": [{"name": "Jab Estelar", "cd": 2.0, "dmg": 22.0},
+		{"name": "Direto de Campeã", "cd": 2.0, "dmg": 40.0},
+		{"name": "Gancho Meteoro", "cd": 2.0, "dmg": 70.0},
+		{"name": "Contagem Regressiva", "cd": 14.0},
+		{"name": "SUPERSTAR!", "cd": 20.0},
+		{"name": "Nocaute Final", "cd": 60.0}],
+	# Apotecário: healer com rotação ofensiva. Recurso: Vestígios (unit.vestiges, até 3), ganhos
+	# renovando a Decomposição (DoT da Necropsia) com 1 s ou menos sobrando.
+	"apothecary": [{"name": "Incisão", "cd": 1.0, "dmg": 16.0},
+		{"name": "Necropsia", "cd": 7.0, "dmg": 60.0},
+		{"name": "Sutura", "cd": 1.0, "cast": 1.5, "ai_cd": 3.5},
+		{"name": "Solução Hemostática", "cd": 20.0},
+		{"name": "Tanatopraxia", "cd": 45.0},
+		{"name": "Estabilização", "cd": 60.0}],
+	# Sleepwalker, Modo Acordado (o Modo Dormindo é SKILLS_ASLEEP; quem escolhe a lista é kit()).
+	"sleepwalker": [{"name": "Bocejo", "cd": 2.0},
+		{"name": "Puxar o Lençol", "cd": 15.0},
+		{"name": "Visitantes debaixo da Cama", "cd": 15.0},
+		{"name": "Senhor Travesseiro", "cd": 15.0},
+		{"name": "A Cama Caiu!", "cd": 15.0},
+		{"name": "Sono Profundo", "cd": 3.0}],
 }
+## Sleepwalker, Modo Dormindo: sequência obrigatória; "cost" é o Torpor gasto.
+const SKILLS_ASLEEP := [
+	{"name": "A Mordida dos Mil", "cd": 18.0, "cost": 5.0, "base": 100.0},
+	{"name": "Senhor Travesseiro: Devorador", "cd": 0.6, "cost": 10.0, "base": 150.0},
+	{"name": "O Abraço Impossível", "cd": 0.6, "cost": 15.0, "base": 200.0},
+	{"name": "A Porta Errada", "cd": 0.6, "cost": 20.0, "base": 250.0},
+	{"name": "A Casa que Engole", "cd": 0.6, "cost": 50.0, "base": 600.0},
+	{"name": "Acordar", "cd": 3.0},
+]
 ## Cast curto trava o personagem no lugar; cast longo pode ser interrompido andando.
 const LOCKED_CAST := 1.0
 ## DPS da IA com a carta roxa Rotação (sem ela vale o ai_dps de UNIT_DEFS).
 ## Assassina e Maga, além disso, soltam o golpe forte de 20 s (Lâmina Final / Ruína) sempre que dá.
-const ROTATION_DPS := {"tank": 10.0, "nurse": 4.0, "healer": 6.0, "assassina": 14.0, "maga": 10.0}
+const ROTATION_DPS := {"tank": 10.0, "nurse": 4.0, "healer": 6.0, "assassina": 14.0, "maga": 10.0, "burner": 11.0, "ringstar": 12.0, "apothecary": 8.0, "sleepwalker": 12.0}
 ## Cura em Área: metade da Cura, em todo mundo perto do Healer.
 const AOE_HEAL_R := 6.0
 ## Quanto tempo Maga e Healer ficam presos no cast quando um vermelho aparece e não têm Cautela.
@@ -241,6 +290,108 @@ const FRENZY_TIME := 8.0       # Frenesi da Fera
 const FRENZY_DMG := 1.15       # ... +15% de dano
 const FRENZY_HASTE := 0.5      # ... e o Talho recarrega na metade do tempo
 const SIDE_COL := Color(0.3, 1.0, 0.55)
+## Kit da Maga. Balas Rainbow: uma a cada BULLET_EVERY segundos, até BULLET_MAX. A cor diz o efeito
+## que a bala dá quando sai sozinha pelo Rainbow Shots.
+const BULLETS := [
+	{"name": "DANO", "col": Color(1.0, 0.25, 0.3)},      # vermelha: +20% de dano por 6 s
+	{"name": "GUARDA", "col": Color(0.3, 0.6, 1.0)},     # azul: toma 25% menos dano por 6 s
+	{"name": "VIDA", "col": Color(0.35, 0.95, 0.5)},     # verde: recupera 20 de vida
+	{"name": "VENENO", "col": Color(0.72, 0.35, 1.0)},   # roxa: DoT de 5/s por 8 s na boss
+	{"name": "IMPULSO", "col": Color(1.0, 0.85, 0.25)},  # amarela: o próximo Disparo dá um dash pra trás
+]
+const BULLET_EVERY := 8.0
+const BULLET_MAX := 7
+const BULLET_DMG := 40.0       # Rainbow Shots: uma bala
+const BULLET_TRIPLE := 170.0   # ... com EXATAMENTE 3 guardadas: um tiro só, forte, e ela é empurrada pra trás
+const BULLET_KNOCK := 5.0
+const BULLET_BUFF := 6.0
+const PIERCE_MULT := 1.5       # Disparo Rúnico fortalecido depois de uma bala
+const RICO_TIME := 4.0         # Ricochete Prismático: no máximo 4 s ...
+const RICO_STEP := 0.5         # ... uma ida a cada meio segundo (boss, ela, boss, ela...)
+const RICO_DMG := 12.0
+const RICO_HEAL := 6.0         # ... o que passar da vida cheia vira escudo
+const SALVO_COST := 3          # Salva Astral: gasta 3 balas
+const SALVO_DMG := 45.0        # ... por bala
+const SALVO_SHIELD := 40.0
+const CANNON_DMG := 220.0      # Canhão Estelar sozinho ...
+const CANNON_PER_BULLET := 75.0  # ... e por bala guardada: bem mais que os 40 de soltá-las uma a uma
+## Kit do Soulburner.
+const ZENITH_TIME := 10.0      # Marca do Zênite: DoT leve ...
+const ZENITH_DPS := 5.0
+const LANCE_BARE := 15.0       # Lança Serafim sem marca: quase nada
+const LANCE_MIN := 90.0        # ... com a marca recém-posta: dano médio
+const LANCE_MAX := 190.0       # ... com a marca quase acabando: dano alto
+const SWOOP_DIST := 5.0        # Rasante Incandescente
+const SWOOP_DMG := 45.0
+const RAIN_TIME := 15.0        # Chuva de Brasas
+const RAIN_DPS := 6.0
+const SOLAR_DMG := 200.0       # Juízo Solar ...
+const SOLAR_MARKED := 300.0    # ... com a boss marcada (não gasta a marca)
+const SOLAR_DOT := 12.0        # ... e aí deixa um DoT médio
+const SOLAR_DOT_TIME := 15.0
+const FIRE := Color(1.0, 0.55, 0.2)
+## Kit da Ringstar.
+const WEAK_HIT := 8.0          # Direto ou Gancho sem estar fortalecido: dano mínimo
+const COUNT_TIME := 15.0       # Contagem Regressiva: duração ...
+const COUNT_GCD := 1.0         # ... o GCD dos três golpes cai de 2 s pra 1 s ...
+const COUNT_DMG := 1.1         # ... e +10% de dano
+const SUPERSTAR_DMG := 110.0
+const KNOCKOUT_DMG := 380.0
+const STAR := Color(1.0, 0.45, 0.75)
+## Kit do Apotecário.
+const DECOMP_TIME := 8.0       # Decomposição (DoT da Necropsia)
+const DECOMP_DPS := 6.0
+const VESTIGE_WINDOW := 1.0    # renovar com isso ou menos sobrando dá 1 Vestígio
+const VESTIGE_MAX := 3
+const INCISION_SLOW := 3.0     # recarga da Incisão sem Decomposição na boss
+const PATIENT_TIME := 15.0     # Paciente (quem recebeu Sutura)
+const PATIENT_HEAL := 4.0      # ... cura por Incisão acertada com a boss em Decomposição
+const SUTURE_HEAL := 60.0
+const HEMO_RATIO := 0.18       # Solução Hemostática num aliado: escudo de 18% da vida máxima ...
+const HEMO_TIME := 8.0         # ... por 8 s
+const CONTAM_TIME := 20.0      # ... na boss (3 Vestígios + Decomposição): Contaminação
+const CLOUD_HEAL := 60.0       # Tanatopraxia clínica: cura em todos ...
+const CLOUD_REGEN := 5.0       # ... e regeneração por segundo ...
+const CLOUD_TIME := 8.0        # ... durante 8 s
+const CLOUD_BOOST := 1.8       # ... gastando 3 Vestígios: cura e regeneração 80% maiores
+const TOXIC_DMG := 120.0       # Tanatopraxia tóxica (boss com Contaminação): dano inicial ...
+const TOXIC_DPS := 20.0        # ... e por segundo ...
+const TOXIC_TIME := 8.0
+const STABILIZE_HEAL := 100.0  # Estabilização
+const STABILIZE_LOW := 0.25    # ... alvo abaixo de 25%: cura 50% maior
+const CHEM := Color(0.35, 0.8, 0.66)
+## Em que slot cada healer guarda cada tipo de socorro (a IA e as cartas de healer usam isso). -1 = não tem.
+const HEAL_SLOTS := {
+	"healer": {"shield": 3, "revive": 5, "area": 2, "big": 4, "heal": 1},
+	"apothecary": {"shield": 3, "revive": -1, "area": 4, "big": 5, "heal": 2},
+}
+## Kit do Sleepwalker. Os danos da ficha (50, 60, 120...) são relativos; SW_SCALE traz pra escala do jogo.
+const SW_SCALE := 0.45
+const SW_AWAKE := [  # dano-base, Torpor gerado, stacks de Vulnerabilidade com a interação certa / sem ela
+	{"base": 50.0, "torpor": 4.0, "stacks": 0, "weak": 0},
+	{"base": 60.0, "torpor": 8.0, "stacks": 2, "weak": 2},
+	{"base": 120.0, "torpor": 12.0, "stacks": 3, "weak": 1},
+	{"base": 140.0, "torpor": 16.0, "stacks": 2, "weak": 1},
+	{"base": 200.0, "torpor": 24.0, "stacks": 1, "weak": 0},
+]
+const SW_WINDOW := 1.0         # janela entre uma habilidade da sequência e a seguinte
+const SW_PERFECT_TORPOR := 5.0 # Torpor extra por interação acertada
+const SW_BED_BONUS := 1.5      # A Cama Caiu! com Travesseiro Cheio
+const SW_DECAY := 1.0          # Torpor perdido por segundo, acordado
+const DREAM_MAX := 8           # Vulnerabilidade Onírica: até 8 stacks ...
+const DREAM_PER := 0.02        # ... +2% de dano dela cada ...
+const DREAM_TIME := 30.0       # ... por 30 s
+const NIGHTMARE_TIME := 20.0   # Pesadelo Persistente (DoT da Mordida)
+const NIGHTMARE_DPS := 6.0
+const NEAR_PERFECT := 20.0     # Perto do Sonho: renovação nos últimos NEAR_WINDOW segundos do DoT ...
+const NEAR_OTHER := 10.0       # ... cedo, tarde ou primeira aplicação
+const NEAR_WINDOW := 2.0
+const ECHO_AT := [1.0, 4.0, 7.0, 10.0]  # Ecos do Pesadelo: quando cada Fresta abre, depois da Cama
+const ECHO_OPEN := 0.5         # ... e por quanto tempo fica aberta
+const ECHO_BASE := 80.0        # dano extra do Bocejo que acerta a Fresta
+const HOUSE_SHIELD := 0.08     # A Casa que Engole: escudo de 8% da vida máxima nos aliados ...
+const HOUSE_SHIELD_TIME := 5.0
+const DREAM := Color(0.55, 0.58, 1.0)
 ## Kit da Soulflame.
 const FLAME := Color(0.3, 0.95, 0.8)
 const HEARTH_TIME := 8.0       # Lareira Celestial: quanto dura ...
@@ -252,7 +403,7 @@ const REBIRTH_DMG := 90.0      # ... dano médio na boss ...
 const REBIRTH_DOT := 6.0       # ... e um DoT leve por segundo ...
 const REBIRTH_DOT_TIME := 12.0 # ... durante esse tempo
 ## Em que slot fica o golpe forte que a IA com a carta Rotação solta, e que a carta Golpe Lapidado melhora.
-const BIG_SLOT := {"assassina": 4, "maga": 2}
+const BIG_SLOT := {"assassina": 4, "maga": 3}
 ## Em que slot cada tank guarda a defesa e a provocação (as cartas Guarda e Biscoiteiro usam isso).
 const DEF_SLOT := {"tank": 4, "nurse": 1}
 const PROVOKE_SLOT := {"tank": 2, "nurse": 3}
@@ -385,6 +536,11 @@ var hazards: Array = []
 var holy: Array = []  # áreas de Solo Consagrado ativas
 var hearths: Array = []  # Lareiras Celestiais acesas
 var boss_dots: Array = []  # efeitos de dano por segundo na boss (ver add_dot)
+var dream_stacks := 0  # Vulnerabilidade Onírica (Sleepwalker)
+var dream_t := 0.0
+var echoes: Array = []  # Frestas dos Ecos do Pesadelo: {"wait", "open", "hit", "warned"}
+var echo_mark: MeshInstance3D
+var _tones := {}
 var side_mark: Node3D  # Assassina: marca do lado da boss que está valendo
 var side_pips: Array = []
 var side_label: Label3D
@@ -594,6 +750,12 @@ func _build_world() -> void:
 	fx_root = Node3D.new()
 	add_child(fx_root)
 
+	# Sleepwalker: a Fresta dos Ecos do Pesadelo, uma rachadura clara no corpo da boss
+	var crack := BoxMesh.new()
+	crack.size = Vector3(0.5, 3.4, 0.2)
+	echo_mark = Fx.inst(self, crack, Fx.mat(Color(1, 1, 1), 5.0, true), Vector3(0, 4.2, -12.0))
+	echo_mark.rotation.z = 0.5
+	echo_mark.visible = false
 	# Assassina: marca do lado da boss em que o Talho Relâmpago está valendo
 	side_mark = Node3D.new()
 	add_child(side_mark)
@@ -829,7 +991,7 @@ func give_order(o: String) -> void:
 
 func _try_dash() -> void:
 	var u := units[ctrl]
-	if not u.alive or u.dash_cd > 0.0:
+	if not u.alive or u.dash_cd > 0.0 or u.asleep:
 		return
 	var d := _input_dir()
 	if d == Vector3.ZERO:
@@ -912,6 +1074,11 @@ func _process(delta: float) -> void:
 	_tick_holy(delta)
 	_tick_hearths(delta)
 	_tick_dots(delta)
+	_tick_echoes(delta)
+	if dream_stacks > 0:
+		dream_t -= delta
+		if dream_t <= 0.0:
+			dream_stacks = 0
 	for u in units:
 		if ended:
 			return
@@ -921,6 +1088,18 @@ func _process(delta: float) -> void:
 		u.guard_t = maxf(0.0, u.guard_t - delta)
 		u.wall_t = maxf(0.0, u.wall_t - delta)
 		u.frenzy_t = maxf(0.0, u.frenzy_t - delta)
+		u.count_t = maxf(0.0, u.count_t - delta)
+		u.power_t = maxf(0.0, u.power_t - delta)
+		u.ward_t = maxf(0.0, u.ward_t - delta)
+		if u.key == "maga":
+			_tick_bullets(u, delta)
+			_tick_ricochet(u, delta)
+		if u.key == "sleepwalker":
+			_tick_sleep(u, delta)
+		u.patient_t = maxf(0.0, u.patient_t - delta)
+		if u.mend_t > 0.0:
+			u.mend_t -= delta
+			u.hp = minf(u.max_hp, u.hp + u.mend_rate * delta)
 		if u.parry_t > 0.0:
 			u.parry_t -= delta
 			if u.parry_t <= 0.0 and not u.parry_hit:
@@ -1041,7 +1220,9 @@ func _tick_player(u: Unit, delta: float) -> void:
 	if _tick_cast(u, delta, moving):
 		return
 
-	if u.dash_t > 0.0:
+	if u.asleep:
+		pass  # Sleepwalker dormindo: não anda nem desvia
+	elif u.dash_t > 0.0:
 		u.dash_t -= delta
 		u.position += u.dash_dir * 19.0 * delta
 	else:
@@ -1188,24 +1369,25 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		elif _in_range(u):
 			u.face(BOSS_POINT - u.position)
 
-	if u.key == "healer" and not (careful and in_danger):
+	var hs: Dictionary = HEAL_SLOTS.get(u.key, {})
+	if not hs.is_empty() and not (careful and in_danger):
 		# Escudo de Emergência: só no cast do ESMAGAR, e a tempo de sair antes do golpe
-		if Knowledge.has(u.hero, "eshield") and buster != null and u.skill_cd[3] <= 0.0 and buster["t"] > 0.3 \
+		if Knowledge.has(u.hero, "eshield") and buster != null and u.skill_cd[hs["shield"]] <= 0.0 and buster["t"] > 0.3 \
 				and buster["target"].alive and buster["target"].shield_hp <= 0.0:
-			if use_skill(u, 3, true, buster["target"]):
+			if use_skill(u, hs["shield"], true, buster["target"]):
 				u.set_action("Escudo no " + buster["target"].unit_name, 1)
 				return
 		# Reviver Automático: o Renascimento (slot 6) levanta quem caiu
-		if Knowledge.has(u.hero, "revive") and u.skill_cd[5] <= 0.0:
+		if Knowledge.has(u.hero, "revive") and hs["revive"] >= 0 and u.skill_cd[hs["revive"]] <= 0.0:
 			for o in units:
 				if not o.alive:
-					if use_skill(u, 5, true):
+					if use_skill(u, hs["revive"], true):
 						u.set_action("Revivendo " + o.unit_name, 1)
 						return
 					break
 
 	# Instinto: só reage a pouca vida, então não fica gastando cura à toa.
-	if Knowledge.has(u.hero, "instinct") and u.key == "healer":
+	if Knowledge.has(u.hero, "instinct") and not hs.is_empty():
 		# no Dodge Time a explosão do fim tira 70% da vida: ele enche todo mundo antes
 		var topping: bool = DODGE_PHASES.has(phase) or finale_state == 1
 		var low: float = 0.95 if topping else Knowledge.LOW_HP
@@ -1224,12 +1406,12 @@ func _tick_ai(u: Unit, delta: float) -> void:
 				hurt_near += 1
 		if careful and in_danger:
 			pass  # Cautela: primeiro sai do vermelho, depois cura
-		elif hurt_near >= (2 if topping else 3) and u.skill_cd[2] <= 0.0:
-			use_skill(u, 2, true)  # Lareira Celestial
-		elif heal_focus != null and heal_focus.hp / heal_focus.max_hp < 0.35 and u.skill_cd[4] <= 0.0:
-			use_skill(u, 4, true, heal_focus)  # Asa da Fênix: socorro grande e na hora
-		elif heal_focus != null and u.skill_cd[1] <= 0.0:
-			use_skill(u, 1, true, heal_focus)  # Toque de Brasa
+		elif hurt_near >= (2 if topping else 3) and u.skill_cd[hs["area"]] <= 0.0:
+			use_skill(u, hs["area"], true)  # Lareira Celestial / Tanatopraxia
+		elif heal_focus != null and heal_focus.hp / heal_focus.max_hp < 0.35 and u.skill_cd[hs["big"]] <= 0.0:
+			use_skill(u, hs["big"], true, heal_focus)  # Asa da Fênix / Estabilização: socorro grande e na hora
+		elif heal_focus != null and u.skill_cd[hs["heal"]] <= 0.0:
+			use_skill(u, hs["heal"], true, heal_focus)  # Toque de Brasa / Sutura
 
 	if u.tank and Knowledge.has(u.hero, "provoke") and target != null and target != u and u.skill_cd[PROVOKE_SLOT[u.key]] <= 0.0:
 		use_skill(u, PROVOKE_SLOT[u.key], true)
@@ -1435,7 +1617,7 @@ func _heal_target() -> Unit:
 
 ## Tenta usar a habilidade. Com cast, só começa a conjurar; o efeito sai em _resolve_skill.
 func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
-	var list: Array = SKILLS[u.key]
+	var list: Array = kit(u)
 	if not u.alive or slot >= list.size() or list[slot] == null or u.skill_cd[slot] > 0.0 or u.channel_t > 0.0 or intro_left > 0.0:
 		return false
 	var sk: Dictionary = list[slot]
@@ -1453,7 +1635,7 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 		"Blood Party":
 			if u.stacks < PARTY_NEED or u.party_t > 0.0 or u.taste_t > 0.0:
 				return false
-		"Toque de Brasa", "Asa da Fênix":
+		"Toque de Brasa", "Asa da Fênix", "Sutura", "Estabilização":
 			var ht := _heal_target()
 			# na sua mão, o alvo escolhido no card tem prioridade
 			if not by_ai and sel >= 0 and units[sel].alive and units[sel].hp < units[sel].max_hp:
@@ -1463,6 +1645,16 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 			if ht == null:
 				return false
 			u.cast_target = ht
+		"Solução Hemostática":
+			# com 3 Vestígios e a boss em Decomposição, sem aliado escolhido: vai na boss (Contaminação)
+			var ally: Unit = target if target != null else u
+			if not by_ai and sel >= 0 and units[sel].alive:
+				ally = units[sel]
+			elif not by_ai and u.vestiges >= VESTIGE_MAX and not get_dot("decomp").is_empty():
+				ally = null
+			if forced != null:
+				ally = forced
+			u.cast_target = ally
 		"Manto de Cinzas":
 			# no alvo focado; sem foco, em quem o boss está batendo
 			var st: Unit = target if target != null else u
@@ -1496,11 +1688,19 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 
 
 func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
-	var sk: Dictionary = SKILLS[u.key][slot]
+	var sk: Dictionary = kit(u)[slot]
+	if u.key == "sleepwalker":
+		_sleep_skill(u, slot)
+		return
 	if not (sk.has("cast") and sk["cast"] < LOCKED_CAST):
 		u.skill_cd[slot] = sk.get("ai_cd", sk["cd"] * 1.15) if by_ai else sk["cd"]
 	if slot == 0 and u.frenzy_t > 0.0:
 		u.skill_cd[slot] *= FRENZY_HASTE
+	if u.key == "ringstar" and slot <= 2:
+		# os três golpes dividem a recarga; com a Contagem Regressiva ela cai pela metade
+		var gcd: float = COUNT_GCD if u.count_t > 0.0 else sk["cd"]
+		for n in 3:
+			u.skill_cd[n] = gcd
 	match sk["name"]:
 		"Égide":
 			# ergue o escudo: barreira dourada na frente do corpo (unit.gd), 60% menos dano e regeneração
@@ -1565,8 +1765,48 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_burst(st.position, Color(0.45, 0.9, 1.0), 2.2)
 		"Lareira Celestial":
 			_start_hearth(u)
+		"Necropsia":
+			_necropsy(u)
+		"Solução Hemostática":
+			_hemostatic(u)
+		"Tanatopraxia":
+			_thanato(u)
 		"Renascimento":
 			_rebirth(u)
+		"Rainbow Shots":
+			_rainbow(u)
+		"Ricochete Prismático":
+			_ricochet(u)
+		"Salva Astral":
+			_salvo(u)
+		"Canhão Estelar":
+			_cannon(u)
+		"Marca do Zênite":
+			add_dot("zenite", "Marca do Zênite", Color(1.0, 0.9, 0.45), ZENITH_TIME, ZENITH_DPS, u)
+			_burst(Vector3(0, 7.5, -12.5), Color(1.0, 0.9, 0.45), 3.0)
+		"Lança Serafim":
+			_lance(u)
+		"Rasante Incandescente":
+			_swoop(u)
+		"Chuva de Brasas":
+			add_dot("chuva", "Chuva de Brasas", FIRE, RAIN_TIME, RAIN_DPS, u)
+			for n in 8:
+				_burst(Vector3(randf_range(-3.0, 3.0), randf_range(1.0, 5.0), -11.5), FIRE, 1.0)
+		"Juízo Solar":
+			_solar(u)
+		"Contagem Regressiva":
+			_countdown(u)
+		"SUPERSTAR!":
+			# à distância, sem preparo: uma rajada de luvas de luz
+			for n in 4:
+				_attack_fx(u, true)
+			_burst(Vector3(0, 4, -11.5), STAR, 5.0)
+			_damage_boss(u, SUPERSTAR_DMG, true, true)
+		"Nocaute Final":
+			_burst(Vector3(0, 4.5, -11.5), STAR.lightened(0.3), 9.0)
+			hud.flash(Color(STAR.r, STAR.g, STAR.b, 0.4))
+			hud.toast("NOCAUTE FINAL", 1.6)
+			_damage_boss(u, KNOCKOUT_DMG, true, true)
 		"Passo Rasante":
 			_dash_cut(u, sk["dmg"])
 		"Garras Cruzadas":
@@ -1597,7 +1837,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			hud.toast("FRENESI DA FERA", 1.4)
 		"Bora Biscoitar":
 			_provoke(u, by_ai)
-		"Toque de Brasa", "Asa da Fênix":
+		"Toque de Brasa", "Asa da Fênix", "Sutura", "Estabilização":
 			var ht: Unit = u.cast_target
 			if ht == null or not ht.alive:
 				ht = _heal_target()
@@ -1607,6 +1847,15 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			if sk["name"] == "Asa da Fênix":
 				amount = PHOENIX_HEAL
 				_burst(ht.position + Vector3(0, 1.0, 0), Color(1.0, 0.6, 0.2), 3.2)
+			elif sk["name"] == "Sutura":
+				if not by_ai:
+					amount = SUTURE_HEAL
+				# quem recebe a Sutura vira o Paciente: as Incisões seguintes mantêm ele de pé
+				u.patient = ht
+				u.patient_t = PATIENT_TIME
+			elif sk["name"] == "Estabilização":
+				amount = STABILIZE_HEAL * (1.5 if ht.hp / ht.max_hp < STABILIZE_LOW else 1.0)
+				_burst(ht.position + Vector3(0, 1.0, 0), CHEM, 3.2)
 			# socorreu na mão alguém com pouca vida: conta pra maestria do Instinto
 			if not by_ai and ht.hp / ht.max_hp < Knowledge.LOW_HP:
 				_master("heal")
@@ -1629,6 +1878,28 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			var amount: float = sk["dmg"]
 			if slot == BIG_SLOT.get(u.key, -1) and Knowledge.has(u.hero, "burst"):
 				amount *= 1.3 if u.key == "assassina" else 1.15
+			if sk["name"] == "Incisão":
+				big = false
+				if get_dot("decomp").is_empty():
+					u.skill_cd[0] = INCISION_SLOW  # sem Decomposição na boss o bisturi fica lento
+				elif u.patient != null and u.patient.alive and u.patient_t > 0.0 and u.patient.hp < u.patient.max_hp:
+					u.patient.hp = minf(u.patient.max_hp, u.patient.hp + PATIENT_HEAL)
+					u.enmity += PATIENT_HEAL * HEAL_ENMITY
+					_popup(int(PATIENT_HEAL), Color(0.5, 1.0, 0.85), 36, u.patient.position + Vector3(0, 2.6, 0), "+")
+			if sk["name"] == "Disparo Rúnico":
+				big = false
+				if u.pierce_next:
+					# fortalecido por uma bala Rainbow: perfura
+					u.pierce_next = false
+					amount *= PIERCE_MULT
+					big = true
+					_beam(u.position, Vector3(0, 2.0, -13.0), Color(1, 1, 1, 0.9), 0.25)
+				if u.dash_next:
+					u.dash_next = false
+					_knock_back(u, 3.0)
+			if u.key == "ringstar":
+				amount = _combo_hit(u, slot, amount)
+				big = amount > 30.0
 			if sk["name"] == "Talho Relâmpago":
 				big = false
 				if u.frenzy_t > 0.0:
@@ -1747,6 +2018,572 @@ func _tick_side_mark() -> void:
 	side_label.text = "DIREITA" if me.side_need > 0 else "ESQUERDA"
 
 
+# ---------------------------------------------------------------- Maga
+
+## Empurra o herói pra longe da boss (recuo do tiro forte, dash da bala amarela).
+func _knock_back(u: Unit, dist: float) -> void:
+	var away := u.position - BOSS_POINT
+	away.y = 0.0
+	away = away.normalized() if away.length() > 0.1 else Vector3(0, 0, 1)
+	var to := u.position + away * dist
+	var flat := Vector2(to.x, to.z)
+	if flat.length() > ARENA_R:
+		flat = flat.normalized() * ARENA_R
+		to = Vector3(flat.x, 0, flat.y)
+	u.dash_fx()
+	u.invuln = maxf(u.invuln, 0.25)
+	u.create_tween().tween_property(u, "position", to, 0.14).set_ease(Tween.EASE_OUT)
+
+
+## Passiva: uma bala nova a cada BULLET_EVERY segundos, de cor sorteada.
+func _tick_bullets(u: Unit, delta: float) -> void:
+	if u.bullets.size() >= BULLET_MAX:
+		u.bullet_t = 0.0
+		return
+	u.bullet_t += delta
+	if u.bullet_t >= BULLET_EVERY:
+		u.bullet_t = 0.0
+		u.bullets.append(randi() % BULLETS.size())
+		if u.controlled:
+			_burst(u.position + Vector3(0, 2.2, 0), BULLETS[u.bullets[u.bullets.size() - 1]]["col"], 0.9)
+
+
+func _shot_fx(u: Unit, col: Color, big: bool) -> void:
+	var from := u.position + Vector3(0, 1.2, 0)
+	var to := Vector3(randf_range(-0.8, 0.8), randf_range(2.5, 4.0), -11.0)
+	var mi := Fx.inst(fx_root, Fx.sphere(0.34 if big else 0.2), Fx.mat(col, 4.0, true), from)
+	var tw := mi.create_tween()
+	tw.tween_property(mi, "position", to, 0.08)
+	tw.tween_callback(mi.queue_free)
+	tw.tween_callback(_burst.bind(to, col, 2.6 if big else 1.2))
+
+
+## Rainbow Shots: gasta a próxima bala. Com exatamente 3 guardadas, gasta as 3 num tiro só.
+func _rainbow(u: Unit) -> void:
+	if u.bullets.is_empty():
+		u.set_action("Sem balas", 2)
+		return
+	u.face(BOSS_POINT - u.position)
+	if u.bullets.size() == 3:
+		u.bullets.clear()
+		_shot_fx(u, Color(1, 1, 1), true)
+		_damage_boss(u, BULLET_TRIPLE, true, true)
+		_knock_back(u, BULLET_KNOCK)
+		hud.toast("TIRO TRIPLO", 0.9)
+		return
+	var kind: int = u.bullets.pop_front()
+	var col: Color = BULLETS[kind]["col"]
+	_shot_fx(u, col, false)
+	_damage_boss(u, BULLET_DMG, true, false)
+	u.pierce_next = true
+	match kind:
+		0: u.power_t = BULLET_BUFF
+		1: u.ward_t = BULLET_BUFF
+		2:
+			u.hp = minf(u.max_hp, u.hp + 20.0)
+			_popup(20, Color(0.5, 1.0, 0.65), 48, u.position + Vector3(0, 2.6, 0), "+")
+		3: add_dot("veneno", "Bala Venenosa", col, 8.0, 5.0, u)
+		4: u.dash_next = true
+	_burst(u.position + Vector3(0, 1.0, 0), col, 1.3)
+
+
+## Ricochete Prismático: perto da boss, a bala fica indo e voltando entre ela e a Maga.
+## Longe, é um tiro só que ricocheteia uma vez.
+func _ricochet(u: Unit) -> void:
+	u.face(BOSS_POINT - u.position)
+	if u.position.distance_to(BOSS_POINT) > MELEE_RANGE:
+		_shot_fx(u, Color(0.8, 0.95, 1.0), false)
+		_damage_boss(u, RICO_DMG * 2.5, true, false)
+		return
+	u.ricochet_t = RICO_TIME
+	u.ricochet_tick = 0.0
+	u.ricochet_out = true
+
+
+func _tick_ricochet(u: Unit, delta: float) -> void:
+	if u.ricochet_t <= 0.0:
+		return
+	u.ricochet_t -= delta
+	u.ricochet_tick -= delta
+	if u.ricochet_tick > 0.0:
+		return
+	u.ricochet_tick = RICO_STEP
+	if u.position.distance_to(BOSS_POINT) > MELEE_RANGE:
+		u.ricochet_t = 0.0  # saiu de perto: a bala se perde
+		return
+	var col := Color(0.8, 0.95, 1.0, 0.95)
+	if u.ricochet_out:
+		_beam(u.position, Vector3(0, 2.0, -11.5), col, RICO_STEP)
+		_damage_boss(u, RICO_DMG, true, false)
+	else:
+		_beam(Vector3(0, 2.0, -11.5), u.position, col, RICO_STEP)
+		var room := u.max_hp - u.hp
+		u.hp = minf(u.max_hp, u.hp + RICO_HEAL)
+		if room < RICO_HEAL:
+			# o que passou da vida cheia vira escudo
+			u.shield_hp += RICO_HEAL - maxf(room, 0.0)
+			u.shield_t = maxf(u.shield_t, SHIELD_TIME)
+		_burst(u.position + Vector3(0, 1.0, 0), Color(0.8, 0.95, 1.0), 1.0)
+	u.ricochet_out = not u.ricochet_out
+
+
+## Salva Astral: descarrega 3 balas de uma vez numa área e ganha um escudo.
+func _salvo(u: Unit) -> void:
+	if u.bullets.size() < SALVO_COST:
+		u.set_action("Precisa de 3 balas", 2)
+		u.skill_cd[4] = 0.0
+		return
+	u.face(BOSS_POINT - u.position)
+	for n in SALVO_COST:
+		var col: Color = BULLETS[u.bullets.pop_front()]["col"]
+		get_tree().create_timer(n * 0.09, false).timeout.connect(_shot_fx.bind(u, col, false))
+	_damage_boss(u, SALVO_DMG * SALVO_COST, true, true)
+	u.shield_hp = maxf(u.shield_hp, SALVO_SHIELD)
+	u.shield_t = SHIELD_TIME
+	_burst(u.position, Color(0.45, 0.9, 1.0), 2.2)
+
+
+## Canhão Estelar: gasta TODAS as balas guardadas; cada uma vale bem mais aqui do que solta.
+func _cannon(u: Unit) -> void:
+	u.face(BOSS_POINT - u.position)
+	var loaded := u.bullets.size()
+	u.bullets.clear()
+	var amount := CANNON_DMG + CANNON_PER_BULLET * loaded
+	_beam(u.position, Vector3(0, 3.0, -12.0), Color(1, 1, 1, 0.98), 0.6)
+	_burst(Vector3(0, 4, -11.5), u.color.lightened(0.4), 6.0 + loaded)
+	hud.flash(Color(1.0, 0.9, 0.6, 0.35))
+	hud.toast("CANHÃO ESTELAR" + (" ×%d" % loaded if loaded > 0 else ""), 1.6)
+	_damage_boss(u, amount, true, true)
+	_knock_back(u, 2.0)
+
+
+# ---------------------------------------------------------------- Soulburner
+
+## Lança Serafim: quase nada sem a marca. Com ela, o dano cresce conforme a marca envelhece
+## (médio no começo, alto perto do fim) e a marca é consumida.
+func lance_damage() -> float:
+	var mark := get_dot("zenite")
+	if mark.is_empty():
+		return LANCE_BARE
+	var aged := clampf(1.0 - mark["t"] / mark["total"], 0.0, 1.0)
+	return lerpf(LANCE_MIN, LANCE_MAX, aged)
+
+
+func _lance(u: Unit) -> void:
+	var amount := lance_damage()
+	var marked := not get_dot("zenite").is_empty()
+	remove_dot("zenite")
+	var m := Fx.mat(Color(1.0, 0.8, 0.35, 0.95), 4.0, true)
+	var spear := Fx.inst(fx_root, Fx.cyl(0.02, 0.45, 9.0), m, Vector3(0, 16, -12.5))
+	var tw := spear.create_tween()
+	tw.tween_property(spear, "position:y", 4.5, 0.16)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.3)
+	tw.tween_callback(spear.queue_free)
+	_burst(Vector3(0, 3, -11.5), FIRE if marked else Color(0.6, 0.6, 0.6), 5.0 if marked else 1.6)
+	_damage_boss(u, amount, true, amount > 60.0)
+
+
+## Rasante Incandescente: dash rápido (na direção que está andando, ou pra trás) com explosão no ponto de partida.
+func _swoop(u: Unit) -> void:
+	var d := _input_dir() if u.controlled else Vector3.ZERO
+	if d == Vector3.ZERO:
+		d = (u.position - BOSS_POINT).normalized()
+		d.y = 0.0
+	var from := u.position
+	var to := from + d.normalized() * SWOOP_DIST
+	var flat := Vector2(to.x, to.z)
+	if flat.length() > ARENA_R:
+		flat = flat.normalized() * ARENA_R
+		to = Vector3(flat.x, 0, flat.y)
+	u.dash_fx()
+	u.invuln = maxf(u.invuln, 0.35)
+	_beam(from, to, FIRE, 0.5)
+	_burst(from, FIRE, 3.2)
+	u.create_tween().tween_property(u, "position", to, 0.12)
+	_damage_boss(u, SWOOP_DMG, true, false)
+
+
+## Juízo Solar: um sol enorme explode na boss. Marcada, leva mais e fica queimando (a marca não é gasta).
+func _solar(u: Unit) -> void:
+	var marked := not get_dot("zenite").is_empty()
+	var m := Fx.mat(Color(1.0, 0.85, 0.35, 0.9), 5.0, true)
+	var sun := Fx.inst(fx_root, Fx.sphere(1.0), m, Vector3(0, 9, -12.0))
+	sun.scale = Vector3.ONE * 0.4
+	var tw := sun.create_tween()
+	tw.tween_property(sun, "scale", Vector3.ONE * 4.5, 0.4).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.5)
+	tw.tween_callback(sun.queue_free)
+	hud.flash(Color(1.0, 0.85, 0.35, 0.4))
+	hud.toast("JUÍZO SOLAR", 1.6)
+	_damage_boss(u, SOLAR_MARKED if marked else SOLAR_DMG, true, true)
+	if marked:
+		add_dot("solar", "Queimadura Solar", Color(1.0, 0.75, 0.2), SOLAR_DOT_TIME, SOLAR_DOT, u)
+
+
+# ---------------------------------------------------------------- Ringstar
+
+## Qual slot da Ringstar está fortalecido agora (-1 = nenhum). É o que faz o botão brilhar na barra.
+func glow_slot(u: Unit) -> int:
+	if u.key == "ringstar" and u.chain > 0:
+		return u.chain
+	if u.key == "maga" and u.pierce_next:
+		return 0
+	if u.key == "sleepwalker":
+		if u.asleep:
+			return u.dream_step  # como combo de FFXIV: a próxima da ordem brilha
+		if u.window_t > 0.0:
+			return u.window_slot
+	return -1
+
+
+## Aplica a sequência no golpe do slot (0 Jab, 1 Direto, 2 Gancho) e devolve o dano que ele dá.
+func _combo_hit(u: Unit, slot: int, full: float) -> float:
+	var amount := full
+	if slot == 0:
+		u.chain = 1  # Jab sempre (re)começa a sequência
+	elif slot == u.chain:
+		u.chain = 2 if slot == 1 else 0  # fortalecido: dano cheio e passa a vez
+		if slot == 2:
+			_burst(BOSS_POINT + Vector3(0, 1.6, 1.8), STAR, 3.4)
+	else:
+		amount = WEAK_HIT  # fora de ordem: dano mínimo e a sequência se perde
+		u.chain = 0
+	if u.count_t > 0.0:
+		amount *= COUNT_DMG
+	return amount
+
+
+## Contagem Regressiva: avança até a boss e abre uma arena de luz em volta dela mesma.
+func _countdown(u: Unit) -> void:
+	var to_boss := BOSS_POINT - u.position
+	to_boss.y = 0.0
+	var go := maxf(0.0, to_boss.length() - (MELEE_RANGE - 1.0))
+	u.face(to_boss)
+	if go > 0.1:
+		u.dash_fx()
+		u.create_tween().tween_property(u, "position", u.position + to_boss.normalized() * go, 0.12)
+	u.count_t = COUNT_TIME
+	for n in 3:
+		u.skill_cd[n] = minf(u.skill_cd[n], COUNT_GCD)
+	_burst(u.position, STAR, 4.0)
+	hud.toast("CONTAGEM REGRESSIVA", 1.2)
+
+
+# ---------------------------------------------------------------- Apotecário
+
+## Lista de habilidades que vale pro herói agora (o Sleepwalker tem uma lista por modo).
+func kit(u: Unit) -> Array:
+	return SKILLS_ASLEEP if (u.key == "sleepwalker" and u.asleep) else SKILLS[u.key]
+
+
+## Necropsia: dano alto + Decomposição. Renovar com VESTIGE_WINDOW ou menos sobrando dá 1 Vestígio.
+func _necropsy(u: Unit) -> void:
+	if not _in_range(u):
+		u.set_action("Longe demais", 2)
+		u.skill_cd[1] = 0.0
+		return
+	var old := get_dot("decomp")
+	if not old.is_empty() and old["t"] <= VESTIGE_WINDOW and u.vestiges < VESTIGE_MAX:
+		u.vestiges += 1
+		_burst(u.position + Vector3(0, 2.2, 0), CHEM, 1.2)
+		if u.controlled:
+			hud.toast("VESTÍGIO %d/%d" % [u.vestiges, VESTIGE_MAX], 0.9)
+	u.face(BOSS_POINT - u.position)
+	u.punch()
+	_attack_fx(u, true)
+	_damage_boss(u, SKILLS["apothecary"][1]["dmg"], true, true)
+	add_dot("decomp", "Decomposição", Color(0.6, 0.75, 0.3), DECOMP_TIME, DECOMP_DPS, u)
+	u.skill_cd[0] = minf(u.skill_cd[0], 1.0)  # a Incisão volta ao ritmo normal
+
+
+## Solução Hemostática: escudo num aliado, ou Contaminação na boss (cast_target null).
+func _hemostatic(u: Unit) -> void:
+	var ally: Unit = u.cast_target
+	if ally == null:
+		if u.vestiges >= VESTIGE_MAX and not get_dot("decomp").is_empty():
+			add_dot("contam", "Contaminação", Color(0.75, 0.3, 0.9), CONTAM_TIME, 0.0, u)
+			_beam(u.position, Vector3(0, 3.0, -11.5), Color(0.75, 0.3, 0.9, 0.95), 0.4)
+			hud.toast("CONTAMINAÇÃO", 1.2)
+			return
+		ally = u
+	if not ally.alive:
+		ally = u
+	ally.shield_hp = maxf(ally.shield_hp, ally.max_hp * HEMO_RATIO)
+	ally.shield_t = HEMO_TIME
+	u.enmity += ally.shield_hp * HEAL_ENMITY * 0.5
+	_beam(u.position, ally.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.3)
+	_burst(ally.position, CHEM, 2.0)
+
+
+## Tanatopraxia: nuvem tóxica se a boss está com Contaminação; senão, nuvem que cura a party.
+func _thanato(u: Unit) -> void:
+	if not get_dot("contam").is_empty():
+		remove_dot("contam")
+		u.vestiges = 0
+		_burst(Vector3(0, 3, -11.5), Color(0.6, 0.85, 0.2), 7.0)
+		hud.flash(Color(0.6, 0.85, 0.2, 0.3))
+		hud.toast("NUVEM TÓXICA", 1.6)
+		_damage_boss(u, TOXIC_DMG, true, true)
+		add_dot("toxica", "Nuvem Tóxica", Color(0.6, 0.85, 0.2), TOXIC_TIME, TOXIC_DPS, u)
+		return
+	var boost := 1.0
+	if u.vestiges >= VESTIGE_MAX:
+		u.vestiges = 0
+		boost = CLOUD_BOOST
+	_burst(u.position, CHEM, 7.0)
+	hud.toast("NUVEM CONSERVANTE" + (" +" if boost > 1.0 else ""), 1.4)
+	for o in units:
+		if not o.alive:
+			continue
+		var each := CLOUD_HEAL * boost
+		o.hp = minf(o.max_hp, o.hp + each)
+		o.mend_t = CLOUD_TIME
+		o.mend_rate = CLOUD_REGEN * boost
+		u.enmity += each * HEAL_ENMITY * 0.5
+		_burst(o.position, CHEM, 1.6)
+		_popup(int(each), Color(0.5, 1.0, 0.85), 52, o.position + Vector3(0, 2.6, 0), "+")
+
+
+# ---------------------------------------------------------------- Sleepwalker
+
+## Recarga de uma habilidade do Sleepwalker, já com o -1 s do Perto do Sonho.
+func _sw_cd(u: Unit, base: float) -> float:
+	return maxf(0.3, base - (1.0 if u.near_t > 0.0 else 0.0))
+
+
+func _dream_add(n: int) -> void:
+	if n <= 0:
+		return
+	dream_stacks = mini(DREAM_MAX, dream_stacks + n)
+	dream_t = DREAM_TIME
+
+
+func _sw_hit(u: Unit, base: float, big: bool) -> void:
+	u.face(BOSS_POINT - u.position)
+	_attack_fx(u, big)
+	_damage_boss(u, base * SW_SCALE, true, big)
+
+
+## Todas as habilidades do Sleepwalker passam por aqui (acordado e dormindo).
+func _sleep_skill(u: Unit, slot: int) -> void:
+	if slot == 5:
+		_sw_toggle(u)
+		return
+	if u.asleep:
+		_sw_dream(u, slot)
+		return
+	var def: Dictionary = SW_AWAKE[slot]
+	u.skill_cd[slot] = _sw_cd(u, SKILLS["sleepwalker"][slot]["cd"])
+	if not _in_range(u):
+		u.set_action("Longe demais", 2)
+		u.skill_cd[slot] = 0.0
+		return
+	var amount: float = def["base"]
+	var gain: float = def["torpor"]
+	if slot == 0:
+		# Bocejo: acerta a Fresta que estiver aberta
+		for e in echoes:
+			if e["open"] > 0.0 and not e["hit"]:
+				e["hit"] = true
+				amount += ECHO_BASE
+				_burst(Vector3(0, 3.5, -11.5), Color(1, 1, 1), 3.4)
+				if u.controlled:
+					hud.toast("FRESTA!", 0.6)
+				break
+		u.torpor = minf(100.0, u.torpor + gain)
+		_sw_hit(u, amount, amount > 60.0)
+		return
+	# sequência Lençol (1) -> Visitantes (2) -> Travesseiro (3) -> Cama (4): cada uma abre 1 s pra próxima
+	var perfect: bool = slot == 1 or (u.window_slot == slot and u.window_t > 0.0)
+	var stacks: int = def["stacks"] if perfect else def["weak"]
+	if slot > 1 and perfect:
+		gain += SW_PERFECT_TORPOR
+	match slot:
+		2:
+			u.crumbs = perfect
+		3:
+			perfect = perfect and u.crumbs
+			stacks = def["stacks"] if perfect else def["weak"]
+			u.pillow_full = perfect
+			u.crumbs = false
+		4:
+			perfect = perfect and u.pillow_full
+			stacks = def["stacks"] if perfect else def["weak"]
+			if perfect:
+				amount *= SW_BED_BONUS
+				_start_echoes()
+			u.pillow_full = false
+	if slot > 1 and not perfect:
+		gain = def["torpor"]
+		if u.controlled:
+			hud.toast("JANELA PERDIDA", 0.8)
+	elif slot > 1 and u.controlled:
+		hud.toast("PERFEITO", 0.5)
+	_dream_add(stacks)
+	u.torpor = minf(100.0, u.torpor + gain)
+	# abre a janela da próxima (a Cama é a última)
+	u.window_slot = slot + 1 if slot < 4 else -1
+	u.window_t = SW_WINDOW if slot < 4 else 0.0
+	_sw_hit(u, amount, true)
+
+
+## Sono Profundo / Acordar.
+func _sw_toggle(u: Unit) -> void:
+	u.skill_cd[5] = 3.0
+	if u.asleep:
+		_sw_wake(u, true)
+		return
+	u.asleep = true
+	u.dream_step = 0
+	u.window_slot = -1
+	u.window_t = 0.0
+	# as recargas do Modo Acordado ficam guardadas (e continuam correndo em _tick_sleep);
+	# as do sonho começam prontas, menos a Mordida, que tem recarga própria
+	for n in 5:
+		u.awake_cd[n] = u.skill_cd[n]
+		u.skill_cd[n] = 0.0
+	u.skill_cd[0] = u.bite_cd
+	_burst(u.position, DREAM, 3.0)
+	if u.controlled:
+		hud.toast("DORMINDO", 0.9)
+
+
+## Acorda. `lose`: perde o Torpor que sobrou (acordou no meio, ou faltou Torpor).
+func _sw_wake(u: Unit, lose: bool) -> void:
+	u.bite_cd = u.skill_cd[0]
+	u.asleep = false
+	u.dream_step = 0
+	u.wake_t = 0.0
+	if lose:
+		u.torpor = 0.0
+	for n in 5:
+		u.skill_cd[n] = u.awake_cd[n]
+	_burst(u.position, Color(1, 1, 1), 2.0)
+
+
+## Uma habilidade da sequência do Modo Dormindo. Fora de ordem não sai.
+func _sw_dream(u: Unit, slot: int) -> void:
+	var sk: Dictionary = SKILLS_ASLEEP[slot]
+	if slot != u.dream_step or u.wake_t > 0.0:
+		u.set_action("Fora de ordem", 2)
+		return
+	var cost: float = sk["cost"]
+	var amount: float = sk["base"]
+	if slot == 0:
+		# A Mordida dos Mil: mantém o Pesadelo Persistente. Sem Torpor pra pagar, sai de graça e fraca.
+		if u.torpor < cost:
+			cost = 0.0
+			amount *= 0.2
+		var old := get_dot("pesadelo")
+		var perfect: bool = not old.is_empty() and old["t"] <= NEAR_WINDOW
+		add_dot("pesadelo", "Pesadelo Persistente", DREAM, NIGHTMARE_TIME, NIGHTMARE_DPS, u)
+		u.near_t = NEAR_PERFECT if perfect else NEAR_OTHER
+		if u.controlled:
+			hud.toast("PERTO DO SONHO %d s" % int(u.near_t), 0.9)
+		u.skill_cd[0] = _sw_cd(u, sk["cd"])
+	elif u.torpor < cost:
+		return
+	u.torpor -= cost
+	_sw_hit(u, amount, slot >= 3)
+	if slot == 4:
+		# A Casa que Engole: fecha a sequência, protege a party e acorda sozinho
+		hud.flash(Color(DREAM.r, DREAM.g, DREAM.b, 0.4))
+		hud.toast("A CASA QUE ENGOLE", 1.4)
+		for o in units:
+			if o.alive:
+				o.shield_hp = maxf(o.shield_hp, o.max_hp * HOUSE_SHIELD)
+				o.shield_t = maxf(o.shield_t, HOUSE_SHIELD_TIME)
+		_sw_wake(u, false)
+		return
+	u.dream_step = slot + 1
+	for n in range(1, 5):
+		u.skill_cd[n] = 0.6
+	if u.torpor < float(SKILLS_ASLEEP[u.dream_step]["cost"]):
+		# não dá pra pagar a próxima: acorda sozinho daqui a 1 s e perde o que sobrou
+		u.wake_t = 1.0
+		if u.controlled:
+			hud.toast("SEM TORPOR NECESSÁRIO, ACORDANDO", 1.0)
+
+
+## Ecos do Pesadelo: quatro Frestas abrem na boss depois de A Cama Caiu! perfeita.
+func _start_echoes() -> void:
+	echoes.clear()
+	for at in ECHO_AT:
+		echoes.append({"wait": at, "open": 0.0, "hit": false, "warned": false})
+
+
+func _tick_echoes(delta: float) -> void:
+	if echoes.is_empty():
+		echo_mark.visible = false
+		return
+	var showing := false
+	for e in echoes.duplicate():
+		if e["wait"] > 0.0:
+			e["wait"] -= delta
+			if e["wait"] <= 0.45 and not e["warned"]:
+				# aviso: algo vai abrir (som de invocação)
+				e["warned"] = true
+				_sfx(_tone(520.0, 0.18, false), -8.0)
+			if e["wait"] <= 0.0:
+				e["open"] = ECHO_OPEN
+				_sfx(_tone(160.0, 0.12, true), -2.0)  # o "PA!": é agora
+			continue
+		e["open"] -= delta
+		if e["open"] > 0.0 and not e["hit"]:
+			showing = true
+		if e["open"] <= 0.0:
+			echoes.erase(e)
+	echo_mark.visible = showing
+	if showing:
+		echo_mark.scale = Vector3.ONE * (1.0 + 0.25 * sin(Time.get_ticks_msec() * 0.04))
+
+
+## Som curto gerado na hora (o projeto não tem áudio pra isso): tom que some, ou um estalo.
+func _tone(freq: float, dur: float, snap: bool) -> AudioStreamWAV:
+	var key := "%d_%d_%s" % [int(freq), int(dur * 1000.0), snap]
+	if _tones.has(key):
+		return _tones[key]
+	var rate := 22050
+	var count := int(rate * dur)
+	var data := PackedByteArray()
+	data.resize(count * 2)
+	for i in count:
+		var t := float(i) / rate
+		var env := pow(1.0 - float(i) / count, 3.0 if snap else 1.5)
+		var v := sin(TAU * freq * t * (1.0 if snap else 1.0 + t * 2.0))
+		if snap:
+			v = v * 0.6 + randf_range(-1.0, 1.0) * 0.4
+		data.encode_s16(i * 2, int(clampf(v * env, -1.0, 1.0) * 26000.0))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.data = data
+	_tones[key] = wav
+	return wav
+
+
+## Sleepwalker, a cada frame: Torpor, janelas, buffs e o despertar por falta de Torpor.
+func _tick_sleep(u: Unit, delta: float) -> void:
+	if not u.asleep:
+		u.torpor = maxf(0.0, u.torpor - SW_DECAY * delta)
+	else:
+		for n in 5:
+			u.awake_cd[n] = maxf(0.0, u.awake_cd[n] - delta)
+	if u.window_t > 0.0:
+		u.window_t -= delta
+		if u.window_t <= 0.0:
+			u.window_slot = -1
+	u.near_t = maxf(0.0, u.near_t - delta)
+	if get_dot("pesadelo").is_empty():
+		u.near_t = 0.0  # o DoT caiu: o buff vai junto
+	if not u.asleep:
+		u.bite_cd = maxf(0.0, u.bite_cd - delta)
+	if u.wake_t > 0.0:
+		u.wake_t -= delta
+		if u.wake_t <= 0.0:
+			_sw_wake(u, true)
+
+
 # ---------------------------------------------------------------- Soulflame
 
 ## Lareira Celestial: fogueira espiritual no chão, onde a Soulflame está. Cura quem fica dentro.
@@ -1861,7 +2698,7 @@ func _tick_dots(delta: float) -> void:
 	for d in boss_dots.duplicate():
 		d["t"] -= delta
 		d["acc"] += delta
-		if d["acc"] >= 1.0:
+		if d["acc"] >= 1.0 and d["dps"] > 0.0:
 			d["acc"] -= 1.0
 			_damage_boss(d["owner"], d["dps"], false, false)
 			_popup(int(d["dps"]), (d["col"] as Color).lightened(0.2), 30)
@@ -2049,7 +2886,7 @@ func _resolve_lb(u: Unit) -> void:
 				if o.alive:
 					o.immortal_t = LB_IMMORTAL
 					_burst(o.position, Color(1.0, 0.9, 0.5), 2.2)
-		"healer":
+		"healer", "apothecary":
 			for o in units:
 				if not o.alive:
 					o.revive(0.6)  # sem Fraqueza: é a vantagem sobre o Reviver comum
@@ -2857,6 +3694,10 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 	var dmg := amount * _dmg_mult() * low_hp_mult(u)
 	if u.frenzy_t > 0.0:
 		dmg *= FRENZY_DMG
+	if u.power_t > 0.0:
+		dmg *= 1.2
+	if u.key == "sleepwalker":
+		dmg *= 1.0 + DREAM_PER * dream_stacks
 	if u.weak_t > 0.0:
 		dmg *= 0.5
 	if Knowledge.has(u.hero, "sharpen"):
@@ -2930,6 +3771,8 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 		dmg *= MITIGATION
 	if u.wall_t > 0.0:
 		dmg *= WALL_MULT
+	if u.ward_t > 0.0:
+		dmg *= 0.75
 	if Knowledge.has(u.hero, "plate"):
 		dmg *= 0.9
 	if Knowledge.has(u.hero, "overdrive"):

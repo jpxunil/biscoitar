@@ -193,10 +193,10 @@ Boxeadora / estrela pop / magical girl com luvas mágicas gigantes. Sem gauge ne
 - [x] Paladino — os 6 slots da ficha, Égide com barreira dourada e regeneração, Muralha da Fé com a cruz de 3 s, Solo Consagrado. Interromper do Baque fica pra quando existir cast interrompível
 - [x] Assassina — os 6 slots; Talho com 3 golpes de cada lado (+150%) e marca no chão; Passo Rasante atravessa a boss; Misericórdia com janela de parry de 0,35 s. Dano por golpe é proposta minha
 - [x] Soulflame — os 6 slots; Lareira (8 s, 7/s), Manto, Asa da Fênix (110), Renascimento (cura 70, dano 90, DoT 6/s por 12 s). O Reviver saiu do kit: o Renascimento também levanta quem caiu (adição minha)
-- [ ] Maga
+- [x] Maga — os 6 slots sem cast; balas Rainbow (1 a cada 8 s, máx. 7, 5 cores com efeito), tiro triplo com recuo, Ricochete perto da boss, Salva (3 balas), Canhão que rende mais com balas guardadas
 - [x] Debuffs de DoT embaixo da vida da boss (game.add_dot / hud._tick_dots)
-- [ ] Soulburner
-- [ ] Apotecário (+ análise de design)
-- [ ] Sleepwalker
-- [ ] Ringstar
+- [x] Soulburner (herói 5, chave "burner") — marca + Lança que cresce com a idade da marca (90 a 190), Rasante, Chuva, Juízo Solar. Retrato provisório
+- [x] Apotecário (herói 7, chave "apothecary") — kit da ficha, Vestígios, Paciente, Hemostática em aliado ou boss, Tanatopraxia clínica/tóxica, IA de healer (HEAL_SLOTS). Análise de design em design/apotecario-analise.md (sugestões NÃO aplicadas)
+- [x] Sleepwalker (herói 8, chave "sleepwalker") — dois modos (kit()), Torpor, Vulnerabilidade Onírica, janelas de 1 s, Ecos do Pesadelo com som gerado, Pesadelo Persistente e Perto do Sonho. Danos da ficha × SW_SCALE (0,45)
+- [x] Ringstar (herói 6, chave "ringstar") — sequência Jab/Direto/Gancho com GCD dividido, botão fortalecido brilha, Contagem Regressiva, SUPERSTAR!, Nocaute Final. Retrato provisório
 - [x] Party livre e fluxo de entrada: PLAY -> saves (4 slots, user://save_N.json) -> cafeteria (scripts/lobby.gd) -> bosses -> cartas -> luta. Teste: ui/tests/test_party.gd (rodar SEM argumentos)

@@ -9,11 +9,13 @@ var g
 var boss_bar: Control
 var boss_pct: Label
 var dot_row: HBoxContainer
+var bullet_row: Control
 var dot_ui := {}  # id do DoT -> {"box": Control, "time": Label}
 var end_stats: VBoxContainer
 var skill_row: HBoxContainer
 var skill_ui: Array = []
 var skill_for := -1
+var skill_asleep := false  # o Sleepwalker troca de barra quando dorme
 var swap_name: Label
 var swap_bar: Control
 var time_bar: Control
@@ -357,7 +359,8 @@ func _show_skills(i: int) -> void:
 		skill_row.remove_child(c)
 		c.queue_free()
 	var u: Unit = g.units[i]
-	var list: Array = g.SKILLS[u.key]
+	var list: Array = g.kit(u)
+	skill_asleep = u.asleep
 	for n in list.size():
 		if list[n] == null:
 			continue
@@ -386,7 +389,7 @@ func _show_skills(i: int) -> void:
 		var bar := UiStyle.bar(u.color, 5, 0.5)
 		v.add_child(bar)
 		skill_row.add_child(slab)
-		skill_ui.append({"slot": n, "name": name_l, "cd": cd, "bar": bar, "total": list[n]["cd"], "stacks": int(list[n].get("stacks", 0))})
+		skill_ui.append({"slot": n, "name": name_l, "cd": cd, "bar": bar, "slab": slab, "total": list[n]["cd"], "stacks": int(list[n].get("stacks", 0))})
 
 	# a troca de personagem aparece junto, com a própria recarga
 	var sw := UiStyle.slab(UiStyle.INK, UiStyle.SKEW, 18, 7)
@@ -411,7 +414,7 @@ func _show_skills(i: int) -> void:
 func _process(delta: float) -> void:
 	if g == null:
 		return
-	if g.ctrl != skill_for:
+	if g.ctrl != skill_for or g.units[g.ctrl].asleep != skill_asleep:
 		_show_skills(g.ctrl)
 	var me: Unit = g.units[g.ctrl]
 	# tempo x vida: as duas barras têm a mesma largura, então dá pra comparar de olho
@@ -465,9 +468,13 @@ func _process(delta: float) -> void:
 
 	UiStyle.set_bar(swap_bar, 1.0 - g.swap_cd / g.SWAP_CD)
 	swap_name.modulate.a = 1.0 if g.swap_cd <= 0.0 else 0.45
+	var glow: int = g.glow_slot(me)
+	_tick_bullets(me)
 	for s in skill_ui:
 		var n: int = s["slot"]
 		var left: float = me.skill_cd[n]
+		# habilidade fortalecida (sequência da Ringstar, Disparo da Maga): o botão brilha
+		s["slab"].modulate = Color(1, 1, 1).lerp(Color(1.9, 1.6, 0.6), 0.55 + 0.45 * sin(Time.get_ticks_msec() * 0.012)) if n == glow else Color(1, 1, 1)
 		# pronta = barra cheia e nome claro; recarregando = barra enchendo e segundos
 		if me.channel_t > 0.0 and me.channel_slot == n:
 			# carregando: a barra enche até o disparo
@@ -552,6 +559,79 @@ func _process(delta: float) -> void:
 		if toast_t <= 0.0:
 			toast_slab.visible = false
 	flash_rect.color.a = maxf(0.0, flash_rect.color.a - delta * 1.6)
+
+
+## Faixa de recurso da classe, em cima da barra de habilidades. Só aparece pra quem tem recurso:
+## Maga (balas Rainbow), Apotecário (Vestígios e Paciente) e Sleepwalker (Torpor, Vulnerabilidade,
+## Perto do Sonho e a janela de 1 s).
+func _tick_bullets(me: Unit) -> void:
+	if bullet_row == null:
+		bullet_row = Control.new()
+		bullet_row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+		bullet_row.offset_left = -210
+		bullet_row.offset_right = 210
+		# acima do aviso central (toast), pra um não cobrir o outro
+		bullet_row.offset_top = -214
+		bullet_row.offset_bottom = -144
+		bullet_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bullet_row.draw.connect(_draw_bullets)
+		fight_ui.add_child(bullet_row)
+	bullet_row.visible = me.alive and me.key in ["maga", "apothecary", "sleepwalker"]
+	if bullet_row.visible:
+		bullet_row.queue_redraw()
+
+
+func _draw_bullets() -> void:
+	var me: Unit = g.units[g.ctrl]
+	var f := ThemeDB.fallback_font
+	match me.key:
+		"maga":
+			bullet_row.draw_rect(Rect2(60, 40, 300, 28), UiStyle.INK)
+			for n in g.BULLET_MAX:
+				var c := Vector2(84 + n * 37, 54)
+				if n < me.bullets.size():
+					var col: Color = g.BULLETS[me.bullets[n]]["col"]
+					bullet_row.draw_circle(c, 12.0 if n == 0 else 9.0, UiStyle.PAPER)
+					bullet_row.draw_circle(c, 9.5 if n == 0 else 7.0, col)
+				else:
+					bullet_row.draw_circle(c, 7.0, UiStyle.INK_SOFT)
+			# quanto falta pra próxima bala
+			if me.bullets.size() < g.BULLET_MAX:
+				bullet_row.draw_rect(Rect2(60, 66, 300.0 * me.bullet_t / g.BULLET_EVERY, 3), UiStyle.PAPER)
+		"apothecary":
+			bullet_row.draw_rect(Rect2(80, 40, 260, 28), UiStyle.INK)
+			bullet_row.draw_string(f, Vector2(92, 60), "VESTÍGIOS", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UiStyle.PAPER)
+			for n in g.VESTIGE_MAX:
+				var c := Vector2(196 + n * 30, 54)
+				bullet_row.draw_circle(c, 10.0, UiStyle.PAPER)
+				bullet_row.draw_circle(c, 7.5, g.CHEM if n < me.vestiges else UiStyle.INK_SOFT)
+			if me.patient != null and me.patient_t > 0.0 and me.patient.alive:
+				bullet_row.draw_rect(Rect2(80, 14, 260, 22), UiStyle.INK)
+				bullet_row.draw_string(f, Vector2(80, 30), "PACIENTE: %s  %d s" % [me.patient.unit_name.to_upper(), ceili(me.patient_t)], HORIZONTAL_ALIGNMENT_CENTER, 260, 13, g.CHEM)
+		"sleepwalker":
+			# Torpor: barra de 0 a 100, com as marcas de quanto custa chegar em cada passo do sonho
+			bullet_row.draw_rect(Rect2(0, 44, 420, 22), UiStyle.INK)
+			bullet_row.draw_rect(Rect2(3, 47, 414.0 * me.torpor / 100.0, 16), g.DREAM if not me.asleep else UiStyle.PURPLE)
+			var spent := 0.0
+			for n in 5:
+				spent += float(g.SKILLS_ASLEEP[n]["cost"])
+				bullet_row.draw_rect(Rect2(3 + 414.0 * spent / 100.0 - 1, 44, 2, 22), UiStyle.PAPER)
+			bullet_row.draw_string(f, Vector2(8, 60), "TORPOR  %d" % int(me.torpor), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, UiStyle.PAPER)
+			# Vulnerabilidade Onírica: oito marcas e o tempo
+			bullet_row.draw_rect(Rect2(0, 20, 420, 20), UiStyle.INK)
+			for n in g.DREAM_MAX:
+				bullet_row.draw_rect(Rect2(4 + n * 16, 25, 12, 10), UiStyle.YELLOW if n < g.dream_stacks else UiStyle.INK_SOFT)
+			if g.dream_stacks > 0:
+				bullet_row.draw_string(f, Vector2(138, 35), "+%d%%  %d s" % [g.dream_stacks * 2, ceili(g.dream_t)], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, UiStyle.YELLOW)
+			if me.near_t > 0.0:
+				bullet_row.draw_string(f, Vector2(220, 35), "PERTO DO SONHO  %d s" % ceili(me.near_t), HORIZONTAL_ALIGNMENT_RIGHT, 194, 12, UiStyle.CYAN)
+			# janela de 1 s pra próxima da sequência
+			if me.window_t > 0.0 and not me.asleep:
+				bullet_row.draw_rect(Rect2(60, 0, 300, 18), UiStyle.INK)
+				bullet_row.draw_rect(Rect2(62, 2, 296.0 * me.window_t / g.SW_WINDOW, 14), UiStyle.YELLOW)
+				bullet_row.draw_string(f, Vector2(60, 14), "AGORA: %s" % String(g.SKILLS["sleepwalker"][me.window_slot]["name"]).to_upper(), HORIZONTAL_ALIGNMENT_CENTER, 300, 12, UiStyle.INK)
+			elif me.wake_t > 0.0:
+				bullet_row.draw_string(f, Vector2(0, 14), "SEM TORPOR NECESSÁRIO, ACORDANDO", HORIZONTAL_ALIGNMENT_CENTER, 420, 13, UiStyle.DANGER)
 
 
 ## Ícones dos DoTs embaixo da vida da boss: cor do efeito, nome curto e os segundos que faltam.

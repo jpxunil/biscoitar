@@ -89,6 +89,7 @@ func _initialize() -> void:
 	check(Knowledge.slot == 2 and Knowledge.slot_exists(2), "o save 2 foi criado")
 	check(Knowledge.money == 0 and not Knowledge.owned.has("stack"), "save novo não herda cartas nem moedas do save 1")
 	check(lobby.figs.size() == Knowledge.HEROES.size(), "todos os heróis estão na cafeteria (%d)" % lobby.figs.size())
+	check(lobby.figs.size() >= 7, "incluindo as classes novas (Soulburner e Ringstar)")
 	check(lobby.team.is_empty() and lobby.ready_btn.disabled, "os quatro lugares começam vazios e READY TO PLAY bloqueado")
 	check(lobby.focus == -1 and not lobby.card.visible, "ninguém em foco no começo")
 	var where := {}
@@ -102,6 +103,12 @@ func _initialize() -> void:
 	#        C (fundo)
 	#   A    B    D
 	#        E (frente)
+	# o desenho abaixo usa cinco heróis: os outros saem do salão só pra esta parte do teste
+	var everyone: int = lobby.figs.size()
+	for k in range(5, lobby.figs.size()):
+		lobby.figs[k].visible = false
+	lobby.figs.resize(5)
+	lobby.marks.resize(5)
 	var a: Unit = lobby.figs[0]
 	var b: Unit = lobby.figs[1]
 	var c: Unit = lobby.figs[2]

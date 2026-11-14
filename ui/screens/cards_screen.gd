@@ -65,7 +65,7 @@ const QUOTES := {
 	"nurse": "Fica parado. Vai doer.",
 }
 ## Ordem dos heróis no seletor: as duas tanks ficam lado a lado.
-const ORDER := [0, 4, 1, 2, 3]
+const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8]
 ## Enquadramento da arte por herói: largura na tela e canto de cima. A altura segue a proporção do arquivo;
 ## o que passar da parte de baixo fica atrás dos painéis.
 const ART_FRAME := {"nurse": {"w": 540.0, "x": 790.0, "y": 26.0}}
@@ -278,7 +278,8 @@ func open(hero_idx: int, show_ready := true) -> void:
 	hero = clampi(hero_idx, 0, Knowledge.HEROES.size() - 1)
 	_show_ready = show_ready
 	# com a party montada, o seletor mostra só os quatro dela (na aula do tutorial, todos)
-	var team: Array = Knowledge.party if (Knowledge.party_ready() and tutor.is_empty()) else ORDER
+	# sem party montada (ou na aula), entram os primeiros da lista: o seletor tem lugar pra cinco
+	var team: Array = Knowledge.party if (Knowledge.party_ready() and tutor.is_empty()) else ORDER.slice(0, TILE_X.size())
 	if not team.has(hero):
 		hero = team[0]
 	# fila do seletor: o herói atual na frente, os outros na ordem padrão

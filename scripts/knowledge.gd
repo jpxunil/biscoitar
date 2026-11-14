@@ -20,11 +20,20 @@ const HEROES := [
 	{"key": "assassina", "name": "Assassina", "role": "DPS corpo a corpo", "color": Color(0.78, 0.38, 1.0), "hp": 100,
 		"blurb": "Rápida e simples: três golpes de um lado da boss, três do outro, sem parar."},
 	{"key": "maga", "name": "Maga", "role": "DPS à distância", "color": Color(1.0, 0.72, 0.25), "hp": 90,
-		"blurb": "Dano de longe, com cast."},
+		"blurb": "Atiradora arcana: junta balas Rainbow coloridas e escolhe quando descarregar."},
 	# Segunda tank: entra na party no lugar do Paladino (ver `tank_pick`).
 	# Malpractice (era a Gothic Nurse; a chave interna continua "nurse" por causa do save e da arte).
 	{"key": "nurse", "name": "Malpractice", "role": "Tanque de Sangue", "color": Color(0.36, 0.4, 0.95), "hp": 80, "tank": true,
 		"blurb": "De papel: sangra a cada golpe. Vive de parry e bate mais forte quase morta."},
+	# Classes novas (design/classes-v2.md). Ainda sem arte: o retrato é um provisório com as iniciais.
+	{"key": "burner", "name": "Soulburner", "role": "DPS à distância", "color": Color(1.0, 0.55, 0.25), "hp": 90,
+		"blurb": "Anjo do fogo: marca o inimigo e estoura a marca com uma lança na hora certa."},
+	{"key": "ringstar", "name": "Ringstar", "role": "DPS corpo a corpo", "color": Color(1.0, 0.45, 0.75), "hp": 110,
+		"blurb": "Boxeadora estelar: Jab, Direto, Gancho. O botão que brilha é o próximo."},
+	{"key": "apothecary", "name": "Apotecário", "role": "Curandeiro químico", "color": Color(0.35, 0.8, 0.66), "hp": 90,
+		"blurb": "Healer que bate: mantém a Decomposição, junta Vestígios e escolhe entre curar forte ou envenenar."},
+	{"key": "sleepwalker", "name": "Sleepwalker", "role": "DPS à distância", "color": Color(0.55, 0.58, 1.0), "hp": 85,
+		"blurb": "O mais difícil: prepara acordado em janelas de 1 s e descarrega dormindo, imóvel."},
 ]
 
 ## Mesma ordem de BOSSES em game.gd.
@@ -81,9 +90,9 @@ const CARDS := {
 		"desc": "Usa a defesa quando a boss solta o Esmagar."},
 	"provoke": {"name": "Biscoiteiro", "kind": "gold", "cat": "utility", "who": ["tank", "nurse"], "mastery": "provoke",
 		"desc": "Provoca sempre que a boss larga do tank."},
-	"instinct": {"name": "Instinto", "kind": "gold", "cat": "utility", "who": ["healer"], "mastery": "heal",
+	"instinct": {"name": "Instinto", "kind": "gold", "cat": "utility", "who": ["healer", "apothecary"], "mastery": "heal",
 		"desc": "Cura quem está com pouca vida."},
-	"eshield": {"name": "Escudo de Emergência", "kind": "gold", "cat": "defense", "who": ["healer"], "price": 220,
+	"eshield": {"name": "Escudo de Emergência", "kind": "gold", "cat": "defense", "who": ["healer", "apothecary"], "price": 220,
 		"desc": "Quando a boss conjura ESMAGAR, põe Escudo no Tank antes do golpe."},
 	"burst": {"name": "Golpe Lapidado", "kind": "gold", "cat": "attack", "who": ["assassina", "maga"], "price": 260,
 		"desc": "Golpe forte melhor. Assassina: +30% de dano. Maga: conjura 0,7 s mais rápido e +15%."},
@@ -136,7 +145,7 @@ const RANK_COINS := [20, 40, 60, 90, 120, 160, 220, 300, 400]
 const MINI_REWARD := 0.4
 const LOW_HP := 0.5
 ## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói pra liberar a Rotação.
-const DPS_GOAL := {"tank": 14.0, "nurse": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0}
+const DPS_GOAL := {"tank": 14.0, "nurse": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0, "burner": 34.0, "ringstar": 36.0, "apothecary": 22.0, "sleepwalker": 45.0}
 const DPS_WINDOW := 20
 ## Saves: SLOT_COUNT arquivos independentes (user://save_1.json ...). Cada um guarda o progresso,
 ## as cartas e a party daquele save; nada passa de um pro outro. LEGACY_SAVE é o arquivo único de
