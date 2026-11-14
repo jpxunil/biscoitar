@@ -581,7 +581,12 @@ func _initialize() -> void:
 	main.use_skill(u, 0)
 	before = u.dmg_total
 	main.use_skill(u, 4)
-	check(is_equal_approx(u.dmg_total - before, main.SUPERSTAR_DMG) and main.glow_slot(u) == 1, "SUPERSTAR! no meio da sequência não quebra o fortalecimento")
+	check(is_equal_approx(u.dmg_total, before) and main.glow_slot(u) == 1, "SUPERSTAR! no meio da sequência não quebra o fortalecimento (e o dano não sai na hora)")
+	await wait(0.9)
+	check(is_equal_approx(u.dmg_total, before), "SUPERSTAR!: 1 s de preparo com o microfone, ainda sem dano")
+	await wait(1.3)
+	check(is_equal_approx(u.dmg_total - before, main.SUPERSTAR_DMG), "e a rajada sai no segundo seguinte: %d no total" % main.SUPERSTAR_DMG)
+	check(u.gloves.size() == 2, "a Ringstar tem as duas luvas no boneco")
 	ready(u)
 	before = u.dmg_total
 	main.use_skill(u, 1)
@@ -593,6 +598,7 @@ func _initialize() -> void:
 	before = u.dmg_total
 	check(not main.use_skill(u, 0), "de longe, o Jab não alcança")
 	main.use_skill(u, 4)
+	await wait(2.2)
 	check(is_equal_approx(u.dmg_total - before, main.SUPERSTAR_DMG), "SUPERSTAR! funciona de longe")
 	main.use_skill(u, 3)
 	await wait(0.25)

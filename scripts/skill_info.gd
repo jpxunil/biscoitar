@@ -128,7 +128,7 @@ static func _desc(g: GDScript, key: String, slot: int, asleep: bool, sk: Diction
 				1: return ["Ataque", "Fortalecido pelo Jab: %s de dano e fortalece o Gancho. Fora da sequência: só %s." % [dmg, _n(g.WEAK_HIT)]]
 				2: return ["Ataque", "Fortalecido pelo Direto: %s de dano e a sequência recomeça. Fora da sequência: só %s." % [dmg, _n(g.WEAK_HIT)]]
 				3: return ["Suporte", "Avança até a boss. Por %s s a recarga dos três golpes cai pra %s s e seu dano sobe %s. Não quebra a sequência." % [_n(g.COUNT_TIME), _n(g.COUNT_GCD), _pct(g.COUNT_DMG - 1.0)]]
-				4: return ["Ataque", "Rajada de luvas de luz, de qualquer distância. %s de dano. Não quebra a sequência." % _n(g.SUPERSTAR_DMG)]
+				4: return ["Ataque", "Pega o microfone e aponta pra boss por %s s; depois dispara uma rajada de estrelas por %s s, de qualquer distância: %s de dano no total. Você continua agindo enquanto isso e a sequência não quebra." % [_n(g.SUPERSTAR_WIND), _n(g.SUPERSTAR_FIRE), _n(g.SUPERSTAR_DMG)]]
 				5: return ["Ultimate", "Salta por %s s e despenca na boss: %s de dano em área em volta de onde cair (raio %s). No ar, passa por cima de ataques rentes ao chão." % [_n(g.KNOCKOUT_AIR), _n(g.KNOCKOUT_DMG), _n(g.KNOCKOUT_R)]]
 		"apothecary":
 			match slot:

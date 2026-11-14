@@ -338,6 +338,9 @@ const COUNT_TIME := 15.0       # Contagem Regressiva: duração ...
 const COUNT_GCD := 1.0         # ... o GCD dos três golpes cai de 2 s pra 1 s ...
 const COUNT_DMG := 1.1         # ... e +10% de dano
 const SUPERSTAR_DMG := 110.0
+const SUPERSTAR_WIND := 1.0    # SUPERSTAR!: pega o microfone e aponta pra boss ...
+const SUPERSTAR_FIRE := 1.0    # ... e a rajada sai ao longo desse tempo ...
+const SUPERSTAR_SHOTS := 5     # ... nesse número de disparos (o dano total é SUPERSTAR_DMG)
 const KNOCKOUT_DMG := 380.0
 const KNOCKOUT_AIR := 0.8      # Nocaute Final: tempo do salto, no ar (passa por cima de ataque baixo) ...
 const KNOCKOUT_HEIGHT := 7.5   # ... altura do salto ...
@@ -1783,6 +1786,15 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 
 func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 	var sk: Dictionary = kit(u)[slot]
+	if u.key == "ringstar":
+		# as luvas acompanham cada habilidade (o SUPERSTAR! e o Nocaute animam por conta própria)
+		u.face(BOSS_POINT - u.position)
+		match slot:
+			0: u.glove_anim("jab")
+			1: u.glove_anim("straight")
+			2: u.glove_anim("hook")
+			3: u.glove_anim("guard")
+			5: u.glove_anim("raise", KNOCKOUT_AIR)
 	if sk.get("big", false) and u.controlled and not by_ai:
 		hud.skill_cut(u, sk["name"])  # habilidade importante, na mão do jogador: destaque de tela
 	if u.key == "sleepwalker":
@@ -1893,11 +1905,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 		"Contagem Regressiva":
 			_countdown(u)
 		"SUPERSTAR!":
-			# à distância, sem preparo: uma rajada de luvas de luz
-			for n in 4:
-				_attack_fx(u, true)
-			_burst(Vector3(0, 4, -11.5), STAR, 5.0)
-			_damage_boss(u, SUPERSTAR_DMG, true, true)
+			_superstar(u)
 		"Nocaute Final":
 			_knockout_jump(u)
 		"Passo Rasante":
@@ -2362,6 +2370,50 @@ func _countdown(u: Unit) -> void:
 	hud.toast("CONTAGEM REGRESSIVA", 1.2)
 
 
+## SUPERSTAR!: ela pega o microfone e aponta pra boss (SUPERSTAR_WIND), e só então a rajada sai, em
+## SUPERSTAR_SHOTS disparos ao longo de SUPERSTAR_FIRE. É oGCD: ela continua andando e batendo
+## enquanto isso, e a sequência Jab/Direto/Gancho não quebra. Se ela cair no meio, a rajada para.
+func _superstar(u: Unit) -> void:
+	u.face(BOSS_POINT - u.position)
+	u.glove_anim("mic", SUPERSTAR_WIND)
+	if u.controlled:
+		hud.toast("SUPERSTAR!", 1.0)
+	# microfone na mão direita, com um brilho que cresce durante o preparo
+	var mic := Node3D.new()
+	u.gloves[1].add_child(mic)
+	Fx.inst(mic, Fx.cyl(0.05, 0.05, 0.34), Fx.mat(Color(0.2, 0.2, 0.3)), Vector3(0, 0.3, 0))
+	Fx.inst(mic, Fx.sphere(0.13), Fx.mat(Color(1.0, 0.9, 0.35), 4.0, true), Vector3(0, 0.52, 0))
+	var glow_m := Fx.mat(Color(STAR.r, STAR.g, STAR.b, 0.5), 5.0, true)
+	var glow := Fx.inst(mic, Fx.sphere(0.2), glow_m, Vector3(0, 0.52, 0))
+	glow.create_tween().tween_property(glow, "scale", Vector3.ONE * 3.2, SUPERSTAR_WIND)
+	_burst(u.position + Vector3(0, 1.6, 0), Color(1.0, 0.9, 0.35), 1.6)
+	for n in SUPERSTAR_SHOTS:
+		var at := SUPERSTAR_WIND + SUPERSTAR_FIRE * n / maxf(1.0, SUPERSTAR_SHOTS - 1.0)
+		get_tree().create_timer(at, false).timeout.connect(_superstar_shot.bind(u, n))
+	get_tree().create_timer(SUPERSTAR_WIND, false).timeout.connect(func():
+		if is_instance_valid(u) and u.alive:
+			u.glove_anim("volley", SUPERSTAR_FIRE))
+	get_tree().create_timer(SUPERSTAR_WIND + SUPERSTAR_FIRE + 0.1, false).timeout.connect(func():
+		if is_instance_valid(mic):
+			mic.queue_free())
+
+
+func _superstar_shot(u: Unit, n: int) -> void:
+	if ended or not is_instance_valid(u) or not u.alive:
+		return
+	# estrela gigante saindo dela até a boss
+	var from := u.position + Vector3(0, 1.8, 0)
+	var to := Vector3(randf_range(-2.2, 2.2), randf_range(2.5, 6.0), -11.0)
+	var m := Fx.mat([STAR, Color(1.0, 0.9, 0.35), Color(0.45, 0.8, 1.0)][n % 3].lightened(0.2), 8.0, true)
+	var star := Fx.inst(fx_root, Fx.sphere(0.55), m, from)
+	var tw := star.create_tween()
+	tw.tween_property(star, "position", to, 0.14)
+	tw.parallel().tween_property(star, "scale", Vector3.ONE * 1.6, 0.14)
+	tw.tween_callback(star.queue_free)
+	tw.tween_callback(_burst.bind(to, STAR.lightened(0.2), 3.6))
+	_damage_boss(u, SUPERSTAR_DMG / SUPERSTAR_SHOTS, true, n == SUPERSTAR_SHOTS - 1)
+
+
 ## Nocaute Final: salta alto na direção da boss, fica suspensa e despenca. O dano é na aterrissagem
 ## (_knockout_land), em área. Enquanto air_t > 0 ela está no ar: não age e passa por cima de
 ## ataque baixo (hazard com "low": true).
@@ -2460,6 +2512,36 @@ func _knockout_land(u: Unit) -> void:
 
 
 # ---------------------------------------------------------------- Apotecário
+
+## Buffs ativos do herói, pro HUD mostrar ao lado do card dele: [{"icon": Texture2D, "t": segundos}].
+## O ícone é o da habilidade que deu o buff (SkillInfo.icon). Só entra o que tem tempo correndo.
+func buffs_of(u: Unit) -> Array:
+	var out: Array = []
+	if not u.alive:
+		return out
+	var list := [
+		[u.guard_t if u.key == "tank" else 0.0, "tank", 4, false],        # Égide
+		[u.wall_t, "tank", 5, false],                                       # Muralha da Fé (a party toda)
+		[u.taste_t, "nurse", 1, false],                                     # Blood Taste
+		[u.party_t, "nurse", 4, false],                                     # Blood Party
+		[u.frenzy_t, "assassina", 5, false],                                # Frenesi da Fera
+		[maxf(u.power_t, u.ward_t), "maga", 1, false],                      # bala Rainbow (dano / guarda)
+		[u.count_t, "ringstar", 3, false],                                  # Contagem Regressiva
+		[u.shield_t if u.shield_hp > 0.0 and u.shield_t < 60.0 else 0.0, "healer", 3, false],  # escudo
+		[u.mend_t, "apothecary", 4, false],                                 # regeneração da Tanatopraxia
+		[u.near_t, "sleepwalker", 0, true],                                 # Perto do Sonho
+		[dream_t if (u.key == "sleepwalker" and dream_stacks > 0) else 0.0, "sleepwalker", 1, false],  # Vulnerabilidade Onírica
+		[u.immortal_t if u.party_t <= 0.0 else 0.0, "tank", 2, false],      # imortal (Limit Break do Tank)
+	]
+	for b in list:
+		if float(b[0]) > 0.0:
+			out.append({"icon": SkillInfo.icon(b[1], b[2], b[3]), "t": float(b[0])})
+	# Paciente do Apotecário: aparece em quem está sendo cuidado
+	for o in units:
+		if o.key == "apothecary" and o.alive and o.patient == u and o.patient_t > 0.0:
+			out.append({"icon": SkillInfo.icon("apothecary", 2), "t": o.patient_t})
+	return out
+
 
 ## Lista de habilidades que vale pro herói agora (o Sleepwalker tem uma lista por modo).
 func kit(u: Unit) -> Array:

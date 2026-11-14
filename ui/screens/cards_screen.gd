@@ -425,8 +425,11 @@ func refresh(animate := false, dir := 0) -> void:
 		_art_tex.texture = tex
 		var ts := tex.get_size()
 		_art_tex.size = Vector2(frame["w"], frame["w"] * ts.y / ts.x)
-		# silhueta colorida atrás da figura, na cor de destaque do tema do herói
-		ArtShadow.attach(_art_tex, _th["acc"])
+		# silhueta colorida atrás da figura (cor do herói, com contorno INK pra não se misturar ao fundo)
+		if tutor.is_empty():
+			ArtShadow.for_hero(_art_tex, h["key"])
+		else:
+			ArtShadow.attach(_art_tex, Paper.GOLD)
 		_art.pivot_offset = Vector2(frame["w"] * 0.5, minf(_art_tex.size.y * 0.8, 400.0))
 	else:
 		_face_tex.texture = load("res://assets/portraits/%s_face.png" % h["key"])

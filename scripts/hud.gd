@@ -18,6 +18,7 @@ var skill_for := -1
 var skill_asleep := false  # o Sleepwalker troca de barra quando dorme
 var skill_tip: SkillTip
 var _cut: Control  # destaque de habilidade importante em cena (só um por vez)
+var buff_layer: Control  # ícones dos buffs ativos, à direita do card de cada herói
 var swap_name: Label
 var swap_bar: Control
 var time_bar: Control
@@ -222,6 +223,31 @@ func _build_party() -> void:
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
 		card.gui_input.connect(_on_card_input.bind(i))
 	party.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT, Control.PRESET_MODE_MINSIZE, 22)
+	buff_layer = Control.new()
+	buff_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	buff_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	buff_layer.draw.connect(_draw_buffs)
+	fight_ui.add_child(buff_layer)
+
+
+## Buffs ativos de cada herói, numa fila à direita do card dele: o ícone da habilidade que deu o buff
+## (menor) e os segundos que faltam embaixo.
+func _draw_buffs() -> void:
+	var f := Paper.display(0.0)
+	for i in cards.size():
+		var card: Control = cards[i]
+		var list: Array = g.buffs_of(g.units[i])
+		var at: Vector2 = card.global_position - buff_layer.global_position + Vector2(card.size.x * card.scale.x + 12.0, 6.0)
+		for k in list.size():
+			var r := Rect2(at + Vector2(k * 40.0, 0), Vector2(32, 32))
+			buff_layer.draw_rect(Rect2(r.position + Vector2(3, 4), r.size), Paper.INK)
+			buff_layer.draw_rect(r.grow(2.0), Paper.INK)
+			if list[k]["icon"] != null:
+				buff_layer.draw_texture_rect(list[k]["icon"], r, false)
+			var t: float = list[k]["t"]
+			var txt := ("%d" % ceili(t)) if t >= 1.0 else ("%.1f" % t)
+			buff_layer.draw_string_outline(f, Vector2(r.position.x - 4, r.end.y + 15), txt, HORIZONTAL_ALIGNMENT_CENTER, 40, 13, 5, Paper.INK)
+			buff_layer.draw_string(f, Vector2(r.position.x - 4, r.end.y + 15), txt, HORIZONTAL_ALIGNMENT_CENTER, 40, 13, Paper.CREAM)
 
 
 func _on_card_input(event: InputEvent, i: int) -> void:
@@ -470,6 +496,7 @@ func _process(delta: float) -> void:
 	UiStyle.set_bar(swap_bar, 1.0 - g.swap_cd / g.SWAP_CD)
 	swap_name.modulate.a = 1.0 if g.swap_cd <= 0.0 else 0.45
 	var glow: int = g.glow_slot(me)
+	buff_layer.queue_redraw()
 	_tick_bullets(me)
 	for s in skill_ui:
 		var n: int = s["slot"]

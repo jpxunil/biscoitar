@@ -25,6 +25,19 @@ MAP = {
 }
 
 
+# Vãos de fundo que ficam FECHADOS dentro da figura (entre o braço e o corpo, entre as pernas, dentro da
+# fumaça): o preenchimento a partir das bordas não chega neles, então cada um ganha um ponto-semente aqui,
+# em pixels do arquivo original. O branco que é da personagem (luvas, roupa, olhos) não entra na lista.
+HOLES = {
+    "APOTHECARY.png": [(391, 384)],
+    "MALPRACTICE.png": [(179, 326), (178, 375), (202, 439)],
+    "SOULFLAME.png": [(547, 661)],
+    "ASSASSINA.png": [(340, 471), (328, 456), (271, 752), (271, 763)],
+    "MAGE.png": [(433, 368), (460, 490)],
+    "SOULBURNER.png": [(229, 356)],
+}
+
+
 def cut(path):
     im = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
     low = im.min(axis=2)
@@ -32,7 +45,8 @@ def cut(path):
     lab, _ = ndimage.label(white)
     edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
     edge = edge[edge != 0]
-    bg = np.isin(lab, edge)
+    extra = [lab[y, x] for (x, y) in HOLES.get(os.path.basename(path), []) if lab[y, x] != 0]
+    bg = np.isin(lab, list(edge) + extra)
     alpha = np.where(bg, 0.0, 1.0).astype(np.float32)
     # borda: pixels claros colados no fundo viram meio transparentes (o serrilhado some sem halo branco)
     near = ndimage.binary_dilation(bg, iterations=2) & ~bg

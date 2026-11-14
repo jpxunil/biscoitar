@@ -134,6 +134,9 @@ var shake_amp := 0.0
 const SHAKE_TIME := 0.2
 
 var visual: Node3D
+## Ringstar: as duas luvas (as mãos dela). [esquerda, direita]; vazio nos outros heróis.
+var gloves: Array[Node3D] = []
+var _glove_tw: Tween
 var body_mat: StandardMaterial3D
 var ring: MeshInstance3D
 var orb: MeshInstance3D
@@ -162,6 +165,18 @@ func setup(i: int, d: Dictionary) -> void:
 	Fx.inst(visual, Fx.sphere(0.3), Fx.mat(Color(1.0, 0.88, 0.8)), Vector3(0, 1.62, 0))
 	# faixa pra dar "frente" ao boneco
 	Fx.inst(visual, Fx.sphere(0.12), Fx.mat(Color.WHITE, 1.5), Vector3(0, 1.0, -0.36))
+	if key == "ringstar":
+		# luvas de boxe: as mãos dela. Ficam em guarda na frente do corpo e batem com as habilidades.
+		for s in [-1.0, 1.0]:
+			var hand := Node3D.new()
+			hand.position = _glove_home(s)
+			visual.add_child(hand)
+			var gm := Fx.inst(hand, Fx.sphere(0.27), Fx.mat(Color(1.0, 0.35, 0.72), 1.4))
+			gm.scale = Vector3(1.0, 0.95, 1.2)
+			Fx.inst(hand, Fx.sphere(0.12), Fx.mat(Color(1.0, 0.35, 0.72), 1.4), Vector3(s * -0.2, 0.05, -0.08))
+			var cuff := Fx.inst(hand, Fx.cyl(0.17, 0.17, 0.16), Fx.mat(Color(0.95, 0.94, 1.0), 0.6), Vector3(0, 0, 0.3))
+			cuff.rotation.x = PI / 2.0
+			gloves.append(hand)
 
 	ring = Fx.inst(self, Fx.torus(0.62, 0.74), Fx.mat(Color(1, 1, 1), 2.5, true), Vector3(0, 0.04, 0))
 	ring.visible = false
@@ -292,6 +307,79 @@ func set_action(text: String, kind := 0) -> void:
 func face(dir: Vector3) -> void:
 	if dir.length() > 0.01:
 		visual.rotation.y = atan2(-dir.x, -dir.z)
+
+
+func _glove_home(s: float) -> Vector3:
+	return Vector3(s * 0.52, 1.02, -0.3)
+
+
+## Animação das luvas da Ringstar. `move`:
+##   "jab" esquerda reta e rápida · "straight" direita reta, mais funda · "hook" direita em gancho,
+##   de baixo pra cima · "guard" as duas batem uma na outra (Contagem Regressiva) ·
+##   "mic" a direita sobe até a boca e depois aponta pra frente (SUPERSTAR!, 1 s) ·
+##   "volley" as duas alternam socos por `time` segundos · "raise" as duas pra cima (Nocaute Final).
+func glove_anim(move: String, time := 1.0) -> void:
+	if gloves.is_empty():
+		return
+	if _glove_tw != null:
+		_glove_tw.kill()
+	var l := gloves[0]
+	var r := gloves[1]
+	var lh := _glove_home(-1.0)
+	var rh := _glove_home(1.0)
+	l.scale = Vector3.ONE
+	r.scale = Vector3.ONE
+	_glove_tw = create_tween()
+	var tw := _glove_tw
+	match move:
+		"jab":
+			l.position = lh
+			tw.tween_property(l, "position", lh + Vector3(0.12, 0.12, -1.0), 0.06)
+			tw.tween_property(l, "position", lh, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		"straight":
+			r.position = rh + Vector3(0, 0, 0.25)
+			tw.tween_property(r, "position", rh + Vector3(-0.2, 0.15, -1.35), 0.07)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE * 1.35, 0.07)
+			tw.tween_property(r, "position", rh, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE, 0.22)
+		"hook":
+			r.position = rh + Vector3(0.45, -0.5, 0.1)
+			tw.tween_property(r, "position", rh + Vector3(-0.35, 0.95, -0.95), 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE * 1.6, 0.1)
+			tw.tween_interval(0.08)
+			tw.tween_property(r, "position", rh, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE, 0.24)
+		"guard":
+			tw.tween_property(l, "position", Vector3(-0.2, 1.25, -0.5), 0.08)
+			tw.parallel().tween_property(r, "position", Vector3(0.2, 1.25, -0.5), 0.08)
+			tw.tween_property(l, "position", lh, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(r, "position", rh, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		"mic":
+			# pega o microfone (mão na boca), segura, e aponta pra boss no fim do tempo
+			tw.tween_property(r, "position", Vector3(0.14, 1.58, -0.42), time * 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(l, "position", lh + Vector3(-0.25, 0.25, 0.2), time * 0.22)
+			tw.tween_interval(time * 0.5)
+			tw.tween_property(r, "position", rh + Vector3(-0.1, 0.5, -1.25), time * 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE * 1.3, time * 0.2)
+		"volley":
+			var hits := maxi(2, int(time / 0.125))
+			for n in hits:
+				var hand: Node3D = l if n % 2 == 0 else r
+				var home: Vector3 = lh if n % 2 == 0 else rh
+				tw.tween_property(hand, "position", home + Vector3(0, 0.3, -1.2), time / hits * 0.4)
+				tw.tween_property(hand, "position", home, time / hits * 0.6)
+			tw.tween_property(l, "position", lh, 0.1)
+			tw.parallel().tween_property(r, "position", rh, 0.1)
+		"raise":
+			tw.tween_property(l, "position", Vector3(-0.42, 2.25, -0.1), 0.12)
+			tw.parallel().tween_property(r, "position", Vector3(0.42, 2.25, -0.1), 0.12)
+			tw.parallel().tween_property(l, "scale", Vector3.ONE * 1.5, 0.12)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE * 1.5, 0.12)
+			tw.tween_interval(time)
+			tw.tween_property(l, "position", lh, 0.18)
+			tw.parallel().tween_property(r, "position", rh, 0.18)
+			tw.parallel().tween_property(l, "scale", Vector3.ONE, 0.18)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE, 0.18)
 
 
 func punch() -> void:
