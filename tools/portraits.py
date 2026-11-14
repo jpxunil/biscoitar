@@ -13,15 +13,15 @@ OUT = (sys.argv[2].rstrip("/\\") + "/") if len(sys.argv) > 2 else os.path.join(o
 
 # arquivo -> (chave do herói, centro do rosto x, y, largura do recorte) em pixels do arquivo original
 MAP = {
-    "Paladin.png": ("tank", 492, 692, 340, (77, 128, 255)),
+    "Paladin.png": ("tank", 494, 700, 255, (77, 128, 255)),
     "SOULFLAME.png": ("healer", 478, 450, 380, (60, 190, 150)),
     "ASSASSINA.png": ("assassina", 290, 285, 300, (150, 80, 220)),
-    "MAGE.png": ("maga", 600, 512, 330, (255, 170, 70)),
-    "MALPRACTICE.png": ("nurse", 262, 262, 200, (92, 102, 242)),
+    "MAGE.png": ("maga", 548, 484, 330, (255, 170, 70)),
+    "MALPRACTICE.png": ("nurse", 236, 296, 175, (92, 102, 242)),
     "SOULBURNER.png": ("burner", 268, 222, 250, (240, 130, 70)),
     "RINGSTAR.png": ("ringstar", 420, 590, 320, (255, 115, 190)),
-    "APOTHECARY.png": ("apothecary", 405, 590, 280, (70, 160, 130)),
-    "SLEEPWALKER.png": ("sleepwalker", 715, 640, 300, (120, 130, 230)),
+    "APOTHECARY.png": ("apothecary", 432, 590, 280, (70, 160, 130)),
+    "SLEEPWALKER.png": ("sleepwalker", 612, 646, 300, (120, 130, 230)),
 }
 
 

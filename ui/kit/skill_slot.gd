@@ -16,6 +16,10 @@ var cd_left := 0.0: set = _set_cd
 var cast_k := -1.0
 ## Habilidade fortalecida / a próxima da sequência: o slot brilha.
 var glow := false
+## O brilho roda as cores do arco-íris em vez de usar `accent` (Canhão Estelar carregado).
+var rainbow := false
+## Cor do brilho (dourado por padrão; vermelho nas habilidades fortalecidas pelo Bloodbath).
+var glow_color := Color(1.0, 0.95, 0.6)
 ## Dá pra usar agora? (falta recurso, fora de ordem...) Desligado = ícone apagado.
 var usable := true
 ## Travado (punição, no ar): tudo cinza com um X.
@@ -79,6 +83,13 @@ func _draw() -> void:
 	var full := Rect2(Vector2.ZERO, Vector2(s, s))
 	var rad := int(s * 0.16)
 	var pulse := 0.5 + 0.5 * sin(_t * 7.0)
+	var hot := glow_color
+	var ray_col := accent
+	if glow_color != Color(1.0, 0.95, 0.6):
+		ray_col = glow_color
+	if rainbow:
+		hot = Color.from_hsv(fmod(_t * 0.45, 1.0), 0.55, 1.0)
+		ray_col = hot
 	if glow:
 		# raios girando atrás do slot e três halos pulsando: brilho de verdade, não um tom amarelado
 		var c := full.get_center()
@@ -87,11 +98,13 @@ func _draw() -> void:
 			var d := Vector2(cos(a), sin(a))
 			var side := Vector2(-d.y, d.x)
 			var far := s * (0.92 + 0.14 * pulse)
+			if rainbow:
+				ray_col = Color.from_hsv(fmod(_t * 0.45 + n / 8.0, 1.0), 0.75, 1.0)
 			draw_colored_polygon(PackedVector2Array([c + side * s * 0.1, c + d * far, c - side * s * 0.1]),
-				Color(accent.r, accent.g, accent.b, 0.55))
+				Color(ray_col.r, ray_col.g, ray_col.b, 0.55 if not rainbow else 0.8))
 		for k in 3:
 			var grow := 4.0 + k * 5.0 + pulse * 4.0
-			_rr(full.grow(grow), Color(1.0, 0.95, 0.6, (0.5 - k * 0.14) * (0.6 + 0.4 * pulse)), rad + int(grow))
+			_rr(full.grow(grow), Color(hot.r, hot.g, hot.b, (0.5 - k * 0.14) * (0.6 + 0.4 * pulse)), rad + int(grow))
 	# sombra dura e moldura
 	_rr(Rect2(Vector2(4, 5), full.size), Paper.INK, rad)
 	_rr(full, Paper.INK, rad)
@@ -101,8 +114,8 @@ func _draw() -> void:
 	else:
 		_rr(inner, Paper.NAVY, rad - 2)
 	if glow:
-		_rr(full.grow(1.0), Color(0, 0, 0, 0), rad, Color(1.0, 0.97, 0.7, 0.75 + 0.25 * pulse), 4, false)
-		_rr(inner, Color(1.0, 0.95, 0.55, 0.12 + 0.16 * pulse), rad - 2)
+		_rr(full.grow(1.0), Color(0, 0, 0, 0), rad, Color(hot.r, hot.g, hot.b, 0.75 + 0.25 * pulse).lightened(0.2), 4, false)
+		_rr(inner, Color(hot.r, hot.g, hot.b, 0.12 + 0.16 * pulse), rad - 2)
 	elif selected:
 		_rr(full.grow(3.0), Color(0, 0, 0, 0), rad + 2, accent, 4, false)
 	elif _hot:

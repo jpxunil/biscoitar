@@ -252,7 +252,7 @@ func _initialize() -> void:
 	var menus = current_scene.hud.menus
 	await key(KEY_ESCAPE)
 	check(menus.title.visible and not menus.tutorials.visible, "ESC na lista volta pro menu principal")
-	menus.title.get_node("BtnTutorial").pressed.emit()
+	menus.title.get_node("Stage/BtnTutorial").pressed.emit()
 	await process_frame
 	check(menus.tutorials.visible and not menus.title.visible, "TUTORIAL DO JOGO abre a lista de tutoriais")
 	check(menus.tutorials.LIST[0]["name"] == "TUTORIAL 1" and menus.tutorials.LIST.size() > 1, "a lista tem o TUTORIAL 1 e lugares pros próximos")

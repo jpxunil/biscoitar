@@ -212,7 +212,7 @@ func _initialize() -> void:
 		names.append(sk["name"])
 		cds.append(sk["cd"])
 	check(names == ["Talho Relâmpago", "Passo Rasante", "Garras Cruzadas", "Dança Carmesim", "Golpe de Misericórdia", "Frenesi da Fera"], "Assassina: as seis da ficha: %s" % [names])
-	check(cds == [0.6, 5.0, 6.0, 12.0, 15.0, 60.0], "Assassina: recargas da ficha: %s" % [cds])
+	check(cds == [1.3, 5.0, 0.6, 15.0, 22.0, 60.0], "Assassina: recargas (Garras divide a do Talho; Dança 15 s; Misericórdia 22 s): %s" % [cds])
 	var right := Vector3(2.5, 0, -6.4)
 	var left := Vector3(-2.5, 0, -6.4)
 	check(u.side_need == 1 and u.side_left == 3, "começa pedindo 3 golpes na DIREITA")
@@ -229,7 +229,7 @@ func _initialize() -> void:
 		main.use_skill(u, 0)
 		check(is_equal_approx(u.dmg_total - before, 25.0), "Talho do lado certo: +150%% (%d de 3)" % (n + 1))
 	check(u.side_need == -1 and u.side_left == 3, "depois de 3, o lado troca pra ESQUERDA")
-	check(is_equal_approx(u.skill_cd[0], 0.6), "Talho recarrega em 0,6 s")
+	check(is_equal_approx(u.skill_cd[0], 1.3), "Talho recarrega em 1,3 s sem Ferimento na boss")
 	await process_frame
 	check(main.side_mark.position.x < 0.0 and main.side_label.text == "ESQUERDA", "a marca vai pro outro lado")
 
@@ -238,37 +238,151 @@ func _initialize() -> void:
 	await wait(0.25)
 	check(u.position.x < -2.0 and is_equal_approx(u.dmg_total - before, 35.0), "Passo Rasante atravessa pro outro lado com um corte")
 	check(main._in_range(u), "e ela continua ao alcance da boss")
+	# Garras Cruzadas: dano baixinho, Ferimento, e a recarga dividida com o Talho
+	ready(u)
 	before = u.dmg_total
 	main.use_skill(u, 2)
+	check(is_equal_approx(u.skill_cd[2], 0.6) and is_equal_approx(u.skill_cd[0], 0.6), "Garras Cruzadas põe o Talho na mesma recarga (0,6 s)")
+	check(not main.use_skill(u, 0), "com as Garras em recarga, o Talho não sai")
+	check(not main.get_dot("ferida").is_empty() and is_equal_approx(main.get_dot("ferida")["total"], main.WOUND_TIME), "Garras Cruzadas abre o Ferimento na boss (12 s)")
 	await wait(0.45)
-	check(is_equal_approx(u.dmg_total - before, 54.0), "Garras Cruzadas: três cortes de 18")
+	check(u.dmg_total - before < 8.0 and u.dmg_total - before >= 6.0, "e dá um dano bem baixinho: 3 cortes de 2 (%.1f)" % (u.dmg_total - before))
+	ready(u)
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.skill_cd[2], u.skill_cd[0]) and is_equal_approx(u.skill_cd[0], main.WOUND_GCD), "com a boss em Ferimento o Talho recarrega em 0,6 s (e põe as Garras na mesma recarga)")
+	var buddy: Unit = main.units[(main.ctrl + 1) % 4]
+	before = buddy.dmg_total
+	main._damage_boss(buddy, 100.0, false, false)
+	check(is_equal_approx(buddy.dmg_total - before, 100.0 * main.WOUND_MULT), "com o Ferimento, a party toda dá +15%% de dano")
+	main.remove_dot("ferida")
+	before = buddy.dmg_total
+	main._damage_boss(buddy, 100.0, false, false)
+	check(is_equal_approx(buddy.dmg_total - before, 100.0), "sem o Ferimento, o dano volta ao normal")
+	# Dança Carmesim
+	ready(u)
 	before = u.dmg_total
+	var yaw: float = u.visual.rotation.y
 	main.use_skill(u, 3)
-	check(is_equal_approx(u.dmg_total - before, 65.0), "Dança Carmesim bate em volta")
+	check(is_equal_approx(u.dmg_total - before, 95.0), "Dança Carmesim: 95 de dano")
+	await wait(0.2)
+	check(absf(u.visual.rotation.y - yaw) > 3.0, "e o boneco gira de verdade")
+	await wait(0.4)
+	check(is_equal_approx(u.visual.rotation.y, yaw), "voltando a olhar pra boss no fim")
+	# Golpe de Misericórdia: salto em espiral de 1 s
+	u.position = Vector3(2.0, 0, 2.0)
+	await frames_of(2)
+	ready(u)
 	before = u.dmg_total
 	main.use_skill(u, 4)
-	check(u.parry_t > 0.0 and is_equal_approx(u.dmg_total, before), "Golpe de Misericórdia abre a janela antes do corte")
-	await wait(main.MERCY_WINDOW + 0.15)
-	check(is_equal_approx(u.dmg_total - before, 120.0), "sem levar golpe, o corte sai forte")
+	check(is_equal_approx(u.parry_t, main.MERCY_WINDOW) and is_equal_approx(u.lock_t, 1.0) and is_equal_approx(u.dmg_total, before), "Golpe de Misericórdia: salto de 1 s, o corte ainda não saiu")
+	await wait(0.3)
+	check(u.position.distance_to(Vector3(2.0, 0, 2.0)) > 0.5 and is_equal_approx(u.dmg_total, before), "ela arremessa a adaga e se puxa por ela até a boss")
+	await wait(0.3)
+	var slam: float = u.dmg_total - before
+	check(slam > 120.0 * main.MERCY_FIRST * 0.95 and slam < 120.0 * 0.6 and main._in_range(u), "a cravada com as duas adagas: 40%% do dano (%.0f)" % slam)
+	await wait(0.2)
+	check(u.visual.position.y > 1.5 and is_equal_approx(u.dmg_total - before, slam), "depois ela sobe num pulo seco (%.1f)" % u.visual.position.y)
+	await wait(0.4)
+	var exec: float = 1.0 + main.MERCY_EXEC * (1.0 - (main.boss_hp + (u.dmg_total - before)) / main.boss_max)
+	check(absf(u.dmg_total - before - 120.0 * exec) < 1.0 and main._in_range(u), "ela chega na boss e o corte sai: 120 e um pouco pela vida que a boss já perdeu (%.0f)" % (u.dmg_total - before))
+	check(u.daggers.size() == 2, "a Assassina tem as duas adagas no boneco")
+	# execução: quanto menos vida a boss tem, mais forte; com Ferimento, mais ainda
+	u.position = Vector3(2.0, 0, 2.0)
+	u.skill_cd[4] = 0.0
+	var boss_full: float = main.boss_hp
+	main.boss_hp = main.boss_max * 0.25
+	before = u.dmg_total
+	main.use_skill(u, 4)
+	await wait(1.15)
+	check(absf(u.dmg_total - before - 120.0 * (1.0 + main.MERCY_EXEC * 0.75)) < 1.0, "boss com 25%% de vida: Misericórdia dá +60%% (%.0f)" % (u.dmg_total - before))
+	main.boss_hp = main.boss_max * 0.25
+	u.position = Vector3(2.0, 0, 2.0)
+	u.skill_cd[4] = 0.0
+	main._wound(u)
+	main.get_dot("ferida")["t"] = 3.0
+	before = u.dmg_total
+	main.use_skill(u, 4)
+	await wait(1.15)
+	check(absf(u.dmg_total - before - 120.0 * (1.0 + main.MERCY_EXEC * 0.75) * main.MERCY_WOUND * main.WOUND_MULT) < 1.5, "com Ferimento na boss: mais +25%% (%.0f)" % (u.dmg_total - before))
+	check(main.get_dot("ferida")["t"] > main.WOUND_TIME - 1.0, "e o Ferimento é renovado (na cravada)")
+	main.remove_dot("ferida")
+	main.boss_hp = boss_full
+	check(is_equal_approx(u.visual.position.y, 0.0), "e pousa")
+	u.position = Vector3(2.0, 0, 2.0)
 	u.skill_cd[4] = 0.0
 	before = u.dmg_total
 	hp0 = u.hp
 	main.use_skill(u, 4)
+	await wait(0.3)
 	main.hurt(u, 40.0, "teste")
-	check(is_equal_approx(u.hp, hp0), "usado como parry: o golpe da boss não entra")
-	await wait(main.MERCY_WINDOW + 0.15)
+	check(is_equal_approx(u.hp, hp0), "atingida durante o salto: ela apara, o golpe não entra")
+	await wait(0.9)
 	check(is_equal_approx(u.dmg_total, before), "e aí o corte não dá dano")
 
 	main.use_skill(u, 5)
 	await process_frame
 	await process_frame
-	check(u.frenzy_t > 7.5 and u.frenzy_ring.visible, "Frenesi da Fera: 8 s, com a aura roxa")
+	check(u.frenzy_t > 11.5 and u.frenzy_ring.visible, "Frenesi da Fera: 12 s, com a aura roxa")
+	await frames_of(2)
+	check(main.hud.party_fx.visible and float(main.hud._party_mat.get_shader_parameter("gain")) > 1.0, "durante o Frenesi a tela pulsa em roxo")
 	u.position = right  # lado errado agora (pede esquerda)
 	u.skill_cd[0] = 0.0
+	u.skill_cd[3] = 5.0
+	u.skill_cd[4] = 0.05
 	before = u.dmg_total
 	main.use_skill(u, 0)
 	check(is_equal_approx(u.dmg_total - before, 11.5), "Frenesi: +15% de dano")
-	check(is_equal_approx(u.skill_cd[0], 0.3), "Frenesi: o Talho recarrega na metade do tempo")
+	check(is_equal_approx(u.skill_cd[3], 4.7) and is_equal_approx(u.skill_cd[4], 0.0), "Frenesi: cada Talho tira 0,3 s da recarga da Dança e do Misericórdia")
+	check(is_equal_approx(u.skill_cd[0], 0.65) and is_equal_approx(u.skill_cd[2], 0.65), "Frenesi: Talho e Garras recarregam na metade do tempo (0,65 s sem Ferimento)")
+	u.skill_cd[1] = 0.0
+	main.use_skill(u, 1)
+	check(is_equal_approx(u.skill_cd[1], 2.5), "Frenesi: o Passo Rasante também (5 s -> 2,5 s)")
+	await wait(0.3)
+	# Misericórdia em Frenesi: intocável, o corte sai e bate mais forte
+	u.position = Vector3(2.0, 0, 2.0)
+	u.frenzy_t = 6.0
+	u.skill_cd[4] = 0.0
+	before = u.dmg_total
+	hp0 = u.hp
+	main.use_skill(u, 4)
+	await wait(0.3)
+	main.hurt(u, 40.0, "teste")
+	check(is_equal_approx(u.hp, hp0), "Misericórdia em Frenesi: não toma dano no salto")
+	await wait(0.9)
+	check(u.dmg_total - before >= 120.0 * main.MERCY_FRENZY * main.FRENZY_DMG - 0.5 and u.dmg_total - before < 120.0 * main.MERCY_FRENZY * main.FRENZY_DMG * 1.2, "e o corte sai mesmo assim, mais forte (%.0f)" % (u.dmg_total - before))
+	# fim do Frenesi: a Última Dança
+	check(is_equal_approx(u.finisher_t, 0.0), "durante o Frenesi a habilidade bônus ainda não existe")
+	u.frenzy_t = 0.05
+	await wait(0.2)
+	check(u.finisher_t > 1.5 and u.finisher_t <= main.FINISH_WINDOW, "quando o Frenesi acaba, abre a janela de 2 s da Última Dança")
+	await frames_of(3)
+	check(not main.hud.party_fx.visible, "e a tela para de pulsar")
+	check(main.hud.skill_ui[5]["ui"].glow and main.hud.skill_ui[5]["ui"].icon == SkillInfo.bonus_icon("assassina") and u.skill_cd[5] > 30.0, "o botão do Frenesi brilha com o ícone da Última Dança, mesmo com o Frenesi em recarga")
+	var frenzy_cd: float = u.skill_cd[5]
+	before = u.dmg_total
+	hp0 = u.hp
+	u.frenzy_dmg = 1000.0
+	check(main.use_skill(u, 5) and is_equal_approx(u.lock_t, main.FINISH_LOCK) and u.frenzy_t <= 0.0, "apertar: sai a Última Dança (e não outro Frenesi)")
+	check(absf(u.skill_cd[5] - frenzy_cd) < 0.1, "sem mexer na recarga do Frenesi")
+	await wait(0.35)
+	check(u.visual.visible and u.visual.scale.y < 0.9 and is_equal_approx(u.dmg_total, before), "primeiro ela se agacha em posição de ataque por meio segundo")
+	await wait(0.95)
+	main.hurt(u, 60.0, "teste")
+	check(is_equal_approx(u.hp, hp0) or u.invuln > 0.0, "ela é intocável durante a dança")
+	var mid: float = u.dmg_total - before
+	check(mid > main.FINISH_HIT * 4.0 and mid < main.FINISH_HIT * main.FINISH_HITS * 1.4, "a tempestade de cortes vai batendo (%.0f)" % mid)
+	await wait(1.3)
+	check(u.dmg_total - before >= main.FINISH_HIT * main.FINISH_HITS + main.FINISH_END, "e fecha com o X gigante: %.0f de dano no total" % (u.dmg_total - before))
+	check(not main.get_dot("ferida").is_empty() and u.visual.visible and is_equal_approx(u.visual.position.y, 0.0), "abre o Ferimento, e ela volta ao chão")
+	var x_total: float = u.dmg_total - before
+	await wait(0.7)
+	check(absf(u.dmg_total - before - x_total - 450.0) < 1.0, "o CORTE FINAL devolve 45%% do dano causado no Frenesi (%.0f)" % (u.dmg_total - before - x_total))
+	await frames_of(3)
+	check(not main.hud.skill_ui[5]["ui"].glow and main.hud.skill_ui[5]["ui"].icon == SkillInfo.icon("assassina", 5), "usada, o botão volta a ser o Frenesi em recarga")
+	u.frenzy_t = 0.05
+	await wait(2.4)
+	check(is_equal_approx(u.finisher_t, 0.0), "sem usar, a janela fecha depois de 2 s")
+	check(not main.use_skill(u, 5), "e aí o botão é só o Frenesi, em recarga")
 	main.swap_cd = 0.0
 	main.set_ctrl(0)
 	await process_frame
@@ -288,7 +402,10 @@ func _initialize() -> void:
 		names.append(sk["name"])
 		cds.append(sk["cd"])
 	check(names == ["Fagulha Espiritual", "Toque de Brasa", "Lareira Celestial", "Manto de Cinzas", "Asa da Fênix", "Renascimento"], "Soulflame: as seis da ficha: %s" % [names])
-	check(cds == [1.0, 1.0, 18.0, 20.0, 30.0, 60.0], "Soulflame: recargas da ficha: %s" % [cds])
+	check(cds == [2.0, 2.0, 18.0, 20.0, 30.0, 60.0], "Soulflame: recargas (Fagulha e Toque de Brasa com 2 s): %s" % [cds])
+	for sk in kit:
+		var want := 3.0 if sk["name"] == "Renascimento" else 1.2
+		check(is_equal_approx(float(sk.get("cast", 0.0)), want), "Soulflame: %s conjura %.1f s" % [sk["name"], want])
 	ally = main.units[2]
 	var far: Unit = main.units[3]
 	ally.position = u.position + Vector3(1.0, 0, 0)
@@ -297,38 +414,57 @@ func _initialize() -> void:
 	far.hold_pos = far.position
 
 	before = u.dmg_total
+	check(main.use_skill(u, 0) and is_equal_approx(u.channel_t, 1.2) and is_equal_approx(u.dmg_total, before), "Fagulha Espiritual: 1,2 s de conjuração antes de sair")
+	Input.action_press("move_left")
+	await wait(0.2)
+	Input.action_release("move_left")
+	check(is_equal_approx(u.channel_t, 0.0) and is_equal_approx(u.skill_cd[0], 0.0), "andar cancela a conjuração sem gastar a recarga")
+	u.position = main._atk_pos(u)
+	ally.position = u.position + Vector3(1.0, 0, 0)
+	ally.hold_pos = ally.position
+	await frames_of(2)
 	main.use_skill(u, 0)
-	check(is_equal_approx(u.dmg_total - before, 12.0), "Fagulha Espiritual bate na boss")
+	await wait(1.35)
+	check(is_equal_approx(u.dmg_total - before, 12.0) and u.skill_cd[0] > 1.5, "Fagulha Espiritual bate na boss quando a conjuração termina (recarga de 2 s)")
 	ally.hp = 30.0
 	main.sel = 2
 	main.use_skill(u, 1)
-	check(is_equal_approx(u.channel_t, 1.5), "Toque de Brasa: conjuração de 1,5 s")
-	await wait(1.65)
+	check(is_equal_approx(u.channel_t, 1.2), "Toque de Brasa: conjuração de 1,2 s")
+	await wait(1.35)
 	check(is_equal_approx(ally.hp, 30.0 + main.HEAL_PLAYER), "e cura o aliado escolhido (%.0f)" % ally.hp)
 
 	ally.hp = 30.0
 	far.hp = 30.0
-	main.use_skill(u, 2)
+	sw(main, u, 2)
 	check(main.hearths.size() == 1, "Lareira Celestial acende a fogueira")
 	await wait(2.3)
 	check(ally.hp >= 30.0 + main.HEARTH_HPS * 2.0, "quem está na fogueira é curado por segundo (%.0f)" % ally.hp)
 	check(is_equal_approx(far.hp, 30.0), "quem está longe, não")
 
-	main.use_skill(u, 3)
+	sw(main, u, 3)
 	check(is_equal_approx(ally.shield_hp, ally.max_hp * main.SHIELD_RATIO) and u.skill_cd[3] > 19.0, "Manto de Cinzas: escudo no aliado, 20 s")
 	ally.hp = 5.0
-	main.use_skill(u, 4)
+	sw(main, u, 4)
 	check(ally.hp >= 5.0 + 95.0 and u.skill_cd[4] > 29.0, "Asa da Fênix: cura grande e na hora (5 -> %.0f)" % ally.hp)
 
 	main.kill(far, "teste")
 	ally.hp = 10.0
 	before = u.dmg_total
 	check(not far.alive, "um aliado caiu")
-	main.use_skill(u, 5)
+	sw(main, u, 5)
 	check(far.alive, "Renascimento levanta quem caiu")
 	check(is_equal_approx(ally.hp, 80.0), "cura todos (10 -> %.0f)" % ally.hp)
-	check(is_equal_approx(u.dmg_total - before, main.REBIRTH_DMG), "queima a boss com dano médio")
-	check(main.hearths.is_empty(), "a fogueira vira a fênix")
+	check(is_equal_approx(u.dmg_total, before) and main.get_dot("brasa").is_empty(), "a fênix nasce e grita antes de avançar: ainda sem dano na boss")
+	check(main.hearths.size() == 1 and main.hearths[0]["strong"], "a fênix nasce da Lareira, e a Lareira fica FORTE em vez de sumir")
+	check(is_equal_approx(main.hearths[0]["r"], main.HEARTH_STRONG_R) and is_equal_approx(main.hearths[0]["hps"], main.HEARTH_STRONG_HPS) and main.hearths[0]["t"] > main.HEARTH_STRONG_TIME - 0.5, "mais alcance, mais cura e dura de novo")
+	far.position = main.hearths[0]["node"].position + Vector3(0, 0, 6.0)
+	far.hold_pos = far.position
+	far.hp = 20.0
+	await wait(1.2)
+	check(far.hp >= 20.0 + main.HEARTH_STRONG_HPS, "a Lareira forte cura quem está a 6 m (a normal alcança 4,5) e cura mais (%.0f)" % far.hp)
+	check(is_equal_approx(u.dmg_total, before), "1,2 s depois ela ainda está a caminho")
+	await wait(main.REBIRTH_BIRTH + main.REBIRTH_CRY + main.REBIRTH_FLY - 1.2 + 0.2)
+	check(is_equal_approx(u.dmg_total - before, main.REBIRTH_DMG), "quando a fênix chega: queima a boss com dano médio")
 	check(not main.get_dot("brasa").is_empty(), "e deixa um DoT na boss")
 	await process_frame
 	await process_frame
@@ -336,7 +472,7 @@ func _initialize() -> void:
 	before = u.dmg_total
 	await wait(2.3)
 	check(u.dmg_total - before >= main.REBIRTH_DOT * 2.0, "o DoT dá 6 por segundo")
-	check(u.skill_cd[5] > 55.0, "Renascimento: recarga de 60 s")
+	check(u.skill_cd[5] > 48.0, "Renascimento: recarga de 60 s")
 	# IA: a recarga do Toque de Brasa é maior, pra ela não virar uma metralhadora de cura
 	u.skill_cd[1] = 0.0
 	ally.hp = 20.0
@@ -355,16 +491,22 @@ func _initialize() -> void:
 	for sk in kit:
 		names.append(sk["name"])
 		cds.append(sk["cd"])
-		check(not sk.has("cast"), "Maga: %s não tem conjuração" % sk["name"])
+		check(sk.has("cast") == (sk["name"] == "Canhão Estelar"), "Maga: só o Canhão Estelar conjura (%s)" % sk["name"])
 	check(names == ["Disparo Rúnico", "Rainbow Shots", "Ricochete Prismático", "Tiro Perfurante", "Salva Astral", "Canhão Estelar"], "Maga: as seis da ficha: %s" % [names])
-	check(cds == [1.0, 0.3, 8.0, 12.0, 20.0, 60.0], "Maga: recargas (Rainbow Shots só tem o intervalo de 0,3 s): %s" % [cds])
+	check(cds == [1.0, 0.3, 8.0, 12.0, 0.0, 60.0], "Maga: recargas (Rainbow Shots só tem o intervalo de 0,3 s; a Salva Astral não tem recarga): %s" % [cds])
+	check(u.gun != null, "a Maga tem a pistola na mão")
 	before = u.dmg_total
 	main.use_skill(u, 0)
 	check(is_equal_approx(u.dmg_total - before, 26.0), "Disparo Rúnico sai na hora")
 	check(u.bullets.is_empty(), "começa sem balas")
 	before = u.dmg_total
-	main.use_skill(u, 1)
-	check(is_equal_approx(u.dmg_total, before), "Rainbow Shots sem bala não atira")
+	check(not main.use_skill(u, 1) and is_equal_approx(u.dmg_total, before) and is_equal_approx(u.skill_cd[1], 0.0), "Rainbow Shots sem bala não sai (nem gasta o intervalo)")
+	await frames_of(3)
+	check(not main.hud.skill_ui[1]["ui"].usable, "e o botão fica apagado sem balas")
+	u.bullets = [0]
+	await frames_of(3)
+	check(main.hud.skill_ui[1]["ui"].usable, "com uma bala o botão acende")
+	u.bullets = []
 	u.bullet_t = main.BULLET_EVERY - 0.1
 	await wait(0.3)
 	check(u.bullets.size() == 1, "a passiva dá uma bala a cada 8 s")
@@ -419,9 +561,12 @@ func _initialize() -> void:
 	check(is_equal_approx(u.dmg_total - before, main.BULLET_TRIPLE) and u.bullets.is_empty(), "com exatamente 3 balas: um tiro forte que gasta as 3")
 	check(u.position.distance_to(main.BOSS_POINT) > z0 + 3.0, "e ela é empurrada pra trás")
 	u.bullets = [0, 0, 0, 0, 0, 0, 0]
+	u.bullet_t = main.BULLET_EVERY - 0.1
+	await wait(0.3)
+	check(u.bullets.size() == 8, "a oitava bala entra")
 	u.bullet_t = 5.0
 	await wait(0.2)
-	check(u.bullets.size() == 7, "no máximo 7 balas")
+	check(u.bullets.size() == 8 and main.BULLET_MAX == 8, "no máximo 8 balas")
 	# ricochete
 	u.bullets = []
 	u.power_t = 0.0
@@ -433,50 +578,194 @@ func _initialize() -> void:
 	u.position = Vector3(1.3, 0, -6.0)
 	ready(u)
 	u.hp = 50.0
+	u.salvo_t = 0.0
 	before = u.dmg_total
 	main.use_skill(u, 2)
-	check(u.ricochet_t > 3.5, "Ricochete perto da boss: a bala fica indo e voltando por 4 s")
+	var rico_dmg: float = u.dmg_total - before  # medido na hora: DoTs antigos na boss continuam contando
+	await wait(1.2)
+	check(u.ricochet_t <= 0.0 and is_equal_approx(rico_dmg, 30.0) and u.hp <= 50.0 and u.shield_hp <= 0.0, "Ricochete perto da boss SEM o escudo da Salva: um tiro só, não volta nela")
+	# com o escudo da Salva Astral de pé, a bala volta nela
+	ready(u)
+	u.bullets = [0, 1, 2]
+	main.use_skill(u, 4)
+	check(u.salvo_t > 0.0 and u.shield_hp > 0.0, "a Salva Astral ergue o escudo que habilita o ricochete")
+	u.hp = 50.0
+	before = u.dmg_total
+	main.use_skill(u, 2)
+	check(u.ricochet_t > 3.5, "Ricochete perto da boss com o escudo da Salva: a bala fica indo e voltando por 4 s")
 	await wait(2.2)
 	check(u.dmg_total - before >= main.RICO_DMG * 2.0 and u.hp > 50.0, "cada ida bate na boss, cada volta cura a Maga (%.0f de dano, vida %.0f)" % [u.dmg_total - before, u.hp])
 	# a boss bate em outro herói enquanto isso, pra não gastar o escudo que está sendo medido
 	main.units[0].enmity = 999999.0
 	u.hp = u.max_hp
-	u.shield_hp = 0.0
+	u.shield_hp = 1.0
 	var got_shield := false
 	var until := Time.get_ticks_msec() + 1300
 	while Time.get_ticks_msec() < until:
 		await process_frame
 		u.hp = u.max_hp
-		if u.shield_hp > 0.0:
+		if u.shield_hp > 1.0:
 			got_shield = true
 	check(got_shield, "com a vida cheia, a cura vira escudo")
 	await wait(1.2)
 	check(u.ricochet_t <= 0.0, "e acaba depois de 4 s")
+	ready(u)
+	u.shield_hp = 0.0
+	main.use_skill(u, 2)
+	await wait(0.8)
+	check(u.ricochet_t <= 0.0 and u.salvo_t <= 0.0, "escudo quebrado: o ricochete nela deixa de existir")
 	u.position = Vector3(1.6, 0, 1.2)
 	ready(u)
 	before = u.dmg_total
 	main.use_skill(u, 3)
 	check(is_equal_approx(u.dmg_total - before, 95.0), "Tiro Perfurante")
+	check(is_equal_approx(main.aim_t, main.AIM_TIME) and not main.get_dot("mira").is_empty() and is_instance_valid(main.aim_node), "o Tiro Perfurante marca a boss por 2 s (mira em cima dela e ícone na barra)")
+	await wait(1.9)
+	check(main.aim_t > 0.0, "com 1,9 s a marca ainda está lá")
+	await wait(0.25)
+	check(main.aim_t <= 0.0 and main.get_dot("mira").is_empty() and main.aim_node == null, "e some sozinha depois de 2 s")
+	# Salva Astral: sem recarga, custa 3 balas
 	u.bullets = [0, 1]
 	before = u.dmg_total
-	main.use_skill(u, 4)
-	check(is_equal_approx(u.dmg_total, before) and u.bullets.size() == 2 and u.skill_cd[4] <= 0.0, "Salva Astral precisa de 3 balas (sem elas, nem gasta a recarga)")
-	u.bullets = [0, 1, 2, 3]
+	await frames_of(3)
+	check(not main.use_skill(u, 4) and is_equal_approx(u.dmg_total, before) and u.bullets.size() == 2, "Salva Astral com menos de 3 balas não sai")
+	check(not main.hud.skill_ui[4]["ui"].usable, "e o botão fica apagado")
+	u.bullets = [0, 1, 2, 3, 4, 0, 1]
+	await frames_of(3)
+	check(main.hud.skill_ui[4]["ui"].usable, "com 3 ou mais balas o botão acende")
 	u.shield_hp = 0.0
 	main.use_skill(u, 4)
-	check(is_equal_approx(u.dmg_total - before, main.SALVO_DMG * 3.0) and u.bullets.size() == 1, "Salva Astral: gasta 3 balas, dano em área")
+	check(is_equal_approx(u.dmg_total - before, main.SALVO_DMG * 3.0) and u.bullets.size() == 4, "Salva Astral: consome exatamente 3 balas")
 	check(is_equal_approx(u.shield_hp, main.SALVO_SHIELD), "e dá um escudo nela")
-	u.bullets = []
+	check(is_equal_approx(u.skill_cd[4], 0.0), "sem recarga: com balas, dá pra usar de novo na hora")
+	check(main.use_skill(u, 4) and u.bullets.size() == 1 and not main.use_skill(u, 4), "segunda Salva gasta mais 3; com 1 bala sobrando, a terceira não sai")
+	check(String(SkillInfo.info("maga", 4)["desc"]).begins_with("Consome 3 Rainbow Shots."), "a descrição diz: Consome 3 Rainbow Shots.")
+	# Salva com exatamente 6 balas: Fada Astral
+	main._aim_clear()
+	ready(u)
+	u.bullets = [0, 1, 2, 3, 4, 0, 1]
+	await frames_of(3)
+	check(not main.hud.skill_ui[4]["ui"].glow, "com 7 balas a Salva não brilha")
+	u.bullets = [0, 1, 2, 3, 4, 0]
+	await frames_of(3)
+	check(main.hud.skill_ui[4]["ui"].glow, "com exatamente 6 balas a Salva brilha")
 	before = u.dmg_total
+	main.use_skill(u, 4)
+	check(u.bullets.is_empty() and is_equal_approx(u.dmg_total - before, main.SALVO_DMG * 6.0), "Salva com 6: gasta as 6")
+	check(main.fairy_t > 14.9 and is_instance_valid(main.fairy_node) and not main.get_dot("fada").is_empty(), "e solta a Fada Astral por 15 s (DoT na boss)")
+	before = u.dmg_total
+	await wait(2.1)
+	check(u.dmg_total - before >= main.FAIRY_DPS * 2.0 - 0.5, "a fada dá dano por segundo (%.0f em 2 s)" % (u.dmg_total - before))
+	# ricochete na fada: de longe, sem escudo, e curando a party
+	u.position = Vector3(1.6, 0, 3.0)
+	u.salvo_t = 0.0
+	u.shield_hp = 0.0
+	for o in main.units:
+		o.hp = o.max_hp * 0.5
+		o.shield_hp = 0.0
+	ready(u)
+	before = u.dmg_total
+	main.use_skill(u, 2)
+	check(u.ricochet_t > 3.5, "com a fada em campo, o Ricochete quica (mesmo longe e sem o escudo da Salva)")
+	await wait(1.4)
+	var healed_all := true
+	for o in main.units:
+		if o.hp <= o.max_hp * 0.5:
+			healed_all = false
+	check(healed_all, "cada bala que bate na fada cura a party toda")
+	check(u.dmg_total - before >= main.RICO_DMG * 2.0, "e cada ida bate na boss")
+	for o in main.units:
+		o.hp = o.max_hp
+		o.shield_hp = 0.0
+	await wait(1.1)
+	check(main.units[0].shield_hp > 0.0 and main.units[0].shield_hp <= main.units[0].max_hp * main.FAIRY_HEAL * 3.0, "com a vida cheia, a cura da fada vira escudo (pequeno: 5%% por bala)")
+	await wait(1.8)
+	check(u.ricochet_t <= 0.0, "o ricochete na fada acaba no tempo normal")
+	main.fairy_t = 0.05
+	await wait(0.2)
+	check(main.fairy_node == null and main.get_dot("fada").is_empty(), "depois dos 15 s a fada vai embora e o DoT some")
+	u.bullets = [0, 1, 2, 3, 4, 0, 1, 2]
+	await frames_of(3)
+	check(main.hud.skill_ui[5]["ui"].glow and main.hud.skill_ui[5]["ui"].rainbow, "com 8 balas o Canhão Estelar brilha em arco-íris")
+	u.bullets = []
+	u.position = Vector3(1.6, 0, 1.2)
+	await frames_of(3)
+	check(not main.hud.skill_ui[5]["ui"].glow, "e apaga sem o pente cheio")
+	# marca + consumidores: o bônus sai uma vez só
+	ready(u)
+	main.use_skill(u, 3)
+	u.bullets = [0, 1, 2, 3, 4, 0, 1]  # sete: com seis exatas sairia a fada
+	before = u.dmg_total
+	main.use_skill(u, 4)
+	check(is_equal_approx(u.dmg_total - before, main.SALVO_DMG * 3.0 + main.AIM_BONUS) and main.aim_t <= 0.0, "Salva Astral na boss marcada: estoura a marca (+%d)" % main.AIM_BONUS)
+	before = u.dmg_total
+	main.use_skill(u, 4)
+	check(is_equal_approx(u.dmg_total - before, main.SALVO_DMG * 3.0), "a mesma marca não dá o bônus duas vezes")
+	ready(u)
+	main.use_skill(u, 3)
+	u.pierce_next = false
+	before = u.dmg_total
+	ready(u)
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.dmg_total - before, 26.0) and main.aim_t > 0.0, "Disparo Rúnico comum não gasta a marca")
+	u.pierce_next = true
+	ready(u)
+	before = u.dmg_total
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.dmg_total - before, 26.0 * main.PIERCE_MULT + main.AIM_BONUS) and main.aim_t <= 0.0, "Disparo Rúnico fortalecido estoura a marca")
+	# Canhão Estelar: preparo de 2 s, parada
+	u.bullets = []
+	ready(u)
+	before = u.dmg_total
+	check(main.use_skill(u, 5) and is_equal_approx(u.channel_t, 2.0) and u.has_meta("cannon"), "Canhão Estelar: 2 s de preparo, com o canhão se materializando")
+	await wait(1.0)
+	check(is_equal_approx(u.dmg_total, before), "com 1 s de preparo ainda não disparou")
+	Input.action_press("move_left")
+	await wait(0.2)
+	Input.action_release("move_left")
+	check(is_equal_approx(u.channel_t, 0.0) and not u.has_meta("cannon") and is_equal_approx(u.skill_cd[5], 0.0), "andar cancela o preparo, some com o canhão e não gasta a recarga")
+	u.position = Vector3(1.6, 0, 1.2)
+	await frames_of(2)
 	main.use_skill(u, 5)
-	check(is_equal_approx(u.dmg_total - before, main.CANNON_DMG), "Canhão Estelar sozinho: %d" % main.CANNON_DMG)
+	await wait(2.15)
+	check(is_equal_approx(u.dmg_total - before, main.CANNON_DMG) and u.lock_t <= 0.0, "Canhão Estelar sozinho: %d, sem prender ela" % main.CANNON_DMG)
 	ready(u)
 	u.bullets = [0, 1, 2, 3, 4, 0, 1]
 	before = u.dmg_total
-	main.use_skill(u, 5)
+	sw(main, u, 5)
 	var cannon: float = u.dmg_total - before
-	check(is_equal_approx(cannon, main.CANNON_DMG + 7.0 * main.CANNON_PER_BULLET) and u.bullets.is_empty(), "Canhão com as 7 balas guardadas: %.0f" % cannon)
+	check(is_equal_approx(cannon, main.CANNON_DMG + 7.0 * main.CANNON_PER_BULLET) and u.bullets.is_empty() and u.lock_t <= 0.0, "Canhão com 7 balas: %.0f, versão normal" % cannon)
 	check(cannon > main.CANNON_DMG + 7.0 * main.BULLET_DMG, "guardar as balas pro canhão rende mais do que soltar as 7 e usar o canhão vazio")
+	# marca usada no começo do preparo
+	ready(u)
+	main.use_skill(u, 3)
+	before = u.dmg_total
+	ready(u)
+	main.use_skill(u, 5)
+	check(main.aim_t <= 0.0 and is_equal_approx(u.cannon_bonus, main.AIM_BONUS), "começar o Canhão na boss marcada trava o bônus da marca")
+	u.channel_t = 0.0
+	main._resolve_skill(u, 5, false)
+	check(is_equal_approx(u.dmg_total - before, main.CANNON_DMG + main.AIM_BONUS), "e ele sai junto com o disparo")
+	# supercanhão: exatamente 8 balas
+	await wait(0.4)
+	u.position = Vector3(1.6, 0, 1.2)
+	ready(u)
+	u.bullets = [0, 1, 2, 3, 4, 0, 1, 2]
+	before = u.dmg_total
+	var gun_at: Vector3 = u.position
+	sw(main, u, 5)
+	check(is_equal_approx(u.lock_t, main.CANNON_SUPER_TIME) and u.bullets.is_empty(), "com exatamente 8 balas: supercanhão, ela fica 2 s presa no lugar")
+	check(not main.use_skill(u, 0), "segurando o supercanhão, não usa mais nada")
+	Input.action_press("move_left")
+	await wait(1.0)
+	Input.action_release("move_left")
+	check(u.position.is_equal_approx(gun_at), "nem anda")
+	var half: float = u.dmg_total - before
+	var super_total: float = main.CANNON_DMG + 8.0 * main.CANNON_PER_BULLET + main.CANNON_SUPER_BONUS
+	check(half > super_total * 0.3 and half < super_total * 0.75, "o dano do supercanhão sai ao longo do disparo (%.0f de %.0f na metade)" % [half, super_total])
+	await wait(1.3)
+	check(is_equal_approx(u.dmg_total - before, super_total), "supercanhão: %.0f no total" % super_total)
+	check(u.lock_t <= 0.0 and super_total > cannon + main.CANNON_PER_BULLET, "depois ela se solta; e a oitava bala rende bem mais que as outras")
 
 	# ================================================================ SOULBURNER
 	main = await fight(5)
@@ -491,23 +780,55 @@ func _initialize() -> void:
 		names.append(sk["name"])
 		cds.append(sk["cd"])
 	check(names == ["Brasas do Firmamento", "Marca do Zênite", "Lança Serafim", "Rasante Incandescente", "Chuva de Brasas", "Juízo Solar"], "Soulburner: as seis da ficha: %s" % [names])
-	check(cds == [1.0, 12.0, 8.0, 10.0, 20.0, 60.0], "Soulburner: recargas da ficha: %s" % [cds])
+	check(cds == [2.0, 12.0, 8.0, 10.0, 20.0, 60.0], "Soulburner: recargas da ficha: %s" % [cds])
 	before = u.dmg_total
-	main.use_skill(u, 0)
-	check(is_equal_approx(u.dmg_total - before, 24.0), "Brasas do Firmamento")
+	check(main.use_skill(u, 0) and is_equal_approx(u.channel_t, 1.0) and is_equal_approx(u.dmg_total, before), "Brasas do Firmamento: 1 s de cast")
+	await wait(1.1)
+	check(is_equal_approx(u.dmg_total - before, 24.0), "e o projétil sai no fim do cast: 24 de dano")
+	check(u.skill_cd[0] > 0.7 and u.skill_cd[0] <= 1.0, "a recarga de 2 s conta desde o começo do cast (%.2f)" % u.skill_cd[0])
+	ready(u)
+	check(u.wings.size() == 2, "o Soulburner tem as duas asas")
 	before = u.dmg_total
-	main.use_skill(u, 2)
-	check(is_equal_approx(u.dmg_total - before, main.LANCE_BARE), "Lança Serafim sem marca: quase nada (%d)" % main.LANCE_BARE)
+	check(main.use_skill(u, 2) and is_equal_approx(u.channel_t, 1.0) and u.has_meta("lance"), "Lança Serafim: 1 s de cast, com a lança se formando no céu")
+	await wait(1.0 + main.LANCE_FALL + 0.15)
+	check(is_equal_approx(u.dmg_total - before, main.LANCE_BARE), "Lança Serafim sem marca: quase nada (%d), no impacto" % main.LANCE_BARE)
 	ready(u)
 	main.use_skill(u, 1)
 	check(not main.get_dot("zenite").is_empty() and is_equal_approx(main.get_dot("zenite")["t"], 10.0), "Marca do Zênite: 10 s na boss")
 	check(absf(main.lance_damage() - main.LANCE_MIN) < 3.0, "Lança logo depois de marcar: dano médio (%.0f)" % main.lance_damage())
+	check(main.glow_slot(u) != 2, "no começo da marca o botão da Lança não brilha")
+	await frames_of(3)
+	var sun_ui = main.hud.skill_ui[5]["ui"]
+	check(sun_ui.glow and sun_ui.glow_color.g > 0.9 and sun_ui.glow_color.r < 0.5, "boss marcada e Juízo Solar pronto: o botão dele brilha em fogo verde")
+	var dim: float = main.zenith_mats[0].albedo_color.g
 	main.get_dot("zenite")["t"] = 0.5
+	check(main.glow_slot(u) == 2, "nos últimos 2 s da marca o botão da Lança brilha")
+	await frames_of(3)
+	check(main.zenith_node.get_node("Core").visible and main.zenith_mats[0].albedo_color.g > dim * 2.5, "e o halo fica bem mais luminoso no fim, com o miolo de luz aceso (%.1f -> %.1f)" % [dim, main.zenith_mats[0].albedo_color.g])
 	check(main.lance_damage() > main.LANCE_MAX - 8.0, "Lança com a marca quase acabando: dano alto (%.0f)" % main.lance_damage())
+	check(is_instance_valid(main.zenith_node), "a marca tem o halo em cima da boss")
+	ready(u)
 	before = u.dmg_total
 	var expect: float = main.lance_damage()
 	main.use_skill(u, 2)
-	check(absf(u.dmg_total - before - expect) < 1.0 and main.get_dot("zenite").is_empty(), "a Lança usa e remove a marca")
+	check(absf(u.lance_amount - expect) < 1.0 and u.lance_marked, "o dano da Lança é travado quando o cast começa")
+	check(u.get_meta("lance_grade") == 2, "marca nos últimos instantes: Lança Perfeita (grau 2, com o fogo em volta dela)")
+	await wait(0.7)
+	check(main.get_dot("zenite").is_empty() and is_equal_approx(u.dmg_total, before + 0.0) or main.get_dot("zenite").is_empty(), "a marca expira no meio do cast (faltava 0,5 s)")
+	var dot_part: float = u.dmg_total - before
+	await wait(0.3 + main.LANCE_FALL + 0.15)
+	check(absf(u.dmg_total - before - dot_part - expect) < 1.5, "e a Lança ainda sai com o bônus cheio (%.0f)" % expect)
+	await frames_of(2)
+	check(main.zenith_node == null, "o halo some com a marca")
+	# andar cancela o cast sem gastar
+	ready(u)
+	main.use_skill(u, 2)
+	Input.action_press("move_left")
+	await wait(0.2)
+	Input.action_release("move_left")
+	check(is_equal_approx(u.channel_t, 0.0) and not u.has_meta("lance") and is_equal_approx(u.skill_cd[2], 0.0), "andar cancela a Lança, some com ela e não gasta a recarga")
+	u.position = main._atk_pos(u)
+	await frames_of(2)
 	ready(u)
 	main.use_skill(u, 1)
 	before = u.dmg_total
@@ -522,16 +843,41 @@ func _initialize() -> void:
 	check(u.position.distance_to(p0) > 3.0, "Rasante Incandescente: dash rápido")
 	main.use_skill(u, 4)
 	check(not main.get_dot("chuva").is_empty() and is_equal_approx(main.get_dot("chuva")["total"], 15.0), "Chuva de Brasas: DoT de 15 s")
+	check(main.rain_t > 14.0 and is_instance_valid(main.rain_node), "a chuva cai pelos 15 s, com o círculo no céu")
 	main.remove_dot("zenite")
+	main.remove_dot("chuva")
+	u.position = main._atk_pos(u)
+	await frames_of(2)
+	ready(u)
 	before = u.dmg_total
 	main.use_skill(u, 5)
-	check(is_equal_approx(u.dmg_total - before, main.SOLAR_DMG) and main.get_dot("solar").is_empty(), "Juízo Solar sem marca: %d e sem DoT" % main.SOLAR_DMG)
+	check(is_equal_approx(u.lock_t, main.SOLAR_RISE) and is_equal_approx(u.dmg_total, before), "Juízo Solar: sobe por 1 s (preso) e ainda sem dano")
+	check(not main.use_skill(u, 0), "subindo, ele não usa outra habilidade")
+	await wait(1.3)
+	check(u.visual.position.y > 2.0 and u.lock_t <= 0.0, "depois de lançar ele flutua (%.1f) e já está solto" % u.visual.position.y)
+	ready(u)
+	var sun_before: float = u.dmg_total
+	check(main.use_skill(u, 0) and u.channel_t > 0.0, "flutuando, as outras habilidades funcionam")
+	await frames_of(3)
+	check(not main.hud.skill_ui[5]["ui"].glow, "com o Juízo Solar em recarga, o botão dele não brilha")
+	await wait(1.9)
+	check(is_equal_approx(u.dmg_total - before, main.SOLAR_DMG + 24.0) and main.get_dot("solar").is_empty(), "o sol chega 2 s depois do lançamento: %d, sem DoT sem a marca" % main.SOLAR_DMG)
+	await wait(0.6)
+	check(is_equal_approx(u.visual.position.y, 0.0), "e ele volta pro chão")
 	ready(u)
 	main.use_skill(u, 1)
-	before = u.dmg_total
 	main.use_skill(u, 5)
-	check(is_equal_approx(u.dmg_total - before, main.SOLAR_MARKED), "Juízo Solar com a boss marcada: mais dano (%d)" % main.SOLAR_MARKED)
-	check(not main.get_dot("solar").is_empty() and not main.get_dot("zenite").is_empty(), "deixa um DoT médio e NÃO gasta a marca")
+	main.remove_dot("zenite")  # a marca valeu na hora do uso
+	await wait(0.05)
+	before = u.dmg_total
+	await wait(3.1)
+	check(is_equal_approx(u.dmg_total - before, main.SOLAR_MARKED), "Juízo Solar com a boss marcada na hora do uso: mais dano (%d)" % main.SOLAR_MARKED)
+	check(not main.get_dot("solar").is_empty(), "e deixa o DoT")
+	ready(u)
+	main.use_skill(u, 1)
+	u.skill_cd[5] = 0.0
+	main.use_skill(u, 5)
+	check(not main.get_dot("zenite").is_empty(), "o Juízo Solar NÃO gasta a marca")
 
 	# ================================================================ RINGSTAR
 	main = await fight(6)
@@ -608,6 +954,11 @@ func _initialize() -> void:
 	main.use_skill(u, 0)
 	check(is_equal_approx(u.dmg_total - before, 22.0 * main.COUNT_DMG), "com a Contagem: +10% de dano")
 	check(is_equal_approx(u.skill_cd[0], main.COUNT_GCD) and is_equal_approx(u.skill_cd[2], main.COUNT_GCD), "e o GCD cai pra 1 s")
+	check(is_equal_approx(main.move_speed(u), 6.5 * 0.6 * 1.44), "com a Contagem: +44% de velocidade de movimento")
+	var count_left: float = u.count_t
+	u.count_t = 0.0
+	check(is_equal_approx(main.move_speed(u), 6.5 * 0.6), "sem a Contagem, a velocidade volta ao normal")
+	u.count_t = count_left
 	u.count_t = 0.0
 	before = u.dmg_total
 	main.use_skill(u, 5)
@@ -1058,7 +1409,7 @@ func _initialize() -> void:
 				var info := SkillInfo.info(key, n, mode)
 				if String(info["desc"]).length() < 15 or String(info["name"]) != String(list[n]["name"]) or not SkillInfo.TYPE_COL.has(info["type"]):
 					miss += "ficha:%s " % list[n]["name"]
-	check(miss == "" and seen.size() == 59, "as 59 habilidades (incluindo as do Modo Dormindo) têm ícone próprio e ficha completa %s" % miss)
+	check(miss == "" and seen.size() == 60, "as 60 habilidades (incluindo as do Modo Dormindo) têm ícone próprio e ficha completa %s" % miss)
 	check(SkillInfo.info("sleepwalker", 0, false)["cast"] == main.SW_CAST and SkillInfo.info("sleepwalker", 4, true)["cost"] == "50 de Torpor", "a ficha do Sleepwalker traz conjuração e custo de Torpor")
 	check(String(SkillInfo.info("ringstar", 5)["desc"]).contains(str(int(main.KNOCKOUT_DMG))), "a descrição usa os números do jogo (Nocaute Final: %d)" % main.KNOCKOUT_DMG)
 	var bigs := 0
@@ -1101,6 +1452,392 @@ func _initialize() -> void:
 	check(ui0.key_text == Binds.label("skill_3"), "o slot mostra a tecla configurada, não o número do slot")
 	ui0.mouse_exited.emit()
 	check(not main.hud.skill_tip.visible, "e a ficha some ao sair")
+
+	# ================================================================ VELOCIDADE DE MOVIMENTO
+	var base_speed := 6.5
+	for spec in [[2, 1.0], [4, 1.0], [5, 0.6], [3, 0.6], [0, 0.6], [1, 0.6], [6, 0.6], [8, 0.35], [7, 0.35]]:
+		main = await fight(spec[0])
+		u = main.units[main.ctrl]
+		check(is_equal_approx(main.move_speed(u), base_speed * spec[1]), "%s na sua mão anda a %d%% da velocidade-base" % [u.unit_name, roundi(spec[1] * 100.0)])
+		if spec[0] == 5:
+			var npc: Unit = main.units[(main.ctrl + 1) % 4]
+			check(is_equal_approx(main.move_speed(npc), base_speed), "a IA continua na velocidade-base (as mecânicas foram medidas com ela)")
+			main.phase = "dodgetime"
+			main.phase_dur = 9999.0
+			var x0: float = u.position.x
+			Input.action_press("move_left")
+			await wait(1.0)
+			Input.action_release("move_left")
+			check(absf(absf(u.position.x - x0) - base_speed * 0.6) < 0.5, "andando 1 s, o Soulburner cobre %.1f m (era 6,5)" % absf(u.position.x - x0))
+	# Apotecário: a nuvem de cura dá pressa pra party toda
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	u = main.units[main.ctrl]
+	check(u.key == "apothecary", "(Apotecário no controle)")
+	ready(u)
+	main.use_skill(u, 4)
+	var all_fast := true
+	for o in main.units:
+		if o.haste_t < main.HASTE_TIME - 0.1:
+			all_fast = false
+	check(all_fast and is_equal_approx(main.move_speed(u), base_speed * 0.35 * main.HASTE_MULT), "a Nuvem Conservante dá velocidade de movimento à party toda por %d s" % int(main.HASTE_TIME))
+	u.haste_t = 0.05
+	await wait(0.2)
+	check(is_equal_approx(main.move_speed(u), base_speed * 0.35), "e a pressa acaba")
+
+	# ================================================================ REVIVER DO APOTECÁRIO (em etapas)
+	var dead: Unit = main.units[(main.ctrl + 1) % 4]
+	var dead_i: int = (main.ctrl + 1) % 4
+	main.kill(dead, "teste", true)
+	check(not dead.alive, "(um aliado caiu)")
+	ready(u)
+	u.vestiges = 3
+	main.sel = -1
+	main.units[(main.ctrl + 2) % 4].hp = 20.0
+	sw(main, u, 2)
+	check(not dead.alive and u.patient != dead, "Sutura sem escolher o caído cura um vivo, como sempre")
+	ready(u)
+	main.use_skill(u, 5)
+	check(not dead.alive and u.vestiges == 3, "Estabilização sem o corpo preparado não reanima nem gasta Vestígios")
+	ready(u)
+	main.sel = dead_i
+	sw(main, u, 2)
+	check(not dead.alive and u.patient == dead and u.patient_t > 0.0, "passo 1: Sutura no caído escolhido prepara o corpo (vira o Paciente)")
+	u.vestiges = 2
+	ready(u)
+	check(not main.use_skill(u, 5) and not dead.alive and is_equal_approx(u.skill_cd[5], 0.0), "passo 2 sem os 3 Vestígios: não sai, e não gasta a recarga")
+	u.vestiges = 3
+	check(main.use_skill(u, 5) and dead.alive, "passo 2: Estabilização com 3 Vestígios reanima o Paciente")
+	check(is_equal_approx(dead.hp, dead.max_hp * main.REANIMATE_HP) and u.vestiges == 0 and dead.weak_t > 0.0, "ele volta com 40%% da vida, com Fraqueza, e os Vestígios são gastos")
+	check(SkillInfo.info("apothecary", 5)["desc"].contains("REANIMA") and SkillInfo.info("apothecary", 2)["desc"].contains("prepara o corpo"), "as fichas explicam os dois passos")
+
+	# ================================================================ REVIVER DA SOULFLAME (simples)
+	main = await fight(1)
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	u = main.units[main.ctrl]
+	dead = main.units[(main.ctrl + 1) % 4]
+	var dead2: Unit = main.units[(main.ctrl + 2) % 4]
+	main.units[(main.ctrl + 3) % 4].hp = 10.0
+	ready(u)
+	sw(main, u, 4)
+	check(main.units[(main.ctrl + 3) % 4].hp > 100.0 or main.units[(main.ctrl + 3) % 4].hp >= main.units[(main.ctrl + 3) % 4].max_hp, "Asa da Fênix sem ninguém caído: a cura grande de sempre")
+	main.kill(dead, "teste", true)
+	main.kill(dead2, "teste", true)
+	main.units[(main.ctrl + 3) % 4].hp = 10.0
+	ready(u)
+	main.sel = -1
+	sw(main, u, 4)
+	check(dead.alive and is_equal_approx(dead.hp, dead.max_hp * main.REVIVE_HP) and not dead2.alive, "com alguém caído, a Asa da Fênix revive (50%% da vida), mesmo com um vivo ferido")
+	ready(u)
+	main.kill(dead, "teste", true)
+	main.sel = (main.ctrl + 2) % 4
+	sw(main, u, 4)
+	check(dead2.alive and not dead.alive, "o caído escolhido no card tem prioridade")
+	check(SkillInfo.info("healer", 4)["desc"].contains("REVIVE"), "a ficha da Asa da Fênix fala do reviver")
+
+	# ================================================================ CLIQUE NAS HABILIDADES
+	main = await fight(6)
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	u = main.units[main.ctrl]
+	u.position = main._atk_pos(u)
+	await frames_of(3)
+	var slot_click := InputEventMouseButton.new()
+	slot_click.button_index = MOUSE_BUTTON_LEFT
+	slot_click.pressed = true
+	before = u.dmg_total
+	main.hud.skill_ui[0]["ui"].gui_input.emit(slot_click)
+	check(is_equal_approx(u.dmg_total - before, 22.0) and u.skill_cd[0] > 0.0, "clicar num slot da barra usa a habilidade")
+	main.hud.skill_ui[3]["ui"].gui_input.emit(slot_click)
+	check(u.count_t > 0.0, "vale pra qualquer slot (Contagem Regressiva)")
+	main.lb = 1.0
+	await frames_of(3)
+	check(main.hud.lb_button.visible, "com a barra cheia, o Limit Break vira um botão")
+	main.hud.lb_button.pressed.emit()
+	check(u.channel_t > 0.0 and u.channel_slot == -1, "clicar nele dispara o Limit Break")
+
+	# ================================================================ CLIQUE: FOCO E TROCA
+	main = await fight(1)
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	var me0: int = main.ctrl
+	var other_i: int = (main.ctrl + 1) % 4
+	main.sel = -1
+	var card_click := InputEventMouseButton.new()
+	card_click.button_index = MOUSE_BUTTON_LEFT
+	card_click.pressed = true
+	main.hud._on_card_input(card_click, other_i)
+	await frames_of(3)
+	check(main.sel == other_i and main.ctrl == me0, "um clique no card foca o herói, sem trocar o controle")
+	check(main.units[other_i].chosen and main.units[other_i].chosen_ring.visible and not main.units[me0].chosen_ring.visible, "o focado ganha o círculo em volta, e só ele")
+	main.hud._on_card_input(card_click, other_i)
+	check(main.sel == other_i, "clicar de novo no mesmo card mantém o foco")
+	main.swap_cd = 0.0
+	card_click.double_click = true
+	main.hud._on_card_input(card_click, other_i)
+	check(main.ctrl == other_i, "dois cliques no card trocam o controle pra ele")
+	# no boneco 3D
+	main.swap_cd = 0.0
+	var third: int = (main.ctrl + 2) % 4
+	var where: Vector2 = main.cam.unproject_position(main.units[third].position + Vector3(0, 1.0, 0))
+	check(main.unit_at(where) == third and main.unit_at(Vector2(20, 20)) == -1, "o clique acha o boneco que está embaixo do mouse (e nada, no vazio)")
+	var world_click := InputEventMouseButton.new()
+	world_click.button_index = MOUSE_BUTTON_LEFT
+	world_click.pressed = true
+	world_click.position = where
+	main._unhandled_input(world_click)
+	check(main.sel == third and main.ctrl == other_i, "um clique no boneco 3D foca ele")
+	world_click.double_click = true
+	main._unhandled_input(world_click)
+	check(main.ctrl == third, "dois cliques no boneco 3D trocam o controle pra ele")
+	main.swap_cd = 0.0
+	var corpse: int = (main.ctrl + 1) % 4
+	main.kill(main.units[corpse], "teste", true)
+	main.click_unit(corpse, true)
+	check(main.sel == corpse and main.ctrl == third, "caído: os cliques só focam (pra reviver), não dá pra controlar")
+
+	# ================================================================ MALPRACTICE: SERINGA, ESCUDO E BLOOD PARTY
+	main = await fight(4)
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	u = main.units[main.ctrl]
+	u.position = main._atk_pos(u)
+	await frames_of(2)
+	check(u.syringe != null and u.med_shield != null and u.syringe_liquid != null, "a Malpractice tem a seringa gigante e o escudo médico no boneco")
+	check(main.units[(main.ctrl + 1) % 4].syringe == null, "só ela tem")
+	var fill0: float = u.syringe_liquid.scale.y
+	ready(u)
+	u.hp = 60.0
+	main.use_skill(u, 2)
+	await wait(0.3)
+	check(u.syringe_liquid.scale.y > fill0 + 0.3, "Blood Consumed: o reservatório da seringa enche de sangue (%.2f -> %.2f)" % [fill0, u.syringe_liquid.scale.y])
+	await wait(1.0)
+	check(u.syringe_liquid.scale.y < 0.6, "e esvazia depois")
+	# Blood Taste: Sangue só no parry bem-sucedido, e só golpe do inimigo conta
+	ready(u)
+	u.stacks = 0
+	u.hp = 60.0
+	main.use_skill(u, 1)
+	check(u.taste_t > 0.0 and u.stacks == 0, "Blood Taste não dá Sangue só por ser usado")
+	main._bleed(u, 4.0)
+	check(not u.taste_hit, "o custo de vida das próprias habilidades não conta como parry")
+	await wait(main.TASTE_TIME + 0.15)
+	check(u.stacks == 0 and u.skill_cd[1] > 15.0, "parry que não aparou nada: sem Sangue e a recarga cheia")
+	ready(u)
+	main.use_skill(u, 1)
+	main.hurt(u, 20.0, "teste")
+	check(u.taste_hit, "golpe do inimigo durante a janela: parry")
+	await wait(main.TASTE_TIME + 0.15)
+	check(u.stacks == main.TASTE_STACKS, "parry bem-sucedido: +%d de Sangue" % main.TASTE_STACKS)
+	# Bloodbath
+	check(main.SKILLS["nurse"].size() == 6 and main.SKILLS["nurse"][5]["name"] == "Bloodbath" and SkillInfo.icon("nurse", 5) != null, "Bloodbath é a sexta habilidade dela, com ícone próprio")
+	ready(u)
+	u.stacks = main.BATH_COST - 1
+	check(not main.use_skill(u, 5), "Bloodbath com menos de 10 de Sangue não sai")
+	u.stacks = 14
+	var near_ally: Unit = main.units[(main.ctrl + 1) % 4]
+	var far_ally: Unit = main.units[(main.ctrl + 2) % 4]
+	near_ally.position = u.position + Vector3(2.0, 0, 0)
+	near_ally.hold_pos = near_ally.position
+	far_ally.position = u.position + Vector3(0, 0, 9.0)
+	far_ally.hold_pos = far_ally.position
+	await frames_of(2)
+	main.use_skill(u, 5)
+	check(u.stacks == 4, "Bloodbath gasta 10 de Sangue")
+	check(u.bath_t > 9.5 and near_ally.bath_t > 9.5 and far_ally.bath_t <= 0.0, "cobre quem está na área (raio 6) por 10 s, e só eles")
+	hp0 = near_ally.hp
+	main.hurt(near_ally, 50.0, "teste")
+	check(is_equal_approx(hp0 - near_ally.hp, 40.0), "quem foi coberto toma 20%% menos dano")
+	check(is_equal_approx(u.bath_window, main.BATH_WINDOW) and u.bath_charges == 1, "abre 2 s pra escolher UMA habilidade fortalecida")
+	await frames_of(3)
+	var reds := 0
+	for n in 6:
+		if main.hud.skill_ui[n]["ui"].glow and main.hud.skill_ui[n]["ui"].glow_color.r > 0.9 and main.hud.skill_ui[n]["ui"].glow_color.g < 0.4:
+			reds += 1
+	check(reds == 3 and not main.hud.skill_ui[3]["ui"].glow, "Poke, Blood Taste e Consumed brilham vermelho; Emergency Response não")
+	ready(u)
+	var blood0: int = u.stacks
+	var tags0: int = main.hud.fight_ui.get_child_count()
+	main.use_skill(u, 3)
+	check(u.bath_charges == 1, "Emergency Response não gasta a carga do Bloodbath")
+	check(u.stacks == blood0 + 1, "Emergency Response junta 1 de Sangue")
+	var provoked := false
+	for c in main.hud.fight_ui.get_children():
+		if c is Chip and c.text == "PROVOKE!":
+			provoked = true
+	check(provoked and main.hud.fight_ui.get_child_count() > tags0 and main.hud.biscoito.modulate.a <= 0.01, "provocar mostra a etiqueta PROVOKE! ao lado da boss, sem a imagem do biscoito")
+	ready(u)
+	u.position = main._atk_pos(u)
+	await frames_of(2)
+	main.use_skill(u, 0)
+	check(u.poke_rush_t > 2.9 and u.bath_charges == 0 and is_equal_approx(u.skill_cd[0], 1.0 * main.POKE_RUSH_CD), "Poke fortalecido: 3 s de estocadas em rajada (recarga %.2f s)" % u.skill_cd[0])
+	await frames_of(3)
+	check(not main.hud.skill_ui[0]["ui"].glow, "usada a carga, o brilho vermelho some")
+	u.poke_rush_t = 0.0
+	# Consumed fortalecido
+	ready(u)
+	u.stacks = 12
+	main.use_skill(u, 5)
+	near_ally.hp = 20.0
+	u.hp = 30.0
+	ready(u)
+	main.use_skill(u, 2)
+	check(u.hp >= 30.0 + u.max_hp * main.CONSUMED_BIG_HEAL, "Blood Consumed fortalecido: cura 20%% da vida máxima além do roubo normal (%.0f)" % u.hp)
+	check(u.mend_t > 4.5 and near_ally.mend_t > 4.5 and is_equal_approx(near_ally.mend_rate, main.SHARE_REGEN), "regeneração nela e Compartilhamento de Sangue na party por 5 s")
+	await wait(1.1)
+	check(near_ally.hp >= 20.0 + main.SHARE_REGEN * 0.9, "os aliados vão recuperando vida (%.0f)" % near_ally.hp)
+	# a janela expira
+	ready(u)
+	u.stacks = 12
+	main.use_skill(u, 5)
+	await wait(2.15)
+	check(u.bath_charges == 0 and u.bath_window <= 0.0, "passados os 2 s sem escolher, a carga se perde")
+	ready(u)
+	u.hp = 30.0
+	main.use_skill(u, 2)
+	check(u.hp < 30.0 + u.max_hp * main.CONSUMED_BIG_HEAL, "e a habilidade sai normal")
+	# parry fortalecido
+	ready(u)
+	u.stacks = 12
+	main.use_skill(u, 5)
+	main.use_skill(u, 1)
+	check(is_equal_approx(u.taste_t, main.TASTE_TIME * main.TASTE_BIG), "Blood Taste fortalecido: janela do parry em dobro")
+	await wait(1.2)
+	# Blood Party
+	ready(u)
+	u.stacks = main.PARTY_NEED
+	u.hp = 55.0
+	main.use_skill(u, 4)
+	check(is_equal_approx(u.party_t, main.PARTY_TIME) and is_equal_approx(main.PARTY_TIME, 10.0) and is_equal_approx(u.hp, 1.0), "Blood Party: 10 s, começando com 1 de vida")
+	await wait(0.9)
+	check(not u.med_shield.visible, "ela joga o escudo fora")
+	main.hurt(u, 500.0, "teste")
+	check(u.alive and is_equal_approx(u.hp, 1.0), "golpe pesado: ela não morre enquanto dura")
+	main.kill(u, "teste")
+	check(u.alive, "nem mecânica que mata na hora")
+	u.hp = 50.0
+	u.shield_hp = 30.0
+	await frames_of(3)
+	check(is_equal_approx(u.hp, 1.0) and is_equal_approx(u.shield_hp, 0.0), "cura e escudo de fora não entram")
+	before = u.dmg_total
+	var mult: float = main.low_hp_mult(u)
+	main._damage_boss(u, 40.0, false, false)
+	var dealt: float = u.dmg_total - before
+	check(is_equal_approx(dealt, 40.0 * mult * main.PARTY_DMG_MULT), "dano dobrado (%.0f)" % dealt)
+	check(is_equal_approx(u.hp, 1.0 + dealt * main.PARTY_STEAL), "rouba 25%% do dano causado (vida %.0f)" % u.hp)
+	await frames_of(3)
+	check(u.hp > 20.0, "e essa cura, que é dela, fica")
+	ready(u)
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.skill_cd[0], 0.5), "recargas pela metade (Poke: 0,5 s)")
+	hp0 = u.hp
+	main.use_skill(u, 0)
+	check(u.hp >= hp0, "e os golpes não custam vida durante o Blood Party")
+	# Extração no lugar do parry
+	ready(u)
+	u.hp = 5.0
+	u.party_hp = 5.0
+	check(main.use_skill(u, 1) and is_equal_approx(u.lock_t, main.EXTRACT_TIME) and u.taste_t <= 0.0, "no Blood Party o slot do parry vira a Extração: 1 s com a seringa na boss")
+	await wait(0.5)
+	check(u.hp < 5.0 + u.max_hp * main.EXTRACT_HEAL, "no meio da extração a cura ainda não veio")
+	await wait(0.65)
+	check(u.hp >= 5.0 + u.max_hp * main.EXTRACT_HEAL, "no fim, recupera 40%% da vida máxima ou mais (%.0f)" % u.hp)
+	check(is_equal_approx(u.skill_cd[1], main.EXTRACT_CD - 1.15) or (u.skill_cd[1] > 2.0 and u.skill_cd[1] < 4.0), "a Extração volta em 4 s: dá pra usar de novo na mesma Ultimate")
+	# Bloodbath no Blood Party: de graça, o dobro do alcance, três cargas e o DoT Pure Blood
+	await frames_of(3)
+	check(main.hud.party_fx.visible, "no Blood Party a tela pulsa (vermelho e roxo)")
+	var urge0: float = main.hud._party_mat.get_shader_parameter("urgency")
+	u.party_t = 2.0
+	await frames_of(3)
+	check(float(main.hud._party_mat.get_shader_parameter("urgency")) > urge0 + 0.3, "e fica mais intensa conforme o tempo acaba")
+	u.party_t = 9.0
+	ready(u)
+	u.stacks = 0
+	far_ally.position = u.position + Vector3(0, 0, 9.0)
+	far_ally.hold_pos = far_ally.position
+	far_ally.bath_t = 0.0
+	await frames_of(2)
+	check(u.bath_free and main.hud.skill_ui[5]["ui"].glow and main.hud.skill_ui[5]["ui"].usable, "no Blood Party o Bloodbath brilha: está de graça")
+	check(main.use_skill(u, 5) and u.stacks == 0 and not u.bath_free, "e sai sem gastar Sangue")
+	check(far_ally.bath_t > 9.0, "e alcança o dobro (cobre quem está a 9 m)")
+	check(u.bath_charges == main.BATH_CHARGES_ULT, "valendo pras três próximas habilidades")
+	check(not main.get_dot("pure").is_empty(), "deixa o DoT Pure Blood na boss")
+	var kept_window: float = u.bath_window
+	var kept_charges: int = u.bath_charges
+	ready(u)
+	await frames_of(3)
+	check(not main.hud.skill_ui[5]["ui"].usable and not main.use_skill(u, 5), "só uma vez: o segundo, no mesmo Blood Party, pede Sangue")
+	u.stacks = 10
+	check(main.use_skill(u, 5) and u.stacks == 0, "com 10 de Sangue ele sai de novo")
+	u.bath_window = kept_window
+	u.bath_charges = kept_charges
+	u.hp = 10.0
+	u.party_hp = 10.0
+	main.plain_hit = true
+	main._damage_boss(u, 50.0, false, false)
+	main.plain_hit = false
+	check(is_equal_approx(u.hp, 10.0), "o Pure Blood não alimenta o roubo de vida")
+	ready(u)
+	main.use_skill(u, 0)
+	check(u.bath_charges == 2 and is_equal_approx(u.bath_window, main.BATH_WINDOW), "cada fortalecida gasta uma carga e reabre os 2 s")
+	# Extração fortalecida: 2,5 s carregando e uma explosão enorme
+	ready(u)
+	u.hp = 5.0
+	u.party_hp = 5.0
+	u.party_t = 9.0
+	before = u.dmg_total
+	check(main.use_skill(u, 1) and is_equal_approx(u.lock_t, main.EXTRACT_BIG_TIME) and u.bath_charges == 1, "Extração fortalecida: 2,5 s carregando a seringa na boss")
+	await wait(1.5)
+	check(u.hp < u.max_hp * 0.6 and not main.use_skill(u, 0), "no meio da carga ela está presa e a cura ainda não veio")
+	await wait(1.2)
+	check(u.dmg_total - before >= main.EXTRACT_BIG_DMG and u.hp >= 5.0 + u.max_hp * main.EXTRACT_BIG_HEAL - 1.0, "ao soltar: %d de dano ou mais, e quase a vida toda de volta (%.0f)" % [int(main.EXTRACT_BIG_DMG), u.hp])
+	check(u.lock_t <= 0.0 and u.channel_t <= 0.0, "e ela se solta")
+	# fim sem a vida cheia: morre
+	u.hp = 40.0
+	u.party_hp = 40.0
+	u.party_t = 0.05
+	await wait(0.25)
+	check(not u.alive, "acabou o tempo sem a vida cheia: ela morre")
+	check(String(main.log_lines[-1]).contains("Blood Party"), "e o motivo fica registrado")
+	# fim com a vida cheia: sobrevive
+	main = await fight(4)
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	u = main.units[main.ctrl]
+	u.stacks = main.PARTY_NEED
+	main.use_skill(u, 4)
+	await wait(0.2)
+	u.hp = u.max_hp
+	u.party_hp = u.max_hp
+	u.party_t = 0.05
+	await wait(0.6)
+	check(u.alive and is_equal_approx(u.hp, u.max_hp) and u.party_t <= 0.0, "com a vida cheia no fim, ela sobrevive")
+	check(not u.bath_free, "o Bloodbath grátis não usado se perde quando o Blood Party acaba")
+	check(u.med_shield.visible and is_equal_approx(u.visual.scale.x, 1.0), "e o escudo volta")
+	check(SkillInfo.info("nurse", 4)["desc"].contains("você morre") and SkillInfo.info("nurse", 1)["desc"].contains("EXTRAÇÃO"), "as fichas explicam a regra do Blood Party e a Extração")
+
+	# ---------- ordem da barra escolhida na tela SKILLS
+	main = await fight(2)
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	u = main.units[main.ctrl]
+	u.position = main._atk_pos(u)
+	Knowledge.layouts[2] = [3, 1, 2, 0, 4, 5]
+	Knowledge.layout_rev += 1
+	await frames_of(3)
+	var bar: Array = main.hud.skill_ui
+	check(bar[0]["slot"] == 3 and bar[3]["slot"] == 0 and bar[0]["ui"].icon == SkillInfo.icon("assassina", 3), "a barra da luta segue a ordem arrumada na tela SKILLS")
+	check(bar[0]["ui"].key_text == Binds.label("skill_1") and bar[3]["ui"].key_text == Binds.label("skill_4"), "as teclas continuam sendo das posições")
+	ready(u)
+	Binds.apply()
+	var press: InputEvent = Binds.event_of(KEY_J)
+	press.pressed = true
+	main._unhandled_input(press)
+	check(u.skill_cd[3] > 10.0 and u.skill_cd[0] <= 0.0, "a tecla da posição 1 solta a habilidade que está lá (Dança Carmesim)")
+	check(Knowledge.pos_of(2, 0) == 3, "e o ataque básico de segurar passa pra tecla da posição 4")
+	Knowledge.layouts.erase(2)
+	Knowledge.layout_rev += 1
 
 	print("Results: %d passed, %d failed" % [passed, failed])
 	quit(1 if failed > 0 else 0)

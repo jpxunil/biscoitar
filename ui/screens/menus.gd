@@ -6,6 +6,7 @@ extends Control
 ##   vitória -> loja -> título
 ##   título -> tutoriais -> (cena do tutorial) -> tutoriais
 ##   título -> SKILLS (consulta das habilidades de todos os personagens) -> título
+##   cartas -> SKILLS (botão pequeno embaixo do VOLTAR, abre no herói que está sendo visto) -> cartas
 ##   título -> opções (a tela de opções é do hud.gd: é a mesma que o pause abre)
 ## Cada tela é uma cena própria em ui/screens/, que também abre sozinha com F6.
 
@@ -18,6 +19,9 @@ var tutorials: TutorialsScreen
 var saves: SavesScreen
 var skills: SkillsScreen
 var _gear := false
+var _skills_from_cards := false
+var _skills_hero := -1
+var _cards_hero := -1
 
 
 func setup(game) -> void:
@@ -35,7 +39,16 @@ func setup(game) -> void:
 		s.visible = false
 	title.play_pressed.connect(show_screen.bind("saves"))
 	title.skills_pressed.connect(show_screen.bind("skills"))
-	skills.back_pressed.connect(show_screen.bind("title"))
+	skills.back_pressed.connect(func():
+		# volta pra onde veio: a tela de cartas (botão SKILLS dela) ou o menu principal
+		var to := "cards" if _skills_from_cards else "title"
+		_skills_from_cards = false
+		show_screen(to))
+	cards.skills_pressed.connect(func(hero: int):
+		_skills_from_cards = true
+		_skills_hero = hero
+		_cards_hero = hero  # na volta, as cartas reabrem no mesmo herói
+		show_screen("skills"))
 	saves.back_pressed.connect(show_screen.bind("title"))
 	saves.slot_chosen.connect(func(n: int):
 		# carrega (ou cria) o save e vai pra cafeteria montar a party; os bosses só abrem depois dela
@@ -97,13 +110,15 @@ func show_screen(id: String) -> void:
 	match id:
 		"skills":
 			skills.visible = true
-			skills.open(Knowledge.start_hero)
+			skills.open(_skills_hero if _skills_hero >= 0 else Knowledge.start_hero)
+			_skills_hero = -1
 		"bosses":
 			bosses.visible = true
 			bosses.open()
 		"cards":
 			cards.visible = true
-			cards.open(Knowledge.start_hero, not _gear)
+			cards.open(_cards_hero if _cards_hero >= 0 else Knowledge.start_hero, not _gear)
+			_cards_hero = -1
 		"shop":
 			shop.visible = true
 			shop.open()

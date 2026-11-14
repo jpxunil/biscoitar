@@ -227,3 +227,67 @@ Vale o que está aqui quando divergir das fichas acima.
 - **Cartas novas**: nenhuma carta é equipada sozinha. Ela entra na coleção marcada como NOVA pro herói que a
   conquistou (`Knowledge.fresh`, salvo no save): selo na carta até passar o mouse nela, aviso no rosto do herói
   até a última ser vista.
+- **Maga, artilharia arcana (rework)**: limite de 8 Rainbow Shots. Salva Astral sem recarga: consome 3 balas e só
+  acende com 3 ou mais. Ricochete Prismático só volta nela com o escudo da Salva de pé (e perto da boss).
+  Tiro Perfurante marca a boss por 2 s; Salva, Canhão ou Disparo fortalecido estouram a marca (+60, uma vez;
+  o Canhão usa a marca ao começar o preparo). Canhão Estelar conjura 2 s parada; com exatamente 8 balas vira
+  o supercanhão arco-íris (+180, 2 s presa no lugar, dano em 8 batidas). Ela ganhou uma pistola de cristal.
+- **Soulburner, fogo celestial (rework visual)**: paleta verde-marinho / ciano / menta / branco; asas no boneco.
+  Marca do Zênite com halo que fica mais luminoso conforme a marca acaba. Lança Serafim com 1 s de cast (o dano
+  é travado no começo do cast) e queda de 0,35 s. Chuva de Brasas cai de verdade pelos 15 s. Juízo Solar: 1 s
+  subindo (preso), sol leva 2 s até a boss (dano no impacto; a marca vale na hora do uso), 1,5 s flutuando já
+  podendo agir. Recargas e danos não mudaram.
+- **Maga, Fada Astral**: Salva Astral com exatamente 6 balas (o botão brilha) gasta as 6 e solta a fada: 15 s perto
+  da boss, 6 de dano por segundo. Com ela em campo o Ricochete quica entre a boss e a fada, e cada bala que a
+  fada recebe cura a party em 5% da vida máxima (o excedente vira escudo). Canhão com 8 balas brilha em arco-íris.
+  Rainbow Shots não sai sem balas.
+- **Velocidade de andar** (só pra quem o jogador controla; a IA fica na base): Assassina e Malpractice 100%;
+  Sleepwalker e Apotecário 35%; os outros 60%. A Nuvem Conservante do Apotecário dá +60% à party por 8 s.
+- **Reviver**: Soulflame, simples: Asa da Fênix com alguém caído revive com 50% (o escolhido no card primeiro).
+  Apotecário, em etapas: Sutura no caído escolhido no card prepara o corpo (vira o Paciente); Estabilização com
+  3 Vestígios reanima o Paciente com 40%. A IA do Apotecário não faz isso sozinha.
+- **Soulburner**: nos últimos 2 s da Marca do Zênite o halo estoura de brilho e o botão da Lança acende; a
+  Lança conjurada aí é a Lança Perfeita (fogo em volta, coluna de luz no impacto).
+- **Assassina (ajustes)**: Frenesi também corta pela metade a recarga do Passo Rasante e das Garras. Garras
+  Cruzadas: 3 de dano por corte, divide a recarga com o Talho (0,6 s) e abre o Ferimento (12 s: +15% de dano da
+  party inteira na boss). Dança Carmesim: 95 de dano, 15 s, o boneco gira. Golpe de Misericórdia: 22 s, salto
+  em espiral de 1 s até a boss, de qualquer distância; atingida no salto ela apara e o corte não sai; em
+  Frenesi não toma dano, o corte sai e dá +50%.
+- **Malpractice (visual e Ultimate)**: seringa gigante e escudo médico modelados no boneco (unit.syringe,
+  unit.med_shield), prontos pra pendurar no modelo definitivo. Blood Party agora dura 10 s: joga o escudo fora e
+  se injeta; começa com 1 de vida, não morre enquanto dura, dano x2, recargas pela metade, rouba 25% do dano
+  causado, cura e escudo de fora não entram, e morre no fim se a vida não estiver cheia. O slot do parry vira a
+  Extração (1 s na boss, +40% da vida máxima, 4 s de recarga). A aura de dano antiga saiu.
+- **Ringstar**: Contagem Regressiva dá +44% de velocidade de movimento.
+- **Foco por clique na luta**: um clique no card ou no boneco 3D foca o herói (círculo em volta dele); dois cliques
+  trocam o controle. Caído só pode ser focado.
+- **Soulflame**: todas as habilidades conjuram 1,2 s; Fagulha e Toque de Brasa com 2 s de recarga. Renascimento
+  com uma Lareira acesa: a fênix nasce dela e a Lareira fica forte (12 de cura por segundo, raio 7, 14 s).
+- **Malpractice, Bloodbath (slot 6)**: 10 de Sangue; chove sangue em volta dela (raio 6): 20% menos dano por 10 s em
+  quem for coberto. Abre 2 s pra escolher UMA habilidade fortalecida (Poke: rajada 3 s; Blood Taste: janela em
+  dobro; Consumed: +20% de vida, regeneração e Compartilhamento de Sangue na party). No Blood Party: de graça,
+  raio em dobro, três cargas, DoT Pure Blood (não alimenta o roubo de vida) e a Extração fortalecida carrega 2,5 s
+  e explode. Blood Taste só dá Sangue no parry bem-sucedido. No Blood Party a tela pulsa vermelho e roxo.
+- **Soulflame, Renascimento**: 3 s de cast; a fênix nasce, grita e voa devagar até a boss, largando fogo no chão.
+  Cura e reviver no nascimento; dano e DoT na chegada.
+- **Assassina**: duas adagas no boneco. Frenesi de 12 s com a tela pulsando roxo; quando acaba, o botão vira a
+  Última Dança por 2 s (bônus, sem recarga): 14 cortes de 20 e um X de 220, intocável, abre o Ferimento.
+  Golpe de Misericórdia é a execução: até +80% conforme a boss perde vida; +25% com Ferimento, que ele renova.
+- **Cliques na luta**: slots da barra e o Limit Break são clicáveis.
+
+## Rodada: Rotação, Assassina, barra arrumável e Soulburner
+
+- **Carta Rotação** (`dps`): com ela, o herói na mão da IA joga o kit de verdade (`_ai_rotation` / `_rot_pick`
+  em `scripts/game.gd`), cada habilidade saindo de 0,3 a 2 s depois de voltar (`AI_REACT`), com 50% do dano
+  do jogador (`AI_ROT_MULT`). Larga a conjuração se uma mecânica chamar. Pra liberar (`rot_ok`), em 25 s
+  corridos: DPS >= `DPS_GOAL`; básico parado no máximo 35% do tempo; cada habilidade de `ROT_SLOTS` usada;
+  atraso médio depois de voltar <= 3 s; nenhuma parada há mais de 6 s.
+- **Assassina**: Talho 1,3 s de recarga (0,6 s com Ferimento na boss); Garras 3x2 de dano; em Frenesi cada
+  Talho tira 0,3 s da Dança e do Misericórdia, os dois botões brilham roxo, a Dança vira furacão (+40%).
+  Misericórdia: arremessa a adaga, se puxa, crava (40%) e mergulha (60%); em Frenesi vai girando como serra.
+  Última Dança: 0,5 s agachada, cortes horizontais longos com a tela clareando, X, e o Corte Final que
+  devolve 45% do dano causado no Frenesi (dano direto).
+- **Barra arrumável**: na tela SKILLS, segurar e arrastar uma linha em cima de outra troca as posições
+  (R restaura). Fica em `Knowledge.layouts`, por herói e por save; teclas são das posições.
+- **Soulburner**: Brasas com 1 s de cast e 2 s de recarga contando do começo do cast; Juízo Solar brilha
+  verde quando está pronto e a boss tem a Marca do Zênite. Meta de DPS da Rotação dele: 34 -> 26.

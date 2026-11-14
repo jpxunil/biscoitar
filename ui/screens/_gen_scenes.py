@@ -48,26 +48,7 @@ def box(name,parent,rect,kind="Control",**kw):
     return (name,parent,kind,rect,kw)
 
 # ---------------- título
-scene("ui/screens/title_screen.tscn","res://ui/screens/title_screen.gd",[
-  ("Bg",".","bg",None,{}),
-  pan("LogoPanel",".",(70,110,660,250),"GRAPE",21,rotation=-0.05),
-  lab("Logo1","LogoPanel",(40,18,600,110),"BORA",100,"CREAM"),
-  lab("Logo2","LogoPanel",(40,118,600,110),"BISCOITAR",100,"COIN"),
-  pan("TagPanel",".",(110,380,360,50),"OUT",5,rotation=-0.03),
-  txt("Tag","TagPanel",(18,10,330,30),"um jogador, quatro heróis, uma boss",17,"CREAM"),
-  btn("BtnPlay",".",(820,210,380,92),"PLAY","COIN","OUT",40,5),
-  btn("BtnGear",".",(840,324,380,92),"GEAR","CREAM","OUT",40,9),
-  btn("BtnShop",".",(820,438,380,92),"LOJA","GRAPE","CREAM",40,13),
-  btn("BtnTutorial",".",(440,612,480,60),"TUTORIAL DO JOGO","CREAM","OUT",26,19),
-  btn("BtnOptions",".",(960,612,260,60),"OPÇÕES","NAVY","CREAM",26,17),
-  pan("ShopLock",".",(880,536,280,38),"OUT",7),
-  txt("ShopLockText","ShopLock",(14,7,260,26),"vença um boss pra abrir",15,"DIM"),
-  pan("Wallet",".",(60,610,330,64),"NAVY",15),
-  box("CoinIcon","Wallet",(18,16,32,32)),
-  lab("Coins","Wallet",(58,10,100,44),"0",28,"COIN"),
-  box("TicketIcon","Wallet",(176,16,32,32)),
-  lab("Tickets","Wallet",(216,10,100,44),"0",28,"VIOLET"),
-])
+# A tela de título é montada em código (ui/screens/title_screen.gd, kit Paper); a cena só tem a raiz com o script.
 
 # ---------------- bosses
 scene("ui/screens/boss_screen.tscn","res://ui/screens/boss_screen.gd",[

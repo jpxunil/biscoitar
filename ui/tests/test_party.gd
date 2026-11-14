@@ -66,12 +66,12 @@ func _initialize() -> void:
 	var menus = main.hud.menus
 	check(Knowledge.slot_exists(1) and FileAccess.file_exists(DIR + "save.json"), "o save antigo vira o SAVE 1 (e o arquivo antigo fica de cópia)")
 	check(Knowledge.slot == 0, "sem save escolhido ao abrir o jogo pela primeira vez")
-	check(menus.title.visible and menus.title.get_node("BtnPlay").text == "PLAY" and not menus.title.has_node("BtnBosses"), "menu principal: PLAY no lugar de BOSSES")
+	check(menus.title.visible and menus.title.get_node("Stage/BtnPlay").text == "JOGAR" and not menus.title.has_node("Stage/BtnBosses"), "menu principal: JOGAR no lugar de BOSSES")
 
 	menus.show_screen("bosses")
 	check(not menus.bosses.visible and menus.saves.visible, "sem save e party, os bosses não abrem (cai nos saves)")
 	menus.show_screen("title")
-	menus.title.get_node("BtnPlay").pressed.emit()
+	menus.title.get_node("Stage/BtnPlay").pressed.emit()
 	await frames(2)
 	check(menus.saves.visible, "PLAY abre a seleção de saves")
 	check(menus.saves._rows.size() == 4, "quatro slots de save")

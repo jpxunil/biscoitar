@@ -110,9 +110,9 @@ func _initialize() -> void:
 	# ---------------------------------------------------------------- menu principal sem GEAR
 	var main := await open_main()
 	var menus = main.hud.menus
-	check(not menus.title.has_node("BtnGear"), "menu principal não tem mais o botão GEAR")
-	check(menus.title._btns.size() == 5 and menus.title.has_node("BtnSkills"), "menu principal: PLAY, LOJA, SKILLS, TUTORIAL e OPÇÕES")
-	menus.title.get_node("BtnSkills").pressed.emit()
+	check(not menus.title.has_node("Stage/BtnGear"), "menu principal não tem mais o botão GEAR")
+	check(menus.title._btns.size() == 5 and menus.title.has_node("Stage/BtnSkills"), "menu principal: PLAY, LOJA, SKILLS, TUTORIAL e OPÇÕES")
+	menus.title.get_node("Stage/BtnSkills").pressed.emit()
 	await frames(3)
 	var sks = menus.skills
 	check(sks.visible and sks._rows.size() == 6, "SKILLS abre a consulta de habilidades (6 slots)")
@@ -136,6 +136,24 @@ func _initialize() -> void:
 			found_key = true
 	check(found_key, "a tela mostra a tecla configurada do slot, não o número")
 	Binds.reset("skill_2")
+	# arrumar a barra: segurar uma linha e soltar em cima de outra troca as duas de posição
+	sks.open(2)
+	var drag = sks._drag_row(0)
+	check(sks._can_drop_row(3, drag) and sks._drop_at == 3 and not sks._can_drop_row(0, drag), "arrastar: dá pra soltar em outra linha (que acende), não na mesma")
+	sks._drop_row(3, drag)
+	check(Knowledge.layout(2) == [3, 1, 2, 0, 4, 5] and sks.sel == 3 and sks._d_name.text == "TALHO RELÂMPAGO", "soltar troca as duas habilidades de posição")
+	check(sks._rows[0]["slot"].icon == SkillInfo.icon("assassina", 3) and sks._rows[3]["slot"].icon == SkillInfo.icon("assassina", 0), "e as linhas mostram a ordem nova")
+	check(Knowledge.layout(0) == [0, 1, 2, 3, 4, 5], "só a barra desse herói muda")
+	Knowledge.select_slot(2)
+	check(Knowledge.layout(2) == [0, 1, 2, 3, 4, 5], "a ordem da barra é de cada save")
+	Knowledge.select_slot(1)
+	check(Knowledge.layout(2) == [3, 1, 2, 0, 4, 5], "e fica gravada no save")
+	sks.open(2)
+	var r_key := InputEventKey.new()
+	r_key.physical_keycode = KEY_R
+	r_key.pressed = true
+	sks._unhandled_input(r_key)
+	check(Knowledge.layout(2) == [0, 1, 2, 3, 4, 5] and sks._rows[0]["slot"].icon == SkillInfo.icon("assassina", 0), "R restaura a ordem original")
 	sks.back_pressed.emit()
 	await frames(2)
 	check(menus.title.visible, "VOLTAR retorna ao menu principal")
@@ -145,6 +163,15 @@ func _initialize() -> void:
 	menus.bosses.get_node("BtnGear").pressed.emit()
 	await frames(2)
 	check(menus.cards.visible and not menus.cards._show_ready, "CARTAS abre as cartas do save, sem botão de luta")
+	# botão SKILLS da tela de cartas
+	check(menus.cards._skills_btn.visible, "a tela de cartas tem o botão SKILLS")
+	var seen_hero: int = menus.cards.hero
+	menus.cards._skills_btn.pressed.emit()
+	await frames(3)
+	check(menus.skills.visible and menus.skills.hero == seen_hero, "ele abre a tela SKILLS no herói que estava sendo visto")
+	menus.skills.back_pressed.emit()
+	await frames(3)
+	check(menus.cards.visible and not menus.title.visible, "VOLTAR da tela SKILLS retorna pras cartas (e não pro menu principal)")
 	menus.cards.back_pressed.emit()
 	await frames(2)
 	check(menus.bosses.visible, "voltar do gear cai na tela de bosses")

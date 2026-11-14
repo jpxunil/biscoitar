@@ -9,6 +9,8 @@ extends Control
 
 signal ready_pressed
 signal back_pressed
+## Abrir a tela SKILLS no herói que está sendo visto (o botão pequeno embaixo do VOLTAR).
+signal skills_pressed(hero: int)
 ## Uma carta mudou de lugar (equipou, tirou ou trocou de slot).
 signal deck_changed
 
@@ -287,6 +289,7 @@ var _d_cat: Tag
 var _d_desc: Label
 ## Pista da carta desconhecida (some quando a carta é do jogador).
 var _d_hint: Label
+var _skills_btn: ShineButton
 var _ready_btn: ShineButton
 var _ready_shadow: Draw
 
@@ -415,6 +418,7 @@ func refresh(animate := false, dir := 0) -> void:
 		_face_frame.visible = false
 		frame = {"w": float(tutor.get("art_w", 400.0)), "x": 880.0, "y": 8.0}
 	_bubble.visible = tutor.is_empty()
+	_skills_btn.visible = tutor.is_empty()
 	_name_tag.visible = tutor.is_empty()
 	_role_tag.visible = tutor.is_empty()
 	_hp.visible = tutor.is_empty()
@@ -647,6 +651,25 @@ func _build() -> void:
 	back.fg_hover = Paper.CREAM
 	_add(_top, back, Vector2(1136, 16), Vector2(120, 40))
 	back.pressed.connect(func(): back_pressed.emit())
+	# atalho pra tela SKILLS: etiqueta roxa pequena, inclinada pro outro lado, pendurada embaixo do VOLTAR
+	_skills_btn = ShineButton.new()
+	_skills_btn.text = "SKILLS"
+	_skills_btn.font_px = 13
+	_skills_btn.chevron = 1
+	_skills_btn.chevron_px = 11
+	_skills_btn.skew = -10
+	_skills_btn.border = 3
+	_skills_btn.shadow = Vector2(4, 5)
+	_skills_btn.fill = Color("5B2BB8")
+	_skills_btn.fill_hover = Paper.GOLD
+	_skills_btn.fg = Paper.CREAM
+	_skills_btn.fg_hover = Paper.INK
+	_skills_btn.hover_scale = 1.1
+	_skills_btn.idle = true
+	_skills_btn.idle_every = 5.0
+	_add(_top, _skills_btn, Vector2(1158, 66), Vector2(98, 32))
+	_skills_btn.rotation = deg_to_rad(-3.0)
+	_skills_btn.pressed.connect(func(): skills_pressed.emit(hero))
 
 	# nome, classe e vida, colados sobre a arte
 	_name_tag = Control.new()

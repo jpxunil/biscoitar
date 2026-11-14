@@ -67,7 +67,7 @@ const UNIT_DEFS := [
 	{"name": "Maga", "range": RANGED_RANGE, "key": "maga", "color": Color(1.0, 0.72, 0.25), "hp": 90.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
 	# os quatro da luta vêm de Knowledge.fight_party(): qualquer combinação destes heróis
 	{"name": "Malpractice", "range": MELEE_RANGE, "key": "nurse", "color": Color(0.36, 0.4, 0.95), "hp": 80.0, "melee": true, "ai_dps": 6.0, "hit": 8.0, "tank": true},
-	{"name": "Soulburner", "range": RANGED_RANGE, "key": "burner", "color": Color(1.0, 0.55, 0.25), "hp": 90.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
+	{"name": "Soulburner", "range": RANGED_RANGE, "key": "burner", "color": Color(0.12, 0.82, 0.78), "hp": 90.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
 	{"name": "Ringstar", "range": MELEE_RANGE, "key": "ringstar", "color": Color(1.0, 0.45, 0.75), "hp": 110.0, "melee": true, "ai_dps": 9.0, "hit": 14.0},
 	{"name": "Apotecário", "range": RANGED_RANGE, "key": "apothecary", "color": Color(0.35, 0.8, 0.66), "hp": 90.0, "melee": false, "ai_dps": 5.0, "hit": 8.0},
 	{"name": "Sleepwalker", "range": RANGED_RANGE, "key": "sleepwalker", "color": Color(0.55, 0.58, 1.0), "hp": 85.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
@@ -186,34 +186,39 @@ const SKILLS := {
 	# o 5 é o ultimate (não tem recarga: gasta PARTY_NEED acúmulos). Quanto menos vida, mais dano.
 	"nurse": [{"name": "Syringe Poke", "cd": 1.0, "dmg": 8.0},
 		{"name": "Blood Taste", "cd": 20.0}, {"name": "Blood Consumed", "cd": 5.0, "dmg": 40.0},
-		{"name": "Emergency Response", "cd": 8.0}, {"name": "Blood Party", "big": true, "cd": 0.0, "stacks": 20}],
+		{"name": "Emergency Response", "cd": 8.0}, {"name": "Blood Party", "big": true, "cd": 0.0, "stacks": 20},
+		{"name": "Bloodbath", "cd": 12.0}],
 	# Soulflame: healer direta, sem recurso. "ai_cd" é a recarga quando quem usa é a IA.
-	"healer": [{"name": "Fagulha Espiritual", "cd": 1.0, "dmg": 12.0},
-		{"name": "Toque de Brasa", "cd": 1.0, "cast": 1.5, "ai_cd": 3.5},
-		{"name": "Lareira Celestial", "cd": 18.0},
-		{"name": "Manto de Cinzas", "cd": 20.0},
-		{"name": "Asa da Fênix", "cd": 30.0},
-		{"name": "Renascimento", "big": true, "cd": 60.0}],
+	# Todas as habilidades dela conjuram 1,2 s (o Renascimento, 3 s): andar cancela, sem gastar a recarga.
+	"healer": [{"name": "Fagulha Espiritual", "cd": 2.0, "dmg": 12.0, "cast": 1.2},
+		{"name": "Toque de Brasa", "cd": 2.0, "cast": 1.2, "ai_cd": 3.5},
+		{"name": "Lareira Celestial", "cd": 18.0, "cast": 1.2},
+		{"name": "Manto de Cinzas", "cd": 20.0, "cast": 1.2},
+		{"name": "Asa da Fênix", "cd": 30.0, "cast": 1.2},
+		{"name": "Renascimento", "big": true, "cd": 60.0, "cast": 3.0}],
+	# Garras Cruzadas divide a recarga com o Talho (usar uma põe a outra na mesma recarga): quase não dá
+	# dano, serve pra manter o Ferimento na boss (a party toda bate mais forte).
 	# Assassina: velocidade pura. O Talho (slot 1) bate MUITO mais forte do lado certo da boss:
 	# três de um lado, três do outro (unit.side_need / side_left), pra sempre.
-	"assassina": [{"name": "Talho Relâmpago", "cd": 0.6, "dmg": 10.0},
+	"assassina": [{"name": "Talho Relâmpago", "cd": 1.3, "dmg": 10.0},
 		{"name": "Passo Rasante", "cd": 5.0, "dmg": 35.0},
-		{"name": "Garras Cruzadas", "cd": 6.0, "dmg": 18.0},
-		{"name": "Dança Carmesim", "cd": 12.0, "dmg": 65.0},
-		{"name": "Golpe de Misericórdia", "cd": 15.0, "dmg": 120.0},
+		{"name": "Garras Cruzadas", "cd": 0.6, "dmg": 2.0},
+		{"name": "Dança Carmesim", "cd": 15.0, "dmg": 95.0},
+		{"name": "Golpe de Misericórdia", "cd": 22.0, "dmg": 120.0},
 		{"name": "Frenesi da Fera", "big": true, "cd": 60.0}],
-	# Maga: atiradora. Nada de cast: ela dispara, junta balas Rainbow (passiva) e decide onde gastar.
+	# Maga: atiradora. Dispara, junta balas Rainbow (passiva) e decide onde gastar. Só o Canhão Estelar
+	# conjura (ela materializa a arma). A Salva Astral não tem recarga: custa SALVO_COST balas.
 	# "pow" = dano de habilidade que não exige o alcance normal de ataque.
 	"maga": [{"name": "Disparo Rúnico", "cd": 1.0, "dmg": 26.0},
 		{"name": "Rainbow Shots", "cd": 0.3},
 		{"name": "Ricochete Prismático", "cd": 8.0},
 		{"name": "Tiro Perfurante", "cd": 12.0, "dmg": 95.0},
-		{"name": "Salva Astral", "cd": 20.0},
-		{"name": "Canhão Estelar", "big": true, "cd": 60.0}],
+		{"name": "Salva Astral", "cd": 0.0},
+		{"name": "Canhão Estelar", "big": true, "cd": 60.0, "cast": 2.0}],
 	# Soulburner: marcar (Marca do Zênite) e estourar a marca (Lança Serafim) o mais tarde possível.
-	"burner": [{"name": "Brasas do Firmamento", "cd": 1.0, "dmg": 24.0},
+	"burner": [{"name": "Brasas do Firmamento", "cd": 2.0, "cast": 1.0, "dmg": 24.0},
 		{"name": "Marca do Zênite", "cd": 12.0},
-		{"name": "Lança Serafim", "cd": 8.0},
+		{"name": "Lança Serafim", "cd": 8.0, "cast": 1.0},
 		{"name": "Rasante Incandescente", "cd": 10.0},
 		{"name": "Chuva de Brasas", "cd": 20.0},
 		{"name": "Juízo Solar", "big": true, "cd": 60.0}],
@@ -252,6 +257,27 @@ const SKILLS_ASLEEP := [
 ]
 ## Cast curto trava o personagem no lugar; cast longo pode ser interrompido andando.
 const LOCKED_CAST := 1.0
+## CARTA ROTAÇÃO
+## Com ela equipada, o herói na mão da IA joga o kit de verdade (_ai_rotation): cada classe tem uma
+## ordem de prioridade (_rot_pick) que respeita as mecânicas dela, e cada habilidade sai de AI_REACT
+## segundos depois de voltar. O dano desses golpes vale AI_ROT_MULT do que valeria na mão do jogador:
+## é um aliado competente, não um segundo jogador.
+const AI_REACT := Vector2(0.3, 2.0)
+const AI_ROT_MULT := 0.5
+## Pra LIBERAR a carta, o jogador precisa mostrar que sabe a rotação do herói, numa janela corrida de
+## Knowledge.DPS_WINDOW segundos no controle dele (rot_ok):
+##   1. DPS médio >= Knowledge.DPS_GOAL do herói;
+##   2. o golpe básico / GCD ficou parado (pronto, ao alcance, sem estar conjurando) no máximo
+##      ROT_IDLE_MAX do tempo;
+##   3. cada habilidade de rotação da classe (ROT_SLOTS: as recargas de dano, sem a ultimate de 60 s,
+##      as defesas e as curas) foi usada pelo menos uma vez na janela;
+##   4. depois de voltarem da recarga, elas esperaram em média no máximo ROT_DELAY_MAX pra ser usadas;
+##   5. nenhuma delas está parada há mais de ROT_STALE segundos agora.
+const ROT_SLOTS := {"tank": [1, 3], "nurse": [2], "healer": [], "assassina": [2, 3, 4], "maga": [3], "burner": [1, 2, 4],
+	"ringstar": [3, 4], "apothecary": [1], "sleepwalker": [1, 2, 3, 4]}
+const ROT_IDLE_MAX := 0.35
+const ROT_DELAY_MAX := 3.0
+const ROT_STALE := 6.0
 ## DPS da IA com a carta roxa Rotação (sem ela vale o ai_dps de UNIT_DEFS).
 ## Assassina e Maga, além disso, soltam o golpe forte de 20 s (Lâmina Final / Ruína) sempre que dá.
 const ROTATION_DPS := {"tank": 10.0, "nurse": 4.0, "healer": 6.0, "assassina": 14.0, "maga": 10.0, "burner": 11.0, "ringstar": 12.0, "apothecary": 8.0, "sleepwalker": 12.0}
@@ -287,10 +313,39 @@ const SIDE_MULT := 2.5         # ... +150% de dano no Talho dado do lado certo
 const SIDE_MIN := 0.6          # ... quão pra fora do meio (em x) já conta como um lado
 const CLAW_HITS := 3           # Garras Cruzadas: três cortes ...
 const CLAW_GAP := 0.1          # ... com esse intervalo
-const MERCY_WINDOW := 0.35     # Golpe de Misericórdia: janela de parry antes do corte sair
-const FRENZY_TIME := 8.0       # Frenesi da Fera
+const MERCY_WINDOW := 1.0      # Golpe de Misericórdia: o salto em espiral até a boss; o corte sai no fim.
+                               # Um golpe que chegar nesse tempo é aparado, e aí o corte não sai
+const MERCY_FRENZY := 1.5      # ... em Frenesi: +50% de dano, não toma dano e o corte sai mesmo aparando
+const WOUND_TIME := 12.0       # Garras Cruzadas: Ferimento na boss por esse tempo ...
+const WOUND_MULT := 1.15       # ... a party toda dá +15% de dano nela
+const WOUND_COL := Color(0.9, 0.1, 0.25)
+const DANCE_SPIN := 0.4        # Dança Carmesim: tempo do giro
+const FRENZY_TIME := 12.0      # Frenesi da Fera
+## Quando o Frenesi acaba, o botão dele brilha de novo por FINISH_WINDOW: é a Última Dança, uma habilidade
+## bônus (não mexe na recarga do Frenesi). Ela some e uma tempestade de cortes atravessa a boss
+## (FINISH_HITS de FINISH_HIT), fechando com um X gigante (FINISH_END). Enquanto dura, ela é intocável.
+const FINISH_WINDOW := 2.0
+const FINISH_HITS := 14
+const FINISH_HIT := 20.0
+const FINISH_END := 220.0
+const FINISH_TIME := 1.9
+## ... e, FINISH_ECHO_T depois do X, os cortes "estouram": FINISH_ECHO de todo o dano que ela causou
+## durante o Frenesi volta de uma vez (dano direto, sem multiplicadores).
+const FINISH_ECHO := 0.45
+const FINISH_ECHO_T := 0.6
+const FINISH_WINDUP := 0.5     # antes de sumir, ela se agacha em posição de ataque por esse tempo... e VAI
+const FINISH_LOCK := FINISH_WINDUP + FINISH_TIME + FINISH_ECHO_T
+const MERCY_FIRST := 0.4       # Golpe de Misericórdia: a parte do dano que sai na cravada (o resto, no mergulho)
+const MERCY_LAND := 0.5        # ... e o instante da cravada dentro da janela
+const DANCE_FRENZY := 1.4      # Dança Carmesim em Frenesi: vira um furacão e bate +40%
+## Golpe de Misericórdia é a execução: bate mais forte quanto menos vida a boss tem (até +MERCY_EXEC com
+## ela no fim), e mais ainda numa boss com Ferimento, que ele renova.
+const MERCY_EXEC := 0.8
+const MERCY_WOUND := 1.25
 const FRENZY_DMG := 1.15       # ... +15% de dano
-const FRENZY_HASTE := 0.5      # ... e o Talho recarrega na metade do tempo
+const WOUND_GCD := 0.6         # Talho Relâmpago com a boss em Ferimento: a recarga cai de 1,3 s pra isso
+const FRENZY_SHAVE := 0.3      # ... cada Talho Relâmpago tira isso da recarga da Dança Carmesim e do Golpe de Misericórdia
+const FRENZY_HASTE := 0.5      # ... e Talho, Garras e Passo Rasante recarregam na metade do tempo
 const SIDE_COL := Color(0.3, 1.0, 0.55)
 ## Kit da Maga. Balas Rainbow: uma a cada BULLET_EVERY segundos, até BULLET_MAX. A cor diz o efeito
 ## que a bala dá quando sai sozinha pelo Rainbow Shots.
@@ -302,7 +357,7 @@ const BULLETS := [
 	{"name": "IMPULSO", "col": Color(1.0, 0.85, 0.25)},  # amarela: o próximo Disparo dá um dash pra trás
 ]
 const BULLET_EVERY := 8.0
-const BULLET_MAX := 7
+const BULLET_MAX := 8
 const BULLET_DMG := 40.0       # Rainbow Shots: uma bala
 const BULLET_TRIPLE := 170.0   # ... com EXATAMENTE 3 guardadas: um tiro só, forte, e ela é empurrada pra trás
 const BULLET_KNOCK := 5.0
@@ -315,8 +370,22 @@ const RICO_HEAL := 6.0         # ... o que passar da vida cheia vira escudo
 const SALVO_COST := 3          # Salva Astral: gasta 3 balas
 const SALVO_DMG := 45.0        # ... por bala
 const SALVO_SHIELD := 40.0
+const SALVO_FAIRY := 6         # Salva Astral com EXATAMENTE 6 balas: gasta as 6 e solta a Fada Astral
+const FAIRY_TIME := 15.0       # ... que fica perto da boss esse tempo ...
+const FAIRY_DPS := 6.0         # ... dando esse dano por segundo com a varinha (é um DoT, só que animado)
+const FAIRY_HEAL := 0.05       # ... e, a cada ricochete que bate nela, cura a party nesse tanto da vida máxima
+const FAIRY_AT := Vector3(2.8, 6.4, -10.4)
+const FAIRY_COL := Color(1.0, 0.75, 0.95)
 const CANNON_DMG := 220.0      # Canhão Estelar sozinho ...
 const CANNON_PER_BULLET := 75.0  # ... e por bala guardada: bem mais que os 40 de soltá-las uma a uma
+const CANNON_SUPER_BONUS := 180.0  # com EXATAMENTE BULLET_MAX balas: supercanhão arco-íris, com esse dano a mais ...
+const CANNON_SUPER_TIME := 2.0   # ... disparando por esse tempo, com ela presa no lugar
+const CANNON_SUPER_TICKS := 8    # ... e o dano saindo nesse número de batidas
+const AIM_TIME := 2.0          # Tiro Perfurante: a boss fica marcada por esse tempo ...
+const AIM_BONUS := 60.0        # ... e a Salva, o Canhão ou o Disparo fortalecido que usar a marca dá isso a mais (uma vez)
+const AIM_COL := Color(0.45, 0.95, 1.0)
+const RAINBOW := [Color(1.0, 0.25, 0.35), Color(1.0, 0.6, 0.2), Color(1.0, 0.88, 0.25), Color(0.35, 0.9, 0.45),
+	Color(0.25, 0.85, 1.0), Color(0.4, 0.5, 1.0), Color(0.8, 0.4, 1.0)]
 ## Kit do Soulburner.
 const ZENITH_TIME := 10.0      # Marca do Zênite: DoT leve ...
 const ZENITH_DPS := 5.0
@@ -331,12 +400,24 @@ const SOLAR_DMG := 200.0       # Juízo Solar ...
 const SOLAR_MARKED := 300.0    # ... com a boss marcada (não gasta a marca)
 const SOLAR_DOT := 12.0        # ... e aí deixa um DoT médio
 const SOLAR_DOT_TIME := 15.0
-const FIRE := Color(1.0, 0.55, 0.2)
+## Paleta do Soulburner: fogo celestial verde-marinho, rastros ciano, brilhos menta e núcleos brancos.
+const FIRE := Color(0.1, 0.86, 0.72)
+const FIRE_CYAN := Color(0.3, 0.95, 1.0)
+const FIRE_MINT := Color(0.62, 1.0, 0.82)
+const LANCE_PERFECT := 0.8     # Lança conjurada com a marca nesse tanto do caminho (os últimos 2 s): timing perfeito
+const LANCE_GOOD := 0.4        # ... a partir daqui: bom
+const LANCE_FALL := 0.35       # Lança Serafim: depois do cast, tempo da queda até o impacto (o dano sai aí)
+const RAIN_EVERY := 0.11       # Chuva de Brasas: intervalo entre uma brasa e outra caindo
+const SOLAR_RISE := 1.0        # Juízo Solar: ele sobe e abre as asas (preso, sem agir) ...
+const SOLAR_TRAVEL := 2.0      # ... lança o sol, que leva esse tempo até a boss (o dano sai no impacto) ...
+const SOLAR_FLOAT := 1.5       # ... e fica flutuando esse tempo depois do lançamento, já podendo agir
+const SOLAR_HEIGHT := 2.6
 ## Kit da Ringstar.
 const WEAK_HIT := 8.0          # Direto ou Gancho sem estar fortalecido: dano mínimo
 const COUNT_TIME := 15.0       # Contagem Regressiva: duração ...
 const COUNT_GCD := 1.0         # ... o GCD dos três golpes cai de 2 s pra 1 s ...
 const COUNT_DMG := 1.1         # ... e +10% de dano
+const COUNT_SPEED := 1.44      # ... e +44% de velocidade de movimento
 const SUPERSTAR_DMG := 110.0
 const SUPERSTAR_WIND := 1.0    # SUPERSTAR!: pega o microfone e aponta pra boss ...
 const SUPERSTAR_FIRE := 1.0    # ... e a rajada sai ao longo desse tempo ...
@@ -420,11 +501,32 @@ const FLAME := Color(0.3, 0.95, 0.8)
 const HEARTH_TIME := 8.0       # Lareira Celestial: quanto dura ...
 const HEARTH_R := 4.5
 const HEARTH_HPS := 7.0        # ... e quanto cura por segundo quem está dentro
+## Renascimento usado com uma Lareira acesa: a fênix nasce dela e a Lareira fica FORTE em vez de sumir.
+const HEARTH_STRONG_TIME := 14.0   # volta a durar isso
+const HEARTH_STRONG_R := 7.0       # alcança mais longe
+const HEARTH_STRONG_HPS := 12.0    # e cura mais
+## Renascimento, depois do cast: a fênix nasce (REBIRTH_BIRTH), grita (REBIRTH_CRY) e só então atravessa
+## o campo devagar (REBIRTH_FLY) até a boss, largando fogo pelo caminho (REBIRTH_PATCH segundos no chão).
+## A cura e o reviver saem no nascimento; o dano e o DoT, quando ela chega na boss.
+const REBIRTH_BIRTH := 0.9
+const REBIRTH_CRY := 0.6
+const REBIRTH_FLY := 1.8
+const REBIRTH_PATCH := 5.0
 const PHOENIX_HEAL := 110.0    # Asa da Fênix
 const REBIRTH_HEAL := 70.0     # Renascimento: cura em todos ...
 const REBIRTH_DMG := 90.0      # ... dano médio na boss ...
 const REBIRTH_DOT := 6.0       # ... e um DoT leve por segundo ...
 const REBIRTH_DOT_TIME := 12.0 # ... durante esse tempo
+## Velocidade de andar por classe, como fração da velocidade-base (unit.speed). Assassina e Malpractice
+## são as ágeis (base cheia); o resto anda 40% mais devagar; Sleepwalker e Apotecário, 65% mais devagar.
+## Vale só pra quem o jogador controla (ver move_speed). Dash, avanços e empurrões não mudam.
+const MOVE_MULT := {"assassina": 1.0, "nurse": 1.0, "sleepwalker": 0.35, "apothecary": 0.35}
+const MOVE_DEFAULT := 0.6
+const HASTE_MULT := 1.6        # pressa da Nuvem Conservante do Apotecário: +60% de velocidade ...
+const HASTE_TIME := 8.0        # ... na party toda, por esse tempo
+const REVIVE_HP := 0.5         # Asa da Fênix num aliado caído (Soulflame): volta com metade da vida
+const REANIMATE_HP := 0.4      # Estabilização no Paciente caído (Apotecário): volta com 40% ...
+const REANIMATE_COST := 3      # ... e gasta os 3 Vestígios
 ## Em que slot fica o golpe forte que a IA com a carta Rotação solta, e que a carta Golpe Lapidado melhora.
 const BIG_SLOT := {"assassina": 4, "maga": 3}
 ## Em que slot cada tank guarda a defesa e a provocação (as cartas Guarda e Biscoiteiro usam isso).
@@ -448,8 +550,37 @@ const CONSUMED_STEAL := 18.0   # Blood Consumed: vida fixa roubada por acerto (c
 const CONSUMED_STACKS := 2
 const RUSH_DIST := 20.0        # Emergency Response: alcance do avanço
 const RUSH_DMG := 12.0
+const RUSH_STACKS := 1         # Emergency Response junta 1 de Sangue
 const PARTY_NEED := 20         # Blood Party: acúmulos gastos
-const PARTY_TIME := 5.0
+const PARTY_TIME := 10.0       # Blood Party: quanto dura. Ela começa com 1 de vida e NÃO morre enquanto dura ...
+const PARTY_DMG_MULT := 2.0    # ... dano das habilidades dobrado ...
+const PARTY_CD := 0.5          # ... recargas pela metade ...
+const PARTY_STEAL := 0.25      # ... rouba esse tanto do dano que causa (é a única cura que entra) ...
+## ... e se a vida não estiver CHEIA quando o tempo acabar, ela morre.
+const EXTRACT_TIME := 1.0      # Extração (o slot do parry durante o Blood Party): tempo com a seringa na boss ...
+const EXTRACT_HEAL := 0.4      # ... recupera esse tanto da vida máxima ...
+const EXTRACT_DMG := 60.0      # ... e dá esse dano
+const EXTRACT_CD := 4.0
+## Bloodbath (slot 6): ergue a seringa e chove sangue em volta dela, cobrindo a party.
+const BATH_COST := 10          # Sangue gasto (o primeiro de cada Blood Party sai de graça) ...
+const BATH_R := 6.0            # ... raio da chuva (o dobro no Blood Party) ...
+const BATH_MULT := 0.8         # ... quem foi coberto toma 20% menos dano ...
+const BATH_TIME := 10.0        # ... por esse tempo
+const BATH_WINDOW := 2.0       # depois dela, tempo pra escolher a habilidade que sai fortalecida ...
+const BATH_CHARGES_ULT := 3    # ... uma só; no Blood Party, as três próximas
+const BATH_SLOTS := [0, 1, 2]  # quais podem: Syringe Poke, Blood Taste / Extração e Blood Consumed
+const PURE_TIME := 10.0        # Bloodbath no Blood Party: DoT Pure Blood na boss (não alimenta o roubo de vida)
+const PURE_DPS := 14.0
+const POKE_RUSH_TIME := 3.0    # Syringe Poke fortalecido: por esse tempo ...
+const POKE_RUSH_CD := 0.55     # ... a recarga dele cai pra quase metade de novo
+const TASTE_BIG := 2.0         # Blood Taste fortalecido (fora do Blood Party): janela do parry em dobro
+const EXTRACT_BIG_TIME := 2.5  # Extração fortalecida: carrega esse tempo na boss ...
+const EXTRACT_BIG_DMG := 260.0 # ... e a explosão dá esse dano ...
+const EXTRACT_BIG_HEAL := 0.7  # ... recuperando esse tanto da vida máxima
+const CONSUMED_BIG_HEAL := 0.2 # Blood Consumed fortalecido: cura 20% da vida máxima ...
+const CONSUMED_REGEN := 4.0    # ... regenera isso por segundo nela ...
+const SHARE_REGEN := 4.0       # ... e a party toda regenera isso por segundo (Compartilhamento de Sangue) ...
+const SHARE_TIME := 5.0        # ... durante esse tempo
 const PARTY_TICK := 0.5        # ... a aura bate a cada meio segundo
 const PARTY_DMG := 25.0
 const PARTY_R := 6.5           # ... em boss a até essa distância
@@ -566,6 +697,18 @@ var hazards: Array = []
 var holy: Array = []  # áreas de Solo Consagrado ativas
 var hearths: Array = []  # Lareiras Celestiais acesas
 var boss_dots: Array = []  # efeitos de dano por segundo na boss (ver add_dot)
+var zenith_node: Node3D  # halo da Marca do Zênite em cima da boss (Soulburner)
+var zenith_mats: Array = []
+var rain_t := 0.0        # Chuva de Brasas caindo (só o visual; o dano é o DoT "chuva")
+var rain_tick := 0.0
+var rain_node: Node3D
+var fairy_t := 0.0   # Fada Astral da Maga em campo
+var fairy_node: Node3D
+var fairy_owner: Unit
+var fairy_shot := 0.0
+var plain_hit := false  # o dano em curso não alimenta roubo de vida (DoT Pure Blood)
+var aim_t := 0.0  # marca do Tiro Perfurante na boss (Maga)
+var aim_node: Node3D
 var dream_stacks := 0  # Vulnerabilidade Onírica (Sleepwalker)
 var dream_t := 0.0
 var echoes: Array = []  # Frestas dos Ecos do Pesadelo: {"wait", "open", "hit", "warned"}
@@ -606,6 +749,13 @@ var fury := false
 var log_lines: Array[String] = []
 var rot_unit := -1
 var rot_buckets: Array[float] = []
+## Acompanhamento da rotação de quem o jogador controla (ver ROT_SLOTS): por segundo, quanto o GCD
+## ficou parado; por habilidade, há quanto tempo está pronta, e os atrasos dos últimos usos.
+var rot_idle: Array[float] = []
+var rot_idle_acc := 0.0
+var rot_wait := [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+var rot_used := {}    # slot -> segundos desde o último uso
+var rot_delays: Array[float] = []
 var hit_count := {}
 ## Pro ranking: dano que a party tomou e quantas mortes aconteceram na luta.
 var dmg_taken := 0.0
@@ -650,6 +800,14 @@ func _ready() -> void:
 	Knowledge.load_save()
 	Settings.boot()  # volume e atalhos do jogador
 	for a in args:
+		if a.begins_with("--party="):
+			# só pra teste: os quatro heróis da luta (índices de HEROES), sem tocar no save
+			var picks: Array = []
+			for p in a.trim_prefix("--party=").split(","):
+				picks.append(int(p))
+			if picks.size() == 4:
+				Knowledge.party = picks
+				Knowledge.start_hero = picks[0]
 		if a.begins_with("--boss="):
 			Knowledge.boss = clampi(int(a.trim_prefix("--boss=")), 0, BOSSES.size() - 1)
 	if args.has("--practice"):
@@ -680,6 +838,10 @@ func _ready() -> void:
 		auto_left = minf(150.0, enrage - 2.0)
 		Engine.time_scale = 6.0
 		_test_decks()
+		if args.has("--rot"):
+			for u in units:
+				Knowledge.dps_known[u.key] = true
+				Knowledge.equip(u.hero, "dps")
 	if args.has("--naive"):
 		autoplay = true
 		auto_left = 90.0
@@ -833,6 +995,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if prep:
 		return  # os menus cuidam das próprias teclas
+	# clique num boneco da party: foca; dois cliques: assume o controle dele
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var hit := unit_at(event.position)
+		if hit >= 0:
+			click_unit(hit, event.double_click)
+			get_viewport().set_input_as_handled()
+			return
 	var id := _pressed_action(event)
 	if id == "":
 		return
@@ -856,9 +1025,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				pick_hero(n)
 			elif id.begins_with("target_"):
 				select_target(n)
-			elif id.begins_with("skill_") and n > 0:
-				# o slot 1 é o ataque básico: vale enquanto segura, e quem lê é o _process
-				use_skill(units[ctrl], n)
+			elif id.begins_with("skill_") and n >= 0:
+				# a tecla é da POSIÇÃO na barra; a habilidade que está lá vem da ordem escolhida na tela SKILLS.
+				# O ataque básico vale enquanto segura, e quem lê é o _process.
+				var me := units[ctrl]
+				var s := Knowledge.skill_at(me.hero, n, kit(me).size())
+				if s > 0:
+					use_skill(me, s)
 
 
 ## Ação do Binds que este evento acabou de apertar ("" se nenhuma).
@@ -1008,6 +1181,38 @@ func select_target(i: int) -> void:
 		u.chosen = u.idx == sel
 
 
+## Põe o foco no herói `i` (alvo das curas, escudos e do reviver). Diferente de select_target, não
+## desliga se ele já era o foco.
+func focus_unit(i: int) -> void:
+	sel = i
+	for u in units:
+		u.chosen = u.idx == sel
+
+
+## Clique no card ou no boneco 3D: um clique foca; dois cliques trocam o controle pra ele.
+## (morto não dá pra controlar: os dois cliques só focam, que é o que o reviver precisa)
+func click_unit(i: int, twice: bool) -> void:
+	focus_unit(i)
+	if twice and i != ctrl and units[i].alive:
+		set_ctrl(i)
+
+
+## Qual boneco da party está embaixo desse ponto da tela (-1 = nenhum). Mede na tela, em volta do
+## meio do corpo; com dois sobrepostos, vale o mais perto do clique.
+func unit_at(screen: Vector2) -> int:
+	var best := -1
+	var best_d := 52.0
+	for u in units:
+		var at := u.position + Vector3(0, 1.0, 0)
+		if cam.is_position_behind(at):
+			continue
+		var d := cam.unproject_position(at).distance_to(screen)
+		if d < best_d:
+			best_d = d
+			best = u.idx
+	return best
+
+
 func mechanic_active() -> bool:
 	return zones_active or phase == "cata" or not stacks.is_empty() or not spreads.is_empty()
 
@@ -1149,6 +1354,10 @@ func _process(delta: float) -> void:
 	_tick_hearths(delta)
 	_tick_dots(delta)
 	_tick_echoes(delta)
+	_tick_aim(delta)
+	_tick_fairy(delta)
+	_tick_zenith(delta)
+	_tick_rain(delta)
 	if dream_stacks > 0:
 		dream_t -= delta
 		if dream_t <= 0.0:
@@ -1161,7 +1370,17 @@ func _process(delta: float) -> void:
 		u.invuln = maxf(0.0, u.invuln - delta)
 		u.guard_t = maxf(0.0, u.guard_t - delta)
 		u.wall_t = maxf(0.0, u.wall_t - delta)
-		u.frenzy_t = maxf(0.0, u.frenzy_t - delta)
+		if u.frenzy_t > 0.0:
+			u.frenzy_t -= delta
+			if u.frenzy_t <= 0.0:
+				u.frenzy_t = 0.0
+				if u.key == "assassina" and u.alive:
+					# o Frenesi acabou: abre a janela da Última Dança
+					u.finisher_t = FINISH_WINDOW
+					_burst(u.position, Color(1.0, 0.3, 0.7), 3.0)
+					if u.controlled:
+						hud.toast("ÚLTIMA DANÇA!", 1.4)
+		u.finisher_t = maxf(0.0, u.finisher_t - delta)
 		u.count_t = maxf(0.0, u.count_t - delta)
 		u.power_t = maxf(0.0, u.power_t - delta)
 		u.ward_t = maxf(0.0, u.ward_t - delta)
@@ -1177,13 +1396,25 @@ func _process(delta: float) -> void:
 		if u.parry_t > 0.0:
 			u.parry_t -= delta
 			if u.parry_t <= 0.0 and not u.parry_hit:
-				_mercy_hit(u)
+				_mercy_hit(u, 2)
 		if u.regen_t > 0.0:
 			u.regen_t -= delta
 			u.hp = minf(u.max_hp, u.hp + AEGIS_REGEN * delta)
 		_tick_blood(u, delta)
 		if ended:
 			return
+		u.lock_t = maxf(0.0, u.lock_t - delta)
+		u.bath_t = maxf(0.0, u.bath_t - delta)
+		u.poke_rush_t = maxf(0.0, u.poke_rush_t - delta)
+		if u.bath_window > 0.0:
+			u.bath_window -= delta
+			if u.bath_window <= 0.0:
+				u.bath_charges = 0  # passou o tempo de escolher
+		u.haste_t = maxf(0.0, u.haste_t - delta)
+		if u.salvo_t > 0.0:
+			u.salvo_t -= delta
+			if u.shield_hp <= 0.0 or u.shield_t <= 0.0:
+				u.salvo_t = 0.0  # o escudo da Salva acabou ou foi quebrado
 		if u.air_t > 0.0:
 			u.air_t -= delta
 			if u.air_t <= 0.0:
@@ -1204,10 +1435,10 @@ func _process(delta: float) -> void:
 		u.dash_cd = maxf(0.0, u.dash_cd - delta)
 		var before := u.position
 		if u.controlled and not autoplay:
-			if u.air_t <= 0.0:
+			if u.air_t <= 0.0 and u.lock_t <= 0.0:
 				_tick_player(u, delta)
 		else:
-			if u.air_t <= 0.0:
+			if u.air_t <= 0.0 and u.lock_t <= 0.0:
 				_tick_ai(u, delta)
 			# a IA nunca pisa no vazio por conta própria
 			if void_on and _in_square(before) and not _in_square(u.position):
@@ -1242,7 +1473,7 @@ func _print_report() -> void:
 	print("acertos: ", hit_count)
 	print("boss=", boss_def["name"], " ended=", ended, " won=", won, " boss_hp=", int(boss_hp), "/", int(boss_max), " phase=", phase, " t=", int(fight_time))
 	for u in units:
-		print(u.unit_name, " alive=", u.alive, " hp=", int(u.hp), " dps=", int(u.dmg_total / maxf(fight_time, 1.0)))
+		print(u.unit_name, " alive=", u.alive, " hp=", int(u.hp), " dps=", int(u.dmg_total / maxf(fight_time, 1.0)), " casts=", u.get_meta("ai_casts", 0), " fail=", u.get_meta("ai_fail", 0))
 	for l in log_lines:
 		print("LOG: ", l)
 
@@ -1278,27 +1509,214 @@ func _tick_rotation(u: Unit) -> void:
 	if autoplay or Knowledge.practice or not u.alive or Knowledge.dps_known.has(u.key):
 		return
 	if rot_unit != u.idx:
-		rot_unit = u.idx
-		rot_buckets.clear()
+		_rot_reset(u)
 	rot_buckets.append(u.dmg_bucket)
+	rot_idle.append(minf(1.0, rot_idle_acc))
+	rot_idle_acc = 0.0
 	if rot_buckets.size() > Knowledge.DPS_WINDOW:
 		rot_buckets.pop_front()
-	if rot_buckets.size() < Knowledge.DPS_WINDOW:
-		return
-	var sum := 0.0
-	for b in rot_buckets:
-		sum += b
-	if sum / Knowledge.DPS_WINDOW >= Knowledge.DPS_GOAL[u.key]:
+		rot_idle.pop_front()
+	for s in rot_used.keys():
+		rot_used[s] += 1.0
+	if rot_ok(u):
 		Knowledge.dps_known[u.key] = true
 		Knowledge.mark_new("dps", u.hero)  # entra na coleção dele como NOVA; equipar é com o jogador
 		Knowledge.save()
 		hud.card_unlocked("dps")
 
 
+func _rot_reset(u: Unit) -> void:
+	rot_unit = u.idx
+	rot_buckets.clear()
+	rot_idle.clear()
+	rot_idle_acc = 0.0
+	rot_wait = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+	rot_used = {}
+	rot_delays.clear()
+	for s in u.skill_cd.size():
+		u.set_meta("rot_cd%d" % s, u.skill_cd[s])
+
+
+## A cada frame, pro herói no controle: mede o GCD parado e o atraso de cada habilidade de rotação.
+func _rot_track(u: Unit, delta: float) -> void:
+	if autoplay or Knowledge.practice or not u.alive or Knowledge.dps_known.has(u.key):
+		return
+	if rot_unit != u.idx:
+		_rot_reset(u)
+	var free: bool = u.channel_t <= 0.0 and u.lock_t <= 0.0 and u.air_t <= 0.0 and u.silence_t <= 0.0 and not u.asleep
+	if free and u.skill_cd[0] <= 0.0 and _in_range(u):
+		rot_idle_acc += delta
+	for s in ROT_SLOTS[u.key]:
+		var before: float = u.get_meta("rot_cd%d" % s, 0.0)
+		var now: float = u.skill_cd[s]
+		if now > 0.0 and before <= 0.0:
+			# acabou de ser usada: guarda quanto ela esperou pronta
+			rot_delays.append(rot_wait[s])
+			if rot_delays.size() > 12:
+				rot_delays.pop_front()
+			rot_wait[s] = 0.0
+			rot_used[s] = 0.0
+		elif now <= 0.0 and free:
+			rot_wait[s] += delta
+		u.set_meta("rot_cd%d" % s, now)
+
+
+## Os cinco critérios da carta Rotação (lista em cima de ROT_SLOTS). Devolve também o motivo que falta
+## em rot_missing, pra teste e depuração.
+var rot_missing := ""
+
+func rot_ok(u: Unit) -> bool:
+	var window: int = Knowledge.DPS_WINDOW
+	if rot_buckets.size() < window:
+		rot_missing = "janela"
+		return false
+	var sum := 0.0
+	for b in rot_buckets:
+		sum += b
+	if sum / window < float(Knowledge.DPS_GOAL[u.key]):
+		rot_missing = "dps"
+		return false
+	var idle := 0.0
+	for v in rot_idle:
+		idle += v
+	if idle / window > ROT_IDLE_MAX:
+		rot_missing = "gcd parado"
+		return false
+	for s in ROT_SLOTS[u.key]:
+		if not rot_used.has(s) or float(rot_used[s]) > window:
+			rot_missing = "habilidade %d não usada" % (s + 1)
+			return false
+		if rot_wait[s] > ROT_STALE:
+			rot_missing = "habilidade %d esperando" % (s + 1)
+			return false
+	if not rot_delays.is_empty():
+		var late := 0.0
+		for d in rot_delays:
+			late += d
+		if late / rot_delays.size() > ROT_DELAY_MAX:
+			rot_missing = "atraso médio"
+			return false
+	rot_missing = ""
+	return true
+
+
+# ---- IA com a carta Rotação
+
+## A IA joga o kit do herói: escolhe a próxima habilidade pela prioridade da classe e usa. Devolve true
+## se usou alguma coisa neste frame.
+func _ai_rotation(u: Unit, delta: float) -> bool:
+	for s in u.skill_cd.size():
+		if u.skill_cd[s] > 0.0:
+			u.ai_ready[s] = -1.0
+		elif u.ai_ready[s] < 0.0:
+			# voltou agora: ela leva um instante pra apertar (o básico e os passos de combo são na hora)
+			u.ai_ready[s] = 0.1 if _rot_prompt(u, s) else randf_range(AI_REACT.x, AI_REACT.y)
+		else:
+			u.ai_ready[s] = maxf(0.0, u.ai_ready[s] - delta)
+	var slot := _rot_pick(u)
+	if slot < 0:
+		return false
+	if use_skill(u, slot, true):
+		u.set_meta("ai_casts", int(u.get_meta("ai_casts", 0)) + 1)
+		return true
+	u.set_meta("ai_fail", int(u.get_meta("ai_fail", 0)) + 1)
+	return false
+
+
+func _rot_prompt(u: Unit, s: int) -> bool:
+	if s == 0:
+		return true
+	return (u.key == "ringstar" and s <= 2) or (u.key == "sleepwalker" and s <= 4) or (u.key == "assassina" and s == 2)
+
+
+func _rot_ready(u: Unit, s: int) -> bool:
+	return u.skill_cd[s] <= 0.0 and u.ai_ready[s] == 0.0
+
+
+## A prioridade de cada classe, respeitando a mecânica dela. -1 = nada pra usar agora.
+func _rot_pick(u: Unit) -> int:
+	match u.key:
+		"tank":
+			for s in [3, 1, 0]:
+				if _rot_ready(u, s):
+					return s
+		"nurse":
+			# versão segura: sem a Ultimate e sem pagar vida
+			for s in [2, 0]:
+				if _rot_ready(u, s):
+					return s
+		"healer":
+			if _rot_ready(u, 0):
+				return 0
+		"assassina":
+			if _rot_ready(u, 5):
+				return 5
+			var wound := get_dot("ferida")
+			if _rot_ready(u, 2) and (wound.is_empty() or wound["t"] < 2.0):
+				return 2  # mantém o Ferimento
+			for s in [4, 3, 0]:
+				if _rot_ready(u, s):
+					return s
+		"maga":
+			var n := u.bullets.size()
+			if n >= BULLET_MAX and _rot_ready(u, 5):
+				return 5  # pente cheio: supercanhão
+			if _rot_ready(u, 3):
+				return 3  # marca a boss
+			if aim_t > 0.0 and n >= SALVO_COST and n < BULLET_MAX and u.skill_cd[5] > 10.0:
+				return 4  # estoura a marca com a Salva
+			if u.pierce_next and _rot_ready(u, 0):
+				return 0
+			if n == SALVO_FAIRY and fairy_t <= 0.0 and u.skill_cd[5] > 16.0:
+				return 4  # seis balas e o canhão longe: fada
+			if fairy_t > 0.0 and _rot_ready(u, 2):
+				return 2
+			if n >= 1 and u.skill_cd[5] > 8.0 * (BULLET_MAX - n) and _rot_ready(u, 1):
+				return 1  # não vai dar tempo de encher o pente: gasta
+			if _rot_ready(u, 0):
+				return 0
+		"burner":
+			var mark := get_dot("zenite")
+			if mark.is_empty():
+				if _rot_ready(u, 1):
+					return 1
+			else:
+				if _rot_ready(u, 5):
+					return 5  # o sol com a boss marcada
+				if 1.0 - mark["t"] / mark["total"] >= LANCE_PERFECT - 0.1 and u.skill_cd[2] <= 0.0:
+					return 2  # a lança no fim da marca
+			if _rot_ready(u, 4):
+				return 4
+			if _rot_ready(u, 0):
+				return 0
+		"ringstar":
+			for s in [3, 4, 5]:
+				if _rot_ready(u, s):
+					return s
+			if _rot_ready(u, u.chain):
+				return u.chain  # Jab, Direto, Gancho, na ordem
+		"apothecary":
+			var rot := get_dot("decomp")
+			if (rot.is_empty() or rot["t"] <= VESTIGE_WINDOW) and u.skill_cd[1] <= 0.0:
+				return 1  # renova a Decomposição na janela do Vestígio
+			if _rot_ready(u, 0):
+				return 0
+		"sleepwalker":
+			# versão segura: só o Modo Acordado (dormindo ele ficaria parado no meio das mecânicas)
+			if u.window_t > 0.0 and u.window_slot >= 1 and u.skill_cd[u.window_slot] <= 0.0:
+				return u.window_slot
+			if u.window_t <= 0.0 and _rot_ready(u, 1):
+				return 1
+			if _rot_ready(u, 0):
+				return 0
+	return -1
+
+
 # ---------------------------------------------------------------- jogador
 
 func _tick_player(u: Unit, delta: float) -> void:
 	var moving := _input_dir() != Vector3.ZERO or u.dash_t > 0.0
+	_rot_track(u, delta)
 	if u.asleep:
 		moving = false  # dormindo ele não sai do lugar: apertar direção não cancela a conjuração
 	if _tick_cast(u, delta, moving):
@@ -1312,11 +1730,11 @@ func _tick_player(u: Unit, delta: float) -> void:
 	else:
 		var d := _input_dir()
 		if d != Vector3.ZERO:
-			u.position += d * u.speed * delta
+			u.position += d * move_speed(u) * delta
 			u.face(d)
 
 	# J é o ataque básico: uma habilidade com 1 s de recarga (segurar repete)
-	var want_attack := Input.is_action_pressed("skill_1")
+	var want_attack := Input.is_action_pressed("skill_%d" % (Knowledge.pos_of(u.hero, 0, kit(u).size()) + 1))
 	if want_attack:
 		use_skill(u, 0)
 	if want_attack and not _in_range(u):
@@ -1329,6 +1747,10 @@ func _tick_player(u: Unit, delta: float) -> void:
 func _tick_cast(u: Unit, delta: float, moving: bool) -> bool:
 	if u.channel_t <= 0.0:
 		return false
+	if u.has_meta("extracting"):
+		# Extração Total: a barra só acompanha; quem resolve é o timer dela, e ela não anda
+		u.channel_t = maxf(0.01, u.channel_t - delta)
+		return true
 	if moving:
 		# andar ou esquivar interrompe qualquer cast, sem gastar a recarga
 		u.cancel_ratio = 1.0 - u.channel_t / u.channel_total
@@ -1336,6 +1758,8 @@ func _tick_cast(u: Unit, delta: float, moving: bool) -> bool:
 		if u.channel_slot >= 0:
 			u.skill_cd[u.channel_slot] = 0.0
 		u.channel_t = 0.0
+		_cannon_drop(u)
+		_lance_drop(u)
 		return false
 	u.channel_t -= delta
 	u.set_action("LIMIT BREAK" if u.channel_slot == -1 else "Conjurando", 1)
@@ -1360,11 +1784,13 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	var caster := u.key == "healer" or u.key == "maga"
 	var careful := not caster or Knowledge.has(u.hero, "safe_cast")
 	# Cautela: larga o cast (sem gastar a recarga) se um vermelho aparecer embaixo
-	var rot_card: bool = Knowledge.has(u.hero, "dps") and (u.key == "assassina" or u.key == "maga")
-	if careful and u.channel_t > 0.0 and u.channel_slot >= 0:
-		# o golpe forte da Rotação também é largado se uma mecânica de juntar começar
-		var must_move: bool = rot_card and u.channel_slot == BIG_SLOT.get(u.key, -1) and not stacks.is_empty()
-		if must_move or _danger_at(u.position, u, true, 0.1):
+	if u.channel_t > 0.0 and u.channel_slot >= 0:
+		# com a carta Rotação, qualquer conjuração de ataque é largada se uma mecânica chamar pra outro lugar
+		var must_move := false
+		if Knowledge.has(u.hero, "dps") and not (u.key == "healer" and u.channel_slot != 0):
+			var call = _card_plan(u)
+			must_move = not stacks.is_empty() or (call != null and call[0] != null and u.position.distance_to(call[0]) > 0.3)
+		if must_move or (careful and _danger_at(u.position, u, true, 0.1)):
 			u.skill_cd[u.channel_slot] = 0.0
 			u.channel_t = 0.0
 	if _tick_cast(u, delta, false):
@@ -1448,7 +1874,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		to.y = 0
 		var dist := to.length()
 		if dist > 0.12:
-			u.position += to / dist * minf(u.speed * delta, dist)
+			u.position += to / dist * minf(move_speed(u) * delta, dist)
 			u.face(to)
 		elif _in_range(u):
 			u.face(BOSS_POINT - u.position)
@@ -1501,22 +1927,25 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		use_skill(u, PROVOKE_SLOT[u.key], true)
 
 	# Rotação: o golpe forte sai quando não tem nada pra resolver e ele já está no lugar
-	if rot_card and u.skill_cd[BIG_SLOT[u.key]] <= 0.0 and _in_range(u) and not in_danger and stacks.is_empty() \
-			and (goal == null or u.position.distance_to(goal) < 0.3):
-		if use_skill(u, BIG_SLOT[u.key], true):
-			u.set_action("Conjurando", 1)
-			return
+	# carta roxa Rotação: a IA joga o kit do herói de verdade, parada no lugar de ataque e fora de perigo
+	if Knowledge.has(u.hero, "dps"):
+		if _in_range(u) and not in_danger and stacks.is_empty() and (goal == null or u.position.distance_to(goal) < 0.3):
+			if _ai_rotation(u, delta) and u.channel_t > 0.0:
+				u.set_action("Conjurando", 1)
+				return
+			text = "Rotação"
+		elif text == "Atacando":
+			text = "Indo atacar"
+		u.set_action(text, kind)
+		return
 
-	# Auto-ataque conservador: bem mais fraco que o jogador no controle.
+	# Sem a carta: auto-ataque conservador, bem mais fraco que o jogador no controle.
 	if _in_range(u):
-		# carta roxa Rotação: a IA usa a rotação que você mostrou jogando bem com esse herói
-		var rate: float = ROTATION_DPS[u.key] if Knowledge.has(u.hero, "dps") else u.ai_dps
+		var rate: float = u.ai_dps
 		_damage_boss(u, rate * delta, false, false)
 		if u.key == "nurse":
-			# as estocadas da IA também roubam um fio de vida; com a Rotação ela usa o Blood Consumed
+			# as estocadas da IA também roubam um fio de vida
 			u.hp = minf(u.max_hp, u.hp + boss_hp * POKE_STEAL * delta)
-			if Knowledge.has(u.hero, "dps") and u.skill_cd[2] <= 0.0 and not in_danger:
-				use_skill(u, 2, true)
 		u.dmg_acc += rate * delta * _dmg_mult()
 		u.dmg_timer += delta
 		if u.dmg_timer >= 1.2:
@@ -1702,13 +2131,23 @@ func _heal_target() -> Unit:
 ## Tenta usar a habilidade. Com cast, só começa a conjurar; o efeito sai em _resolve_skill.
 func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 	var list: Array = kit(u)
+	# Assassina com a janela da Última Dança aberta: o botão do Frenesi vira a habilidade bônus (sem recarga)
+	if u.key == "assassina" and slot == 5 and u.finisher_t > 0.0 and u.alive and u.lock_t <= 0.0 and intro_left <= 0.0:
+		_last_dance(u)
+		return true
 	# Acordar (Sleepwalker dormindo, slot 6) é o único botão que interrompe uma conjuração em curso
 	var wake_now: bool = u.key == "sleepwalker" and u.asleep and slot == 5
 	if not u.alive or slot >= list.size() or list[slot] == null or u.skill_cd[slot] > 0.0 or (u.channel_t > 0.0 and not wake_now) or intro_left > 0.0:
 		return false
 	var sk: Dictionary = list[slot]
-	if u.silence_t > 0.0 or u.air_t > 0.0:
-		return false  # punido por acordar mal, ou no meio do salto
+	if u.silence_t > 0.0 or u.air_t > 0.0 or u.lock_t > 0.0:
+		return false  # punido por acordar mal, no meio do salto, ou segurando o supercanhão
+	if sk["name"] == "Rainbow Shots" and u.bullets.is_empty():
+		u.set_action("Sem balas", 2)
+		return false  # sem Rainbow Shot guardada, a habilidade não sai (nem gasta o intervalo)
+	if sk["name"] == "Salva Astral" and u.bullets.size() < SALVO_COST:
+		u.set_action("Precisa de %d balas" % SALVO_COST, 2)
+		return false
 	var cast_time: float = sk.get("cast", 0.0)
 	if u.key == "sleepwalker":
 		if not _sw_can(u, slot):
@@ -1718,21 +2157,46 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 	if slot == 0 and cast_time > 0.0 and not by_ai and not u.asleep and _input_dir() != Vector3.ZERO:
 		return false
 	u.cast_target = null
-	if sk.has("dmg") and not _in_range(u):
+	# (o Golpe de Misericórdia na mão do jogador é um salto até a boss: sai de qualquer distância)
+	var leap: bool = sk["name"] == "Golpe de Misericórdia" and not by_ai
+	if sk.has("dmg") and not _in_range(u) and not leap:
 		u.set_action("Longe demais", 2)
 		return false
 	match sk["name"]:
 		"Blood Taste":
-			if u.taste_t > 0.0 or u.party_t > 0.0:
+			if u.party_t > 0.0:
+				# durante o Blood Party este slot é a Extração: precisa encostar na boss
+				if not _in_range(u):
+					u.set_action("Longe demais", 2)
+					return false
+			elif u.taste_t > 0.0:
 				return false
 		"Blood Party":
 			if u.stacks < PARTY_NEED or u.party_t > 0.0 or u.taste_t > 0.0:
+				return false
+		"Bloodbath":
+			# de graça só o primeiro de cada Blood Party; fora isso, custa Sangue
+			if not (u.party_t > 0.0 and u.bath_free) and u.stacks < BATH_COST:
+				u.set_action("Precisa de %d de Sangue" % BATH_COST, 2)
 				return false
 		"Toque de Brasa", "Asa da Fênix", "Sutura", "Estabilização":
 			var ht := _heal_target()
 			# na sua mão, o alvo escolhido no card tem prioridade
 			if not by_ai and sel >= 0 and units[sel].alive and units[sel].hp < units[sel].max_hp:
 				ht = units[sel]
+			# REVIVER
+			# Soulflame, simples: com alguém caído, a Asa da Fênix vai nele (o escolhido no card primeiro).
+			if sk["name"] == "Asa da Fênix" and _fallen() != null:
+				ht = _fallen(-1 if by_ai else sel)
+			# Apotecário, em etapas: 1) Sutura no aliado caído ESCOLHIDO no card prepara o corpo (ele
+			# vira o Paciente); 2) Estabilização com os 3 Vestígios reanima o Paciente caído.
+			if sk["name"] == "Sutura" and not by_ai and sel >= 0 and not units[sel].alive:
+				ht = units[sel]
+			if sk["name"] == "Estabilização" and u.patient != null and not u.patient.alive and u.patient_t > 0.0:
+				if u.vestiges < REANIMATE_COST:
+					u.set_action("Reanimar pede %d Vestígios" % REANIMATE_COST, 2)
+					return false
+				ht = u.patient
 			if forced != null:
 				ht = forced
 			if ht == null:
@@ -1768,6 +2232,10 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 		u.channel_t = cast
 		u.channel_total = cast
 		u.channel_slot = slot
+		if sk["name"] == "Canhão Estelar":
+			_cannon_charge(u, cast)
+		if sk["name"] == "Lança Serafim":
+			_lance_charge(u, cast)
 		u.cast_ai = by_ai
 		if u.cast_target != null:
 			# liga quem conjura a quem vai receber enquanto o cast corre
@@ -1786,6 +2254,14 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 
 func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 	var sk: Dictionary = kit(u)[slot]
+	if u.key == "assassina":
+		# as adagas batem no ritmo de cada golpe
+		match slot:
+			0: u.dagger_anim("cut")
+			1: u.dagger_anim("thrust")
+			2: u.dagger_anim("claws")
+			3: u.dagger_anim("spin", DANCE_SPIN)
+			4: u.dagger_anim("raise", MERCY_WINDOW if not by_ai else 0.25)
 	if u.key == "ringstar":
 		# as luvas acompanham cada habilidade (o SUPERSTAR! e o Nocaute animam por conta própria)
 		u.face(BOSS_POINT - u.position)
@@ -1802,8 +2278,18 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 		return
 	if not (sk.has("cast") and sk["cast"] < LOCKED_CAST):
 		u.skill_cd[slot] = sk.get("ai_cd", sk["cd"] * 1.15) if by_ai else sk["cd"]
-	if slot == 0 and u.frenzy_t > 0.0:
+	if u.key == "burner" and slot == 0:
+		# Brasas: os 2 s de recarga contam desde o começo do cast (1 s conjurando + 1 s livre)
+		u.skill_cd[slot] = maxf(0.0, u.skill_cd[slot] - float(sk["cast"]))
+	if u.key == "assassina" and slot == 0 and not get_dot("ferida").is_empty():
+		u.skill_cd[slot] = WOUND_GCD  # boss ferida: o Talho sai bem mais rápido
+	if u.key == "assassina" and slot <= 2 and u.frenzy_t > 0.0:
+		u.skill_cd[slot] *= FRENZY_HASTE  # Frenesi: Talho, Passo Rasante e Garras na metade da recarga
+	elif slot == 0 and u.frenzy_t > 0.0:
 		u.skill_cd[slot] *= FRENZY_HASTE
+	if u.key == "assassina" and (slot == 0 or slot == 2):
+		# Talho e Garras dividem a recarga
+		u.skill_cd[2 - slot] = maxf(u.skill_cd[2 - slot], u.skill_cd[slot])
 	if u.key == "ringstar" and slot <= 2:
 		# os três golpes dividem a recarga; com a Contagem Regressiva ela cai pela metade
 		var gcd: float = COUNT_GCD if u.count_t > 0.0 else sk["cd"]
@@ -1828,14 +2314,20 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_start_holy(u)
 		"Provocação":
 			_provoke(u, by_ai)
+		"Bloodbath":
+			_bloodbath(u)
 		"Blood Taste":
+			if u.party_t > 0.0:
+				_extract(u, _bath_use(u, slot))
+				return
+			var long_parry := _bath_use(u, slot)
+			_parry_guard(u)
 			# a vida vai a TASTE_HP por meio segundo; quando acaba, volta ao que era (ver _end_taste)
 			u.taste_prev = u.hp
 			u.max_hp = u.base_hp * TASTE_HP
 			u.hp = u.max_hp
-			u.taste_t = TASTE_TIME
+			u.taste_t = TASTE_TIME * (TASTE_BIG if long_parry else 1.0)
 			u.taste_hit = false
-			_add_stacks(u, TASTE_STACKS)
 			_burst(u.position, BLOOD, 2.4)
 		"Emergency Response":
 			# avança até encostar na boss (no máximo RUSH_DIST) e puxa ela pra si
@@ -1844,24 +2336,51 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			var go := clampf(to_boss.length() - (MELEE_RANGE - 1.0), 0.0, RUSH_DIST)
 			u.face(to_boss)
 			u.dash_fx()
+			var rush_to := u.position + to_boss.normalized() * go
+			# rastro vermelho do avanço
+			for k in 3:
+				_beam(u.position + Vector3(0, k * 0.4 - 0.4, 0), rush_to + Vector3(0, k * 0.4 - 0.4, 0), Color(BLOOD.r * 1.6, BLOOD.g, BLOOD.b, 0.9 - k * 0.25), 0.4 + k * 0.12)
+			u.syringe_stab(1.4, 0.12)
 			var tw := u.create_tween()
-			tw.tween_property(u, "position", u.position + to_boss.normalized() * go, 0.12)
+			tw.tween_property(u, "position", rush_to, 0.12)
 			tw.tween_callback(func():
 				_clamp_to_arena(u)
+				# impacto físico na chegada: onda de energia no chão
+				_impact_ring(u.position + Vector3(0, 0.4, 0), BLOOD.lightened(0.2), 3.6)
+				_burst(u.position, Color(1, 1, 1), 1.8)
+				shake_t = 0.18
+				shake_amp = 0.22
 				if u.alive and _in_range(u):
 					u.punch()
 					_damage_boss(u, RUSH_DMG, true, false))
+			_taunt_mark()
+			_add_stacks(u, RUSH_STACKS)
 			_provoke(u, by_ai)
 		"Blood Party":
-			# gasta os acúmulos, fica com 1 de vida e invulnerável; a aura bate em _tick_blood
+			# gasta o gauge, joga o escudo fora e se injeta: fica com 1 de vida, não morre enquanto dura,
+			# bate o dobro com recargas pela metade e vive do sangue que rouba. Regras em _tick_blood.
 			u.stacks -= PARTY_NEED
 			u.hp = 1.0
+			u.party_hp = 1.0
+			u.shield_hp = 0.0
+			u.taste_t = 0.0
+			u.max_hp = u.base_hp
 			u.party_t = PARTY_TIME
 			u.party_tick = 0.0
-			u.immortal_t = maxf(u.immortal_t, PARTY_TIME)
-			hud.flash(Color(BLOOD.r, BLOOD.g, BLOOD.b, 0.45))
-			_burst(u.position, BLOOD, 6.0)
-			hud.toast("BLOOD PARTY", 1.6)
+			for n in u.skill_cd.size():
+				u.skill_cd[n] *= PARTY_CD
+			# o Blood Party libera UM Bloodbath de graça, pronto na hora (o botão brilha pra avisar)
+			u.bath_free = true
+			u.skill_cd[5] = 0.0
+			u.blood_party_start()
+			hud.flash(BLOOD, 0.4)
+			_burst(u.position, Color(1, 1, 1), 3.0)
+			_burst(u.position, BLOOD, 6.5)
+			for k in 3:
+				_impact_ring(u.position + Vector3(0, 0.5 + k * 0.5, 0), BLOOD.lightened(k * 0.15), 3.0 + k * 1.4)
+			shake_t = 0.35
+			shake_amp = 0.4
+			hud.toast("BLOOD PARTY: RECUPERE A VIDA TODA", 2.0)
 		"Manto de Cinzas":
 			var st: Unit = u.cast_target
 			if st == null or not st.alive:
@@ -1890,7 +2409,8 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 		"Canhão Estelar":
 			_cannon(u)
 		"Marca do Zênite":
-			add_dot("zenite", "Marca do Zênite", Color(1.0, 0.9, 0.45), ZENITH_TIME, ZENITH_DPS, u)
+			add_dot("zenite", "Marca do Zênite", FIRE, ZENITH_TIME, ZENITH_DPS, u)
+			_zenith_halo()
 			_burst(Vector3(0, 7.5, -12.5), Color(1.0, 0.9, 0.45), 3.0)
 		"Lança Serafim":
 			_lance(u)
@@ -1898,6 +2418,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_swoop(u)
 		"Chuva de Brasas":
 			add_dot("chuva", "Chuva de Brasas", FIRE, RAIN_TIME, RAIN_DPS, u)
+			_rain_start()
 			for n in 8:
 				_burst(Vector3(randf_range(-3.0, 3.0), randf_range(1.0, 5.0), -11.5), FIRE, 1.0)
 		"Juízo Solar":
@@ -1914,25 +2435,19 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			# três cortes seguidos, cada um com a silhueta dela num lugar
 			for n in CLAW_HITS:
 				get_tree().create_timer(n * CLAW_GAP, false).timeout.connect(_claw.bind(u, n, sk["dmg"]))
-		"Dança Carmesim":
-			u.punch()
-			for n in 6:
-				var a := n * TAU / 6.0
-				_afterimage(u, Vector3(cos(a), 0, sin(a)) * 1.3, Color(0.9, 0.1, 0.25))
-			_burst(u.position, Color(0.9, 0.1, 0.25), 3.4)
 			if _in_range(u):
-				_damage_boss(u, sk["dmg"], true, true)
+				_wound(u)
+		"Dança Carmesim":
+			_crimson_dance(u, sk["dmg"])
 		"Golpe de Misericórdia":
 			u.face(BOSS_POINT - u.position)
 			if by_ai:
 				_mercy_hit(u)
 			else:
-				# o corte sai no fim da janela; se um golpe chegar antes, vira parry e não dá dano
-				u.parry_t = MERCY_WINDOW
-				u.parry_hit = false
-				_burst(u.position, Color(1, 1, 1), 1.6)
+				_mercy_leap(u)
 		"Frenesi da Fera":
 			u.frenzy_t = FRENZY_TIME
+			u.frenzy_dmg = 0.0
 			u.skill_cd[0] = 0.0
 			_burst(u.position, Color(0.75, 0.2, 1.0), 4.0)
 			hud.toast("FRENESI DA FERA", 1.4)
@@ -1940,6 +2455,29 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_provoke(u, by_ai)
 		"Toque de Brasa", "Asa da Fênix", "Sutura", "Estabilização":
 			var ht: Unit = u.cast_target
+			if ht != null and not ht.alive:
+				# o alvo está caído: é o caminho do reviver de cada healer
+				if sk["name"] == "Asa da Fênix":
+					_beam(u.position, ht.position, Color(1.0, 0.75, 0.3, 0.95), 0.4)
+					_raise(ht, REVIVE_HP, FLAME)
+					return
+				if sk["name"] == "Sutura":
+					# prepara o corpo: ele vira o Paciente. Falta a Estabilização com os 3 Vestígios.
+					u.patient = ht
+					u.patient_t = PATIENT_TIME
+					_beam(u.position, ht.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.4)
+					_impact_ring(ht.position + Vector3(0, 0.3, 0), CHEM, 2.0)
+					if u.controlled:
+						hud.toast("CORPO PREPARADO: Estabilização com %d Vestígios reanima" % REANIMATE_COST, 2.2)
+					return
+				if sk["name"] == "Estabilização" and u.patient == ht and u.vestiges >= REANIMATE_COST:
+					u.vestiges -= REANIMATE_COST
+					u.patient_t = PATIENT_TIME
+					_beam(u.position, ht.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.4)
+					_raise(ht, REANIMATE_HP, CHEM)
+					if u.controlled:
+						hud.toast("REANIMAÇÃO", 1.4)
+					return
 			if ht == null or not ht.alive:
 				ht = _heal_target()
 			if ht == null:
@@ -1973,8 +2511,13 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			var big := slot > 0
 			u.face(BOSS_POINT - u.position)
 			u.punch()
-			_attack_fx(u, big)
-			if sk.has("cast") and sk["cast"] >= LOCKED_CAST:
+			if u.key == "maga":
+				_maga_basic_fx(u, slot)
+			elif u.key == "burner":
+				_ember_fx(u)
+			else:
+				_attack_fx(u, big)
+			if sk.has("cast") and sk["cast"] >= LOCKED_CAST and slot != 0:
 				_burst(Vector3(0, 4, -11.5), u.color.lightened(0.3), 6.0)
 			var amount: float = sk["dmg"]
 			if slot == BIG_SLOT.get(u.key, -1) and Knowledge.has(u.hero, "burst"):
@@ -1993,6 +2536,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					# fortalecido por uma bala Rainbow: perfura
 					u.pierce_next = false
 					amount *= PIERCE_MULT
+					amount += _use_aim(u)  # com a boss marcada pelo Tiro Perfurante: estoura a marca
 					big = true
 					_beam(u.position, Vector3(0, 2.0, -13.0), Color(1, 1, 1, 0.9), 0.25)
 				if u.dash_next:
@@ -2005,8 +2549,12 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				big = false
 				if u.frenzy_t > 0.0:
 					_afterimage(u, Vector3(randf_range(-0.8, 0.8), 0, randf_range(-0.5, 0.5)), Color(0.75, 0.2, 1.0))
+					# em Frenesi, cada Talho adianta a Dança Carmesim e o Golpe de Misericórdia
+					for s in [3, 4]:
+						u.skill_cd[s] = maxf(0.0, u.skill_cd[s] - FRENZY_SHAVE)
 				# do lado certo da boss: gasta um dos três golpes fortalecidos; acabou, troca de lado
-				if not by_ai and _side_of(u) == u.side_need:
+				# (a IA com a carta Rotação conta como posicionada do lado certo)
+				if (not by_ai and _side_of(u) == u.side_need) or (by_ai and Knowledge.has(u.hero, "dps")):
 					amount *= SIDE_MULT
 					big = true
 					u.side_left -= 1
@@ -2014,6 +2562,8 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 						u.side_need = -u.side_need
 						u.side_left = SIDE_HITS
 						_burst(_side_pos(u.side_need), SIDE_COL, 2.4)
+			if sk["name"] == "Tiro Perfurante":
+				_aim_mark(u)
 			if sk["name"] == "Baque do Escudo":
 				# golpe de escudo: mais pesado na tela. (Interromper fica pra quando existir cast interrompível.)
 				_burst(BOSS_POINT + Vector3(0, 1.2, 2.0), Color(1.0, 0.95, 0.8), 2.6)
@@ -2023,11 +2573,25 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				var steal := boss_hp * POKE_STEAL
 				amount += steal
 				_lifesteal(u, steal)
+				_poke_fx(u)
+				if _bath_use(u, slot):
+					# fortalecido pelo Bloodbath: estocadas em rajada por alguns segundos
+					u.poke_rush_t = POKE_RUSH_TIME
+					_burst(u.position + Vector3(0, 1.0, 0), BLOOD, 2.6)
+					if u.controlled:
+						hud.toast("ESTOCADAS EM RAJADA", 1.0)
+				if u.poke_rush_t > 0.0:
+					u.skill_cd[slot] *= POKE_RUSH_CD
 			elif sk["name"] == "Blood Consumed":
 				amount += CONSUMED_STEAL
 				_lifesteal(u, CONSUMED_STEAL)
 				_add_stacks(u, CONSUMED_STACKS)
+				_consumed_fx(u)
+				if _bath_use(u, slot):
+					_consumed_big(u)
 			_damage_boss(u, amount, true, big)
+	if u.key == "nurse" and u.party_t > 0.0:
+		u.skill_cd[slot] *= PARTY_CD  # Blood Party: recargas pela metade
 	# Malpractice: o golpe saiu, o sangue foi. Só na mão do jogador: a IA joga uma versão segura dela.
 	if not by_ai and SELF_COST.has(sk["name"]):
 		_bleed(u, SELF_COST[sk["name"]])
@@ -2091,17 +2655,602 @@ func _claw(u: Unit, n: int, dmg: float) -> void:
 		_damage_boss(u, dmg, true, n == CLAW_HITS - 1)
 
 
-## O corte do Golpe de Misericórdia de fato (quando a janela passa sem ninguém bater nela).
-func _mercy_hit(u: Unit) -> void:
-	if not u.alive or not _in_range(u):
+## Dano direto, sem nenhum multiplicador (o estouro da Última Dança).
+func _raw_hit(u: Unit, dmg: float, size := 84) -> void:
+	if ended or dmg <= 0.0:
 		return
-	var amount: float = SKILLS["assassina"][BIG_SLOT["assassina"]]["dmg"]
-	if Knowledge.has(u.hero, "burst"):
-		amount *= 1.3
+	boss_hp -= dmg
+	u.dmg_total += dmg
+	u.dmg_bucket += dmg
+	u.enmity += dmg
+	boss.hit_flash()
+	_popup(int(round(dmg)), Color(1.0, 0.45, 1.0), size)
+	if boss_hp <= 0.0:
+		if Knowledge.practice:
+			boss_hp = boss_max
+			hud.toast("O dummy se recompôs", 1.6)
+			return
+		boss_hp = 0.0
+		_end(true)
+
+
+## Os golpes do Golpe de Misericórdia. `part`: 0 = o corte inteiro de uma vez (IA); 1 = a cravada com as
+## duas adagas no chão (MERCY_FIRST do dano); 2 = o mergulho que fecha (o resto).
+func _mercy_hit(u: Unit, part := 0) -> void:
+	var strong := u.mercy_frenzy
+	if part != 1:
+		u.mercy_frenzy = false
+		u.visual.rotation.z = 0.0
+		u.visual.rotation.x = 0.0
+		u.visual.position.y = 0.0
+	if not u.alive or not _in_range(u):
+		u.remove_meta("mercy_amt")
+		return
+	var base: float = SKILLS["assassina"][BIG_SLOT["assassina"]]["dmg"]
+	var missing := 1.0 - clampf(boss_hp / boss_max, 0.0, 1.0)
+	var wounded := not get_dot("ferida").is_empty()
+	var amount := base
+	if part == 2 and u.has_meta("mercy_amt"):
+		# o total já foi calculado na cravada
+		amount = u.get_meta("mercy_amt")
+		missing = u.get_meta("mercy_missing", missing)
+		wounded = u.get_meta("mercy_wounded", wounded)
+	else:
+		if Knowledge.has(u.hero, "burst"):
+			amount *= 1.3
+		if strong:
+			amount *= MERCY_FRENZY
+		# execução: quanto menos vida a boss tem, mais forte; com Ferimento, mais ainda (e o Ferimento é renovado)
+		amount *= 1.0 + MERCY_EXEC * missing
+		if wounded:
+			amount *= MERCY_WOUND
+			_wound(u)
+	var total := amount
+	if part == 1:
+		u.set_meta("mercy_amt", amount)
+		u.set_meta("mercy_missing", missing)
+		u.set_meta("mercy_wounded", wounded)
+		_mercy_slam(u, strong)
+		_damage_boss(u, amount * MERCY_FIRST, true, false)
+		return
+	if part == 2 and u.has_meta("mercy_amt"):
+		u.remove_meta("mercy_amt")
+		amount *= 1.0 - MERCY_FIRST
 	u.punch()
 	_attack_fx(u, true)
-	_burst(BOSS_POINT + Vector3(0, 1.4, 1.8), Color(1.0, 0.95, 0.9), 3.0)
+	var at := BOSS_POINT + Vector3(0, 1.6, 1.6)
+	var col := Color(0.75, 0.2, 1.0) if strong else Color(1.0, 0.95, 0.9)
+	_burst(at, Color(1, 1, 1), 3.0)
+	_burst(at, col, 4.2 if strong else 3.0)
+	# o corte: duas lâminas de luz cruzadas no ponto do golpe
+	for k in 2:
+		var slash := BoxMesh.new()
+		slash.size = Vector3(0.16, 5.2 if strong else 3.8, 0.08)
+		var sm := Fx.mat(Color(col.r * 2.2, col.g * 2.2, col.b * 2.2, 0.95), 0.0, true)
+		var mi := Fx.inst(fx_root, slash, sm, at + Vector3(0, 1.0, 0.2))
+		mi.rotation.z = (0.75 if k == 0 else -0.75)
+		mi.scale = Vector3(1.0, 0.1, 1.0)
+		var tw := mi.create_tween().set_parallel(true)
+		tw.tween_property(mi, "scale", Vector3.ONE, 0.08)
+		tw.tween_property(sm, "albedo_color:a", 0.0, 0.3).set_delay(0.08)
+		tw.chain().tween_callback(mi.queue_free)
+	_impact_ring(at, col, 4.5 if strong else 3.2)
+	# o chão racha embaixo dela e uma coluna de luz sobe do golpe
+	_impact_ring(u.position + Vector3(0, 0.2, 0), col, 3.4)
+	var pc := Color(col.r * 1.6, col.g * 1.6, col.b * 1.6, 0.8)
+	var pm := Fx.mat(pc, 0.0, true)
+	var pillar := Fx.inst(fx_root, Fx.cyl(0.9, 1.2, 14.0), pm, at + Vector3(0, 5.0, 0))
+	var tpl := pillar.create_tween().set_parallel(true)
+	tpl.tween_property(pillar, "scale", Vector3(0.05, 1.1, 0.05), 0.45).set_ease(Tween.EASE_IN)
+	tpl.tween_property(pm, "albedo_color:a", 0.0, 0.45)
+	tpl.chain().tween_callback(pillar.queue_free)
+	for n in 10:
+		var a := n * TAU / 10.0
+		var sp := Fx.inst(fx_root, Fx.sphere(0.12), Fx.mat(Color(col.r * 1.6, col.g * 1.6, col.b * 1.6), 0.0, true), at)
+		var ts := sp.create_tween().set_parallel(true)
+		ts.tween_property(sp, "position", at + Vector3(cos(a), sin(a), 0.2) * randf_range(2.0, 4.0), 0.4).set_ease(Tween.EASE_OUT)
+		ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.4)
+		ts.chain().tween_callback(sp.queue_free)
+	if u.controlled:
+		# brilho nas bordas da tela: mais forte quanto mais o golpe executou
+		hud.edge_glow(col, 0.5 + missing * 0.5 + (0.3 if strong else 0.0))
+		if missing >= 0.5 or wounded:
+			hud.toast("EXECUÇÃO  +%d%%" % roundi((total / base - 1.0) * 100.0), 1.0)
+	if strong:
+		_impact_ring(at, Color(1, 1, 1), 6.5)
+		hud.flash(Color(0.75, 0.2, 1.0), 0.2)
+		shake_t = 0.35
+		shake_amp = 0.45
+	else:
+		hud.flash(Color(1, 1, 1), 0.12)
+		shake_t = 0.25
+		shake_amp = 0.32
+	boss.hit_flash()
 	_damage_boss(u, amount, true, true)
+
+
+## A cravada: ela chega puxada pela adaga e enterra as duas no chão, na frente da boss.
+func _mercy_slam(u: Unit, strong: bool) -> void:
+	var col := Color(0.75, 0.2, 1.0) if strong else Color(1.0, 0.95, 0.9)
+	var at := u.position + Vector3(0, 0.15, 0)
+	u.punch()
+	_attack_fx(u, false)
+	_burst(at, Color(1, 1, 1), 2.2)
+	_burst(at, col, 3.0)
+	_impact_ring(at, col, 3.0)
+	_impact_ring(at, Color(1, 1, 1), 1.8)
+	# rachaduras: riscos de luz que abrem do ponto da cravada
+	for n in 7:
+		var a := n * TAU / 7.0 + randf() * 0.4
+		var crack := BoxMesh.new()
+		crack.size = Vector3(0.1, 0.04, randf_range(1.6, 3.0))
+		var cm := Fx.mat(Color(col.r * 2.4, col.g * 2.4, col.b * 2.4, 0.95), 0.0, true)
+		var mi := Fx.inst(fx_root, crack, cm, at + Vector3(cos(a), 0, sin(a)) * crack.size.z * 0.5)
+		mi.rotation.y = PI / 2.0 - a
+		var tw := mi.create_tween()
+		tw.tween_property(cm, "albedo_color:a", 0.0, 0.45).set_delay(0.08)
+		tw.tween_callback(mi.queue_free)
+	hud.flash(col, 0.1)
+	shake_t = 0.18
+	shake_amp = 0.3
+
+
+## Golpe de Misericórdia na mão do jogador (MERCY_WINDOW no total):
+##   1. ela arremessa uma adaga, que crava no chão na frente da boss;
+##   2. se puxa por ela num rasante e enterra as duas adagas no chão (a cravada, em MERCY_LAND);
+##   3. sobe num pulo seco e mergulha: o corte que fecha, no fim da janela.
+## Durante tudo ela está presa na animação. Se um golpe chegar nesse tempo, ela o apara e o resto NÃO
+## sai. Em Frenesi da Fera: não toma dano, os dois golpes saem de qualquer jeito, batem mais forte, e ela
+## faz o caminho todo girando com as adagas abertas, como uma serra.
+func _mercy_leap(u: Unit) -> void:
+	var strong := u.frenzy_t > 0.0
+	u.mercy_frenzy = strong
+	u.remove_meta("mercy_amt")
+	u.parry_t = MERCY_WINDOW
+	u.parry_hit = false
+	u.lock_t = MERCY_WINDOW
+	var from := u.position
+	var to_boss := BOSS_POINT - from
+	to_boss.y = 0.0
+	var dist := maxf(0.0, to_boss.length() - (MELEE_RANGE - 1.2))
+	var fwd := to_boss.normalized()
+	var to := from + fwd * dist
+	var col := Color(0.75, 0.2, 1.0) if strong else u.color.lightened(0.3)
+	var hot := Color(col.r * 2.4, col.g * 2.4, col.b * 2.4)
+	var t_throw := 0.16
+	var t_pull := MERCY_LAND - t_throw - 0.02
+	var t_up := (MERCY_WINDOW - MERCY_LAND) * 0.58
+	var t_down := MERCY_WINDOW - MERCY_LAND - t_up
+	u.face(fwd)
+	_burst(from, col, 2.0)
+	if u.controlled:
+		hud.edge_glow(col, 0.45)
+		if strong:
+			hud.toast("MISERICÓRDIA EM FRENESI", 1.0)
+	# 1. a adaga arremessada, com o fio de luz que a liga à mão dela
+	u.dagger_anim("thrust", 0.2)
+	var knife := Node3D.new()
+	fx_root.add_child(knife)
+	var blade := BoxMesh.new()
+	blade.size = Vector3(0.12, 0.12, 0.95)
+	Fx.inst(knife, blade, Fx.mat(Color(2.6, 2.6, 2.8), 0.0, true), Vector3.ZERO)
+	Fx.inst(knife, Fx.sphere(0.2), Fx.mat(hot, 0.0, true), Vector3(0, 0, 0.5))
+	var hand := from + Vector3(0, 1.1, 0)
+	var stuck := to + fwd * 0.9 + Vector3(0, 0.25, 0)
+	knife.position = hand
+	knife.look_at(stuck + Vector3(0, -0.6, 0), Vector3.UP)
+	var wire := BoxMesh.new()
+	wire.size = Vector3(0.05, 0.05, 1.0)
+	var wm := Fx.mat(Color(hot.r, hot.g, hot.b, 0.9), 0.0, true)
+	var line := Fx.inst(fx_root, wire, wm, hand)
+	var stretch := func():
+		if not is_instance_valid(line) or not is_instance_valid(knife) or not is_instance_valid(u):
+			return
+		var a: Vector3 = u.position + Vector3(0, 1.1 + u.visual.position.y, 0)
+		var b: Vector3 = knife.position
+		var len := a.distance_to(b)
+		line.visible = len > 0.3
+		if line.visible:
+			line.position = (a + b) * 0.5
+			line.look_at(b, Vector3.UP)
+			line.scale = Vector3(1, 1, len)
+	var tk := knife.create_tween()
+	tk.tween_method(func(t: float):
+		knife.position = hand.lerp(stuck, t)
+		stretch.call(), 0.0, 1.0, t_throw).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tk.tween_callback(func():
+		_burst(stuck, col, 1.4)
+		_impact_ring(stuck, col, 1.2))
+	# em Frenesi: a serra, um disco de lâminas que gira com ela a animação inteira
+	var saw: Node3D = null
+	if strong:
+		saw = Node3D.new()
+		u.visual.add_child(saw)
+		saw.position = Vector3(0, 1.0, 0)
+		for k in 4:
+			var tooth := BoxMesh.new()
+			tooth.size = Vector3(0.1, 3.4, 0.34)
+			var tm := Fx.inst(saw, tooth, Fx.mat(Color(2.6, 1.2, 3.0, 0.9), 0.0, true), Vector3.ZERO)
+			tm.rotation.x = k * PI / 4.0
+		var rim := Fx.inst(saw, Fx.torus(1.55, 1.75), Fx.mat(Color(2.0, 0.5, 2.6, 0.75), 0.0, true), Vector3.ZERO)
+		rim.rotation.z = PI / 2.0
+		u.dagger_anim("spin", MERCY_WINDOW)
+	# 2 e 3. o corpo: rasante puxado pela adaga, cravada, pulo seco e mergulho
+	var tw := u.create_tween()
+	tw.tween_interval(t_throw)
+	tw.tween_method(func(t: float):
+		u.position = from.lerp(to, t)
+		u.visual.position.y = sin(t * PI) * 0.9
+		u.visual.rotation.x = t * TAU * 3.0 if strong else -0.55 * sin(t * PI)
+		stretch.call(), 0.0, 1.0, t_pull).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func():
+		u.position = to
+		u.visual.position.y = 0.0
+		if not strong:
+			u.visual.rotation.x = 0.0
+		if is_instance_valid(knife):
+			knife.queue_free()
+		if is_instance_valid(line):
+			line.queue_free()
+		# a cravada só sai se ninguém a acertou no caminho (em Frenesi, sai sempre)
+		if u.alive and u.lock_t > 0.0 and (strong or not u.parry_hit):
+			_mercy_hit(u, 1)
+			if not strong:
+				u.dagger_anim("raise", t_up + t_down))
+	tw.tween_interval(0.02)
+	tw.tween_method(func(t: float):
+		u.visual.position.y = t * 4.4
+		if strong:
+			u.visual.rotation.x = TAU * 3.0 + t * TAU * 2.0, 0.0, 1.0, t_up).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(t: float):
+		u.visual.position.y = (1.0 - t) * 4.4
+		if strong:
+			u.visual.rotation.x = TAU * 5.0 + t * TAU * 3.0, 0.0, 1.0, t_down).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func():
+		u.visual.position.y = 0.0
+		u.visual.rotation.x = 0.0
+		u.visual.rotation.z = 0.0
+		if saw != null and is_instance_valid(saw):
+			saw.queue_free()
+		u.face(BOSS_POINT - u.position))
+	# rastro: silhuetas pelo caminho; em Frenesi, mais delas e anéis de corte
+	var ghosts := 12 if strong else 6
+	for n in ghosts:
+		get_tree().create_timer(MERCY_WINDOW * (n + 1) / (ghosts + 1.0), false).timeout.connect(func():
+			if is_instance_valid(u) and u.alive and u.lock_t > 0.0:
+				_afterimage(u, Vector3(0, u.visual.position.y, 0), col)
+				if strong:
+					_impact_ring(u.position + Vector3(0, 1.0 + u.visual.position.y, 0), col, 1.8))
+
+
+## Última Dança: a habilidade bônus do fim do Frenesi. Ela some num borrão; uma tempestade de cortes
+## atravessa a boss vindo de todos os lados, cada um com a silhueta dela; então ela reaparece no alto e
+## fecha com um X gigante que racha a arena. Durante tudo isso ela é intocável.
+func _last_dance(u: Unit) -> void:
+	u.finisher_t = 0.0
+	u.lock_t = FINISH_LOCK
+	u.invuln = maxf(u.invuln, FINISH_LOCK)
+	u.channel_t = 0.0
+	var echo := u.frenzy_dmg * FINISH_ECHO
+	u.frenzy_dmg = 0.0
+	if u.controlled:
+		hud.skill_cut(u, "Última Dança")
+		hud.toast("ÚLTIMA DANÇA", 1.6)
+		hud.flash(Color(0.45, 0.05, 0.7), 0.5)
+		hud.edge_glow(Color(0.8, 0.25, 1.0), 1.0)
+	var purple := Color(0.8, 0.25, 1.0)
+	var pink := Color(1.0, 0.3, 0.7)
+	var green := SIDE_COL
+	var center := Vector3(0, 4.2, -11.2)
+	var home := BOSS_POINT + Vector3(0, 0, MELEE_RANGE - 1.2)
+	# o preparo: ela se agacha em posição de ataque, as adagas cruzadas, a energia juntando nos pés
+	u.face(BOSS_POINT - u.position)
+	u.dagger_anim("both", FINISH_WINDUP)
+	var crouch := u.visual.create_tween()
+	crouch.tween_property(u.visual, "scale", Vector3(1.2, 0.62, 1.2), FINISH_WINDUP * 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	crouch.parallel().tween_property(u.visual, "rotation:x", -0.35, FINISH_WINDUP * 0.7)
+	crouch.tween_property(u.visual, "scale", Vector3(0.8, 1.35, 0.8), 0.06)
+	for k in 4:
+		get_tree().create_timer(k * FINISH_WINDUP / 4.0, false).timeout.connect(func():
+			if not is_instance_valid(u) or not u.alive:
+				return
+			# anéis que fecham em cima dela
+			var gm := Fx.mat(Color(purple.r * 2.2, purple.g * 2.2, purple.b * 2.2, 0.0), 0.0, true)
+			var gather := Fx.inst(fx_root, Fx.torus(0.9, 1.0), gm, u.position + Vector3(0, 0.25, 0))
+			gather.scale = Vector3.ONE * (4.2 - k * 0.5)
+			var tg := gather.create_tween().set_parallel(true)
+			tg.tween_property(gather, "scale", Vector3.ONE * 0.3, FINISH_WINDUP / 3.0).set_ease(Tween.EASE_IN)
+			tg.tween_property(gm, "albedo_color:a", 0.9, FINISH_WINDUP / 3.0)
+			tg.chain().tween_callback(gather.queue_free))
+	await get_tree().create_timer(FINISH_WINDUP, false).timeout
+	if not is_instance_valid(u):
+		return
+	u.visual.scale = Vector3.ONE
+	u.visual.rotation.x = 0.0
+	if ended or not u.alive:
+		return
+	# ... e VAI
+	_burst(u.position, purple, 3.2)
+	_burst(u.position, Color(1, 1, 1), 2.0)
+	_impact_ring(u.position + Vector3(0, 0.2, 0), purple, 4.5)
+	_beam(u.position + Vector3(0, 1.0, 0), center, Color(1, 1, 1, 0.9), 0.18)
+	_afterimage(u, Vector3.ZERO, purple)
+	shake_t = 0.2
+	shake_amp = 0.35
+	u.visual.visible = false
+	u.position = home
+	# a tempestade de cortes
+	var storm := FINISH_TIME * 0.62
+	for n in FINISH_HITS:
+		get_tree().create_timer(0.12 + storm * n / FINISH_HITS, false).timeout.connect(func():
+			if ended or not is_instance_valid(u) or not u.alive:
+				return
+			var col: Color = [purple, pink, green, Color(1, 1, 1)][n % 4]
+			# cortes quase deitados, que atravessam a arena de lado a lado
+			var a := randf_range(-0.42, 0.42) + (PI if n % 2 == 1 else 0.0)
+			var dir := Vector3(cos(a), sin(a), 0)
+			# o risco do corte atravessando a boss
+			var slash := BoxMesh.new()
+			slash.size = Vector3(0.24, 30.0 + randf() * 10.0, 0.08)
+			var sm := Fx.mat(Color(col.r * 3.4, col.g * 3.4, col.b * 3.4, 0.95), 0.0, true)
+			var mi := Fx.inst(fx_root, slash, sm, center + Vector3(randf_range(-1.2, 1.2), randf_range(-2.6, 2.6), 0.6))
+			mi.rotation.z = a + PI / 2.0
+			mi.scale = Vector3(1.0, 0.05, 1.0)
+			var tw := mi.create_tween().set_parallel(true)
+			tw.tween_property(mi, "scale", Vector3.ONE, 0.05)
+			tw.tween_property(sm, "albedo_color:a", 0.0, 0.28).set_delay(0.05)
+			tw.chain().tween_callback(mi.queue_free)
+			# o miolo branco do corte, que fica um instante a mais
+			var core := BoxMesh.new()
+			core.size = Vector3(0.06, slash.size.y, 0.1)
+			var core_m := Fx.mat(Color(4.0, 4.0, 4.0, 1.0), 0.0, true)
+			var ci := Fx.inst(fx_root, core, core_m, mi.position + Vector3(0, 0, 0.05))
+			ci.rotation.z = mi.rotation.z
+			var tc := ci.create_tween()
+			tc.tween_property(core_m, "albedo_color:a", 0.0, 0.5).set_delay(0.12)
+			tc.tween_callback(ci.queue_free)
+			_burst(mi.position, col, 2.2)
+			# a tela vai ficando branca a cada corte, até estourar no fim
+			hud.flash(Color(1, 1, 1), 0.1 + 0.5 * (n + 1.0) / FINISH_HITS)
+			# a silhueta dela passando
+			var ghost := Fx.inst(fx_root, Fx.capsule(0.38, 1.3), Fx.mat(Color(col.r, col.g, col.b, 0.7), 0.0, true), mi.position + dir * 13.0)
+			var tg := ghost.create_tween().set_parallel(true)
+			tg.tween_property(ghost, "position", mi.position - dir * 13.0, 0.1)
+			tg.tween_property(ghost, "scale", Vector3.ONE * 0.3, 0.2)
+			tg.chain().tween_callback(ghost.queue_free)
+			_impact_ring(center + dir * randf_range(-1.5, 1.5), col, 1.6)
+			shake_t = 0.12
+			shake_amp = 0.22
+			boss.hit_flash()
+			_damage_boss(u, FINISH_HIT, true, false))
+	# ela reaparece no alto, com as adagas erguidas
+	get_tree().create_timer(0.12 + storm + 0.08, false).timeout.connect(func():
+		if not is_instance_valid(u) or not u.alive:
+			return
+		u.visual.visible = true
+		u.face(BOSS_POINT - u.position)
+		u.visual.position.y = 6.5
+		u.dagger_anim("raise", FINISH_TIME - storm - 0.4)
+		_burst(u.position + Vector3(0, 6.5, 0), Color(1, 1, 1), 2.6)
+		u.visual.create_tween().tween_property(u.visual, "position:y", 0.0, FINISH_TIME - storm - 0.3).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN))
+	# o X gigante
+	get_tree().create_timer(FINISH_TIME - 0.08, false).timeout.connect(func():
+		if is_instance_valid(u):
+			u.visual.visible = true
+			u.visual.position.y = 0.0
+		if ended or not is_instance_valid(u) or not u.alive:
+			return
+		for k in 2:
+			for layer in 2:
+				var big := BoxMesh.new()
+				big.size = Vector3(0.9 - layer * 0.5, 17.0, 0.1)
+				var lc: Color = [purple, Color(1, 1, 1)][layer]
+				var bm := Fx.mat(Color(lc.r * 2.4, lc.g * 2.4, lc.b * 2.4, 0.95), 0.0, true)
+				var mi := Fx.inst(fx_root, big, bm, center + Vector3(0, 0, 0.8 + layer * 0.05))
+				mi.rotation.z = 0.78 if k == 0 else -0.78
+				mi.scale = Vector3(1.0, 0.05, 1.0)
+				var tw := mi.create_tween().set_parallel(true)
+				tw.tween_property(mi, "scale", Vector3.ONE, 0.07)
+				tw.tween_property(bm, "albedo_color:a", 0.0, 0.6).set_delay(0.15)
+				tw.chain().tween_callback(mi.queue_free)
+		_burst(center, Color(1, 1, 1), 10.0)
+		_burst(center, purple, 14.0)
+		for k in 6:
+			_impact_ring(center, [Color(1, 1, 1), purple, pink, green][k % 4], 4.0 + k * 2.4)
+		_impact_ring(u.position + Vector3(0, 0.2, 0), purple, 7.0)
+		var pm := Fx.mat(Color(purple.r * 2.0, purple.g * 2.0, purple.b * 2.0, 0.85), 0.0, true)
+		var pillar := Fx.inst(fx_root, Fx.cyl(2.0, 2.6, 22.0), pm, center + Vector3(0, 6.0, 0))
+		var tp := pillar.create_tween().set_parallel(true)
+		tp.tween_property(pillar, "scale", Vector3(0.05, 1.1, 0.05), 0.7).set_ease(Tween.EASE_IN)
+		tp.tween_property(pm, "albedo_color:a", 0.0, 0.7)
+		tp.chain().tween_callback(pillar.queue_free)
+		for n in 30:
+			var a := n * TAU / 30.0
+			var sp := Fx.inst(fx_root, Fx.sphere(0.18), Fx.mat([purple, pink, green][n % 3], 0.0, true), center)
+			var ts := sp.create_tween().set_parallel(true)
+			ts.tween_property(sp, "position", center + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 10.0), 0.8).set_ease(Tween.EASE_OUT)
+			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.8)
+			ts.chain().tween_callback(sp.queue_free)
+		hud.flash(Color(1, 1, 1), 0.75)
+		if u.controlled:
+			hud.edge_glow(purple, 1.0)
+		shake_t = 0.6
+		shake_amp = 0.8
+		boss.hit_flash()
+		_wound(u)
+		_damage_boss(u, FINISH_END, true, true)
+		# ela pousa de costas pra boss, adagas baixas: o corte já foi dado, falta ele "chegar"
+		u.face(u.position - BOSS_POINT)
+		u.dagger_anim("both", 0.3)
+		# as duas linhas finas do X ficam riscadas no ar até o estouro
+		for k in 2:
+			var scar := BoxMesh.new()
+			scar.size = Vector3(0.07, 19.0, 0.06)
+			var scm := Fx.mat(Color(4.0, 4.0, 4.0, 1.0), 0.0, true)
+			var si := Fx.inst(fx_root, scar, scm, center + Vector3(0, 0, 0.9))
+			si.rotation.z = 0.78 if k == 0 else -0.78
+			var tsc := si.create_tween()
+			tsc.tween_interval(FINISH_ECHO_T)
+			tsc.tween_property(si, "scale", Vector3(14.0, 1.0, 1.0), 0.08)
+			tsc.parallel().tween_property(scm, "albedo_color", Color(purple.r * 3.0, purple.g * 3.0, purple.b * 3.0, 0.0), 0.3)
+			tsc.tween_callback(si.queue_free))
+	# o estouro: os cortes chegam todos de uma vez, e o dano do Frenesi volta
+	get_tree().create_timer(FINISH_TIME + FINISH_ECHO_T - 0.05, false).timeout.connect(func():
+		if is_instance_valid(u):
+			u.visual.visible = true
+			u.visual.position.y = 0.0
+		if ended or not is_instance_valid(u) or not u.alive:
+			return
+		# explosões em cadeia ao longo dos dois riscos do X
+		for k in 2:
+			var dir := Vector3(-sin(0.78), cos(0.78), 0) if k == 0 else Vector3(sin(0.78), cos(0.78), 0)
+			for n in 9:
+				var p := center + dir * (n - 4) * 2.0 + Vector3(0, 0, 0.9)
+				get_tree().create_timer(n * 0.018, false).timeout.connect(func():
+					_burst(p, [Color(1, 1, 1), purple, pink][n % 3], 3.4)
+					_impact_ring(p, purple, 2.4))
+		_burst(center, Color(1, 1, 1), 16.0)
+		_burst(center, pink, 20.0)
+		for k in 8:
+			_impact_ring(center, [Color(1, 1, 1), purple, pink, green][k % 4], 5.0 + k * 3.0)
+		_impact_ring(BOSS_POINT + Vector3(0, 0.2, 0), purple, 12.0)
+		# a boss "abre" em quatro: quatro lascas de luz voando do centro
+		for k in 4:
+			var a := PI / 4.0 + k * PI / 2.0 + PI / 4.0
+			var shard_m := Fx.mat(Color(purple.r * 2.6, purple.g * 2.6, purple.b * 2.6, 0.85), 0.0, true)
+			var shard := Fx.inst(fx_root, Fx.cyl(0.0, 2.2, 5.0), shard_m, center)
+			shard.rotation.z = a - PI / 2.0
+			var tsh := shard.create_tween().set_parallel(true)
+			tsh.tween_property(shard, "position", center + Vector3(cos(a), sin(a), 0) * 7.0, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+			tsh.tween_property(shard_m, "albedo_color:a", 0.0, 0.5)
+			tsh.chain().tween_callback(shard.queue_free)
+		for n in 44:
+			var a := randf() * TAU
+			var sp := Fx.inst(fx_root, Fx.sphere(0.2), Fx.mat([Color(3, 3, 3), purple, pink, green][n % 4], 0.0, true), center)
+			var ts := sp.create_tween().set_parallel(true)
+			ts.tween_property(sp, "position", center + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(5.0, 14.0), 0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.9)
+			ts.chain().tween_callback(sp.queue_free)
+		hud.flash(Color(1, 1, 1), 1.0)
+		if u.controlled:
+			hud.edge_glow(pink, 1.0)
+			hud.toast("CORTE FINAL  +%d" % roundi(echo), 1.6)
+		shake_t = 0.9
+		shake_amp = 1.1
+		boss.hit_flash()
+		u.face(BOSS_POINT - u.position)
+		_raw_hit(u, echo))
+
+
+## Garras Cruzadas: abre o Ferimento na boss. Enquanto dura, a party inteira dá mais dano nela.
+func _wound(u: Unit) -> void:
+	add_dot("ferida", "Ferimento", WOUND_COL, WOUND_TIME, 0.0, u)
+	var at := BOSS_POINT + Vector3(0, 2.2, 1.8)
+	for k in 3:
+		# três rasgos vermelhos
+		var cut := BoxMesh.new()
+		cut.size = Vector3(0.12, 2.6, 0.06)
+		var cm := Fx.mat(Color(2.0, 0.25, 0.5, 0.95), 0.0, true)
+		var mi := Fx.inst(fx_root, cut, cm, at + Vector3((k - 1) * 0.6, 0, 0))
+		mi.rotation.z = -0.5
+		var tw := mi.create_tween()
+		tw.tween_interval(k * 0.06)
+		tw.tween_property(cm, "albedo_color:a", 0.0, 0.5)
+		tw.tween_callback(mi.queue_free)
+	if u.controlled:
+		hud.toast("FERIMENTO: +%d%% DE DANO DA PARTY" % roundi((WOUND_MULT - 1.0) * 100.0), 1.0)
+
+
+## O furacão da Dança Carmesim em Frenesi: uma coluna de anéis de corte que sobe girando e abre no alto.
+func _hurricane(u: Unit, col: Color) -> void:
+	var time := 0.9
+	var root := Node3D.new()
+	fx_root.add_child(root)
+	root.position = u.position
+	for k in 9:
+		var h := 0.3 + k * 0.85
+		var rad := 1.3 + k * 0.42
+		var c: Color = [col, Color(1.0, 0.3, 0.7), Color(1, 1, 1)][k % 3]
+		var rm := Fx.mat(Color(c.r * 1.3, c.g * 1.3, c.b * 1.3, 0.55), 0.0, true)
+		var ring := Fx.inst(root, Fx.torus(rad * 0.93, rad), rm, Vector3(0, h * 0.2, 0))
+		ring.scale = Vector3.ONE * 0.2
+		ring.rotation.x = randf_range(-0.14, 0.14)
+		var tr := ring.create_tween().set_parallel(true)
+		tr.tween_property(ring, "scale", Vector3.ONE, 0.22).set_delay(k * 0.035).set_ease(Tween.EASE_OUT)
+		tr.tween_property(ring, "position:y", h, 0.3).set_delay(k * 0.035).set_ease(Tween.EASE_OUT)
+		tr.tween_property(rm, "albedo_color:a", 0.0, 0.35).set_delay(time - 0.35)
+		# lâminas presas no anel, pra dar pra ver o giro
+		for s in 3:
+			var a := s * TAU / 3.0 + k
+			var blade := BoxMesh.new()
+			blade.size = Vector3(0.9, 0.06, 0.2)
+			var bi := Fx.inst(ring, blade, Fx.mat(Color(1.6, 1.6, 1.8, 0.9), 0.0, true), Vector3(cos(a), 0, sin(a)) * rad)
+			bi.rotation.y = -a + PI / 2.0
+	var tw := root.create_tween()
+	tw.tween_property(root, "rotation:y", -TAU * 4.0, time).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(root.queue_free)
+	for n in 8:
+		get_tree().create_timer(n * time / 8.0, false).timeout.connect(func():
+			if is_instance_valid(u) and u.alive:
+				if n % 3 == 0:
+					_impact_ring(u.position + Vector3(0, 0.2, 0), col, 3.0 + n * 0.4)
+				_afterimage(u, Vector3(cos(n * 2.4), 0, sin(n * 2.4)) * 2.0, col))
+	if u.controlled:
+		hud.edge_glow(col, 0.7)
+	shake_t = 0.4
+	shake_amp = 0.35
+
+
+## Dança Carmesim: ela gira de verdade, com as duas facas abertas, cortando tudo em volta.
+func _crimson_dance(u: Unit, dmg: float) -> void:
+	var col := WOUND_COL
+	var strong := u.frenzy_t > 0.0
+	if strong:
+		# em Frenesi: um furacão roxo, e bate mais forte
+		dmg *= DANCE_FRENZY
+		col = Color(0.75, 0.2, 1.0)
+		_hurricane(u, col)
+	# o corpo gira duas voltas
+	var start := u.visual.rotation.y
+	var tw := u.visual.create_tween()
+	tw.tween_property(u.visual, "rotation:y", start + TAU * 2.0, DANCE_SPIN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(u.visual, "scale", Vector3(1.2, 0.9, 1.2), DANCE_SPIN * 0.5)
+	tw.tween_property(u.visual, "scale", Vector3.ONE, 0.1)
+	tw.tween_callback(func(): u.visual.rotation.y = start)
+	# as duas facas: lâminas que giram em volta dela, deixando um disco de corte
+	var rig := Node3D.new()
+	u.add_child(rig)
+	rig.position = Vector3(0, 1.0, 0)
+	for s in [-1.0, 1.0]:
+		var blade := BoxMesh.new()
+		blade.size = Vector3(1.9, 0.08, 0.32)
+		Fx.inst(rig, blade, Fx.mat(Color(2.4, 2.4, 2.6), 0.0, true), Vector3(s * 1.5, s * 0.25, 0))
+		var trail := BoxMesh.new()
+		trail.size = Vector3(2.4, 0.04, 0.9)
+		Fx.inst(rig, trail, Fx.mat(Color(col.r * 2.0, col.g * 2.0, col.b * 2.0, 0.6), 0.0, true), Vector3(s * 1.5, s * 0.25, s * 0.5))
+	var tr := rig.create_tween()
+	tr.tween_property(rig, "rotation:y", -TAU * 2.5, DANCE_SPIN)
+	tr.parallel().tween_property(rig, "scale", Vector3.ONE * 1.35, DANCE_SPIN)
+	tr.tween_callback(rig.queue_free)
+	# anéis de corte no chão e silhuetas em volta
+	for k in 3:
+		var ring_m := Fx.mat(Color(col.r * 2.0, col.g * 2.0, col.b * 2.0, 0.9), 0.0, true)
+		var ring := Fx.inst(fx_root, Fx.torus(0.85, 1.0), ring_m, u.position + Vector3(0, 0.6 + k * 0.5, 0))
+		ring.scale = Vector3.ONE * 0.4
+		var tg := ring.create_tween().set_parallel(true)
+		tg.tween_property(ring, "scale", Vector3.ONE * (3.4 + k * 0.5), DANCE_SPIN).set_delay(k * 0.07).set_ease(Tween.EASE_OUT)
+		tg.tween_property(ring_m, "albedo_color:a", 0.0, DANCE_SPIN).set_delay(k * 0.07 + 0.1)
+		tg.chain().tween_callback(ring.queue_free)
+	for n in 6:
+		var a := n * TAU / 6.0
+		get_tree().create_timer(n * DANCE_SPIN / 6.0, false).timeout.connect(func():
+			if is_instance_valid(u) and u.alive:
+				_afterimage(u, Vector3(cos(a), 0, sin(a)) * 1.5, col))
+	_burst(u.position, col, 3.8)
+	shake_t = 0.2
+	shake_amp = 0.2
+	if _in_range(u):
+		_damage_boss(u, dmg, true, true)
 
 
 ## Marca no chão do lado em que o Talho está valendo, com os golpes que faltam. Só pra quem
@@ -2149,14 +3298,147 @@ func _tick_bullets(u: Unit, delta: float) -> void:
 			_burst(u.position + Vector3(0, 2.2, 0), BULLETS[u.bullets[u.bullets.size() - 1]]["col"], 0.9)
 
 
-func _shot_fx(u: Unit, col: Color, big: bool) -> void:
-	var from := u.position + Vector3(0, 1.2, 0)
+## Bala saindo da pistola até a boss: uma cabeça brilhante esticada na direção do tiro, um rastro
+## que apaga e um anel de impacto na cor da munição. `size` 1 = bala comum.
+func _shot_fx(u: Unit, col: Color, big: bool, size := 1.0) -> void:
+	if big:
+		size = maxf(size, 1.7)
+	u.kick(size)
+	var from := u.position + Vector3(0, 1.25, 0)
 	var to := Vector3(randf_range(-0.8, 0.8), randf_range(2.5, 4.0), -11.0)
-	var mi := Fx.inst(fx_root, Fx.sphere(0.34 if big else 0.2), Fx.mat(col, 4.0, true), from)
-	var tw := mi.create_tween()
-	tw.tween_property(mi, "position", to, 0.08)
-	tw.tween_callback(mi.queue_free)
-	tw.tween_callback(_burst.bind(to, col, 2.6 if big else 1.2))
+	# clarão na boca da arma
+	var muzzle_m := Fx.mat(Color(col.r, col.g, col.b, 0.9).lightened(0.4), 8.0, true)
+	var muzzle := Fx.inst(fx_root, Fx.sphere(0.3 * size), muzzle_m, from)
+	var tm := muzzle.create_tween().set_parallel(true)
+	tm.tween_property(muzzle, "scale", Vector3.ONE * 0.2, 0.12)
+	tm.tween_property(muzzle_m, "albedo_color:a", 0.0, 0.12)
+	tm.chain().tween_callback(muzzle.queue_free)
+	# a bala: cápsula esticada, virada pro alvo
+	var head := Fx.inst(fx_root, Fx.capsule(0.13 * size, 0.9 * size), Fx.mat(col.lightened(0.25), 7.0, true), from)
+	head.look_at(to, Vector3.UP)
+	head.rotate_object_local(Vector3.RIGHT, PI / 2.0)
+	var tw := head.create_tween()
+	tw.tween_property(head, "position", to, 0.09)
+	tw.tween_callback(head.queue_free)
+	tw.tween_callback(_impact_ring.bind(to, col, 1.4 * size))
+	tw.tween_callback(_burst.bind(to, col, 1.3 * size))
+	_beam(u.position + Vector3(0, 0.25, 0), to - Vector3(0, 1.0, 0), Color(col.r, col.g, col.b, 0.75), 0.22)
+
+
+## Anel que abre de frente pra arena no ponto do impacto.
+func _impact_ring(at: Vector3, col: Color, radius: float) -> void:
+	var m := Fx.mat(Color(col.r, col.g, col.b, 0.95).lightened(0.3), 6.0, true)
+	var ring := Fx.inst(fx_root, Fx.torus(0.8, 1.0), m, at)
+	ring.rotation.x = PI / 2.0
+	ring.scale = Vector3.ONE * 0.2
+	var tw := ring.create_tween().set_parallel(true)
+	tw.tween_property(ring, "scale", Vector3.ONE * radius, 0.26).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.26)
+	tw.chain().tween_callback(ring.queue_free)
+
+
+## Disparo Rúnico (munição arcana pequena e limpa) e Tiro Perfurante (lança pesada que atravessa a boss).
+func _maga_basic_fx(u: Unit, slot: int) -> void:
+	if slot == 0:
+		_shot_fx(u, Color(1.0, 0.78, 0.4), false, 0.8)
+		return
+	u.kick(2.2)
+	var from := u.position + Vector3(0, 1.25, 0)
+	var hit := Vector3(0, 3.2, -11.0)
+	var through := from + (hit - from).normalized() * (from.distance_to(hit) + 9.0)
+	var lance_m := Fx.mat(Color(0.8, 0.98, 1.0), 9.0, true)
+	var lance := Fx.inst(fx_root, Fx.capsule(0.2, 3.4), lance_m, from)
+	lance.look_at(through, Vector3.UP)
+	lance.rotate_object_local(Vector3.RIGHT, PI / 2.0)
+	var tw := lance.create_tween()
+	tw.tween_property(lance, "position", through, 0.16)
+	tw.tween_callback(lance.queue_free)
+	# rastro grosso em linha reta, que atravessa
+	var a := from - Vector3(0, 1.0, 0)
+	var bb := through - Vector3(0, 1.0, 0)
+	for k in 2:
+		_beam(a + Vector3(0, k * 0.05, 0), bb, Color(0.6, 0.95, 1.0, 0.95 - k * 0.3), 0.3 + k * 0.2)
+	get_tree().create_timer(0.07, false).timeout.connect(func():
+		_impact_ring(hit, AIM_COL, 3.2)
+		_impact_ring(hit + Vector3(0, 0, -1.5), Color(1, 1, 1), 2.2)
+		_burst(hit, AIM_COL, 2.6)
+		boss.hit_flash())
+
+
+# ---- marca do Tiro Perfurante
+
+## O Tiro Perfurante marca a boss por AIM_TIME: uma mira arcana fecha em cima dela. Salva Astral,
+## Canhão Estelar ou Disparo Rúnico fortalecido usados nesse tempo estouram a marca (_use_aim).
+func _aim_mark(u: Unit) -> void:
+	aim_t = AIM_TIME
+	add_dot("mira", "Marca Perfurante", AIM_COL, AIM_TIME, 0.0, u)
+	if aim_node != null and is_instance_valid(aim_node):
+		aim_node.queue_free()
+	aim_node = Node3D.new()
+	aim_node.position = Vector3(0, 5.2, -11.0)
+	fx_root.add_child(aim_node)
+	for spec in [[2.3, 2.5], [1.5, 1.62]]:
+		var ring := Fx.inst(aim_node, Fx.torus(spec[0], spec[1]), Fx.mat(AIM_COL, 6.0, true))
+		ring.rotation.x = PI / 2.0
+	for n in 4:
+		# os quatro traços da mira
+		var tick := BoxMesh.new()
+		tick.size = Vector3(0.14, 1.1, 0.08)
+		var t := Fx.inst(aim_node, tick, Fx.mat(Color(1, 1, 1), 7.0, true), Vector3(0, 2.4, 0).rotated(Vector3(0, 0, 1), n * PI / 2.0))
+		t.rotation.z = n * PI / 2.0
+	Fx.inst(aim_node, Fx.sphere(0.2), Fx.mat(Color(1, 1, 1), 8.0, true))
+	# entra grande e fecha na boss
+	aim_node.scale = Vector3.ONE * 2.4
+	aim_node.create_tween().tween_property(aim_node, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if u.controlled:
+		hud.toast("MARCADA", 0.7)
+
+
+func _tick_aim(delta: float) -> void:
+	if aim_t <= 0.0:
+		return
+	aim_t -= delta
+	if aim_node != null and is_instance_valid(aim_node):
+		aim_node.rotation.z += delta * 2.4
+		# nos últimos instantes a mira pisca: a marca está acabando
+		aim_node.visible = aim_t > 0.5 or fmod(aim_t, 0.16) > 0.08
+	if aim_t <= 0.0:
+		_aim_clear()
+
+
+func _aim_clear() -> void:
+	aim_t = 0.0
+	remove_dot("mira")
+	if aim_node != null and is_instance_valid(aim_node):
+		aim_node.queue_free()
+	aim_node = null
+
+
+## Estoura a marca, se ela existe: devolve o dano a mais (0 sem marca). Vale uma vez por marca.
+func _use_aim(u: Unit) -> float:
+	if aim_t <= 0.0:
+		return 0.0
+	var at := Vector3(0, 5.2, -11.0)
+	_aim_clear()
+	# ruptura arcana: a mira se parte em estilhaços e um clarão
+	_impact_ring(at, Color(1, 1, 1), 5.0)
+	_impact_ring(at, AIM_COL, 3.4)
+	_burst(at, AIM_COL, 4.2)
+	for n in 8:
+		var a := n * TAU / 8.0
+		var shard := BoxMesh.new()
+		shard.size = Vector3(0.12, 0.9, 0.12)
+		var mi := Fx.inst(fx_root, shard, Fx.mat(Color(1, 1, 1), 8.0, true), at)
+		mi.rotation.z = a
+		var tw := mi.create_tween().set_parallel(true)
+		tw.tween_property(mi, "position", at + Vector3(-sin(a), cos(a), 0) * 3.4, 0.28).set_ease(Tween.EASE_OUT)
+		tw.tween_property(mi, "scale", Vector3.ONE * 0.1, 0.28)
+		tw.chain().tween_callback(mi.queue_free)
+	boss.hit_flash()
+	_popup(int(AIM_BONUS), AIM_COL, 54, at + Vector3(0, 1.8, 0), "RUPTURA +")
+	if u.controlled:
+		hud.toast("RUPTURA ARCANA", 0.8)
+	return AIM_BONUS
 
 
 ## Rainbow Shots: gasta a próxima bala. Com exatamente 3 guardadas, gasta as 3 num tiro só.
@@ -2166,15 +3448,17 @@ func _rainbow(u: Unit) -> void:
 		return
 	u.face(BOSS_POINT - u.position)
 	if u.bullets.size() == 3:
+		# tiro triplo: as três cores saem juntas, num disparo pesado
+		for n in 3:
+			_shot_fx(u, BULLETS[u.bullets[n]]["col"], true, 1.5)
 		u.bullets.clear()
-		_shot_fx(u, Color(1, 1, 1), true)
 		_damage_boss(u, BULLET_TRIPLE, true, true)
 		_knock_back(u, BULLET_KNOCK)
 		hud.toast("TIRO TRIPLO", 0.9)
 		return
 	var kind: int = u.bullets.pop_front()
 	var col: Color = BULLETS[kind]["col"]
-	_shot_fx(u, col, false)
+	_shot_fx(u, col, false, 1.15)
 	_damage_boss(u, BULLET_DMG, true, false)
 	u.pierce_next = true
 	match kind:
@@ -2188,17 +3472,47 @@ func _rainbow(u: Unit) -> void:
 	_burst(u.position + Vector3(0, 1.0, 0), col, 1.3)
 
 
-## Ricochete Prismático: perto da boss, a bala fica indo e voltando entre ela e a Maga.
-## Longe, é um tiro só que ricocheteia uma vez.
+## Ricochete Prismático. Normal: um tiro que bate na boss e ricocheteia uma vez nela mesma (não volta).
+## Com o escudo da Salva Astral de pé (unit.salvo_t) e perto da boss: a bala fica indo e voltando
+## entre a boss e a Maga, batendo numa e curando a outra. Sem esse escudo, nunca volta nela.
 func _ricochet(u: Unit) -> void:
 	u.face(BOSS_POINT - u.position)
-	if u.position.distance_to(BOSS_POINT) > MELEE_RANGE:
-		_shot_fx(u, Color(0.8, 0.95, 1.0), false)
+	u.kick(1.2)
+	if fairy_t > 0.0:
+		# com a Fada Astral em campo, a bala fica ricocheteando entre a boss e ela, de qualquer distância
+		_rico_leg(u.position + Vector3(0, 1.25, 0), Vector3(0, 3.0, -11.5))
+		u.ricochet_t = RICO_TIME
+		u.ricochet_tick = 0.16
+		u.ricochet_out = true
+		u.set_meta("rico_fairy", true)
+		if u.controlled:
+			hud.toast("RICOCHETE NA FADA", 0.9)
+		return
+	u.set_meta("rico_fairy", false)
+	if u.salvo_t <= 0.0 or u.position.distance_to(BOSS_POINT) > MELEE_RANGE:
+		var hit := Vector3(randf_range(-0.6, 0.6), 2.6, -11.0)
+		_rico_leg(u.position + Vector3(0, 1.25, 0), hit)
+		get_tree().create_timer(0.16, false).timeout.connect(_rico_leg.bind(hit, hit + Vector3(2.4, 2.2, 0.5)))
 		_damage_boss(u, RICO_DMG * 2.5, true, false)
 		return
 	u.ricochet_t = RICO_TIME
 	u.ricochet_tick = 0.0
 	u.ricochet_out = true
+	if u.controlled:
+		hud.toast("RICOCHETE NO ESCUDO", 0.9)
+
+
+## Um trecho do ricochete: prisma brilhante viajando de `from` a `to`, com rastro e faísca na batida.
+func _rico_leg(from: Vector3, to: Vector3) -> void:
+	var col: Color = RAINBOW[randi() % RAINBOW.size()].lightened(0.35)
+	var prism := Fx.inst(fx_root, Fx.sphere(0.22), Fx.mat(Color(1, 1, 1), 8.0, true), from)
+	prism.scale = Vector3(0.8, 0.8, 1.6)
+	var tw := prism.create_tween()
+	tw.tween_property(prism, "position", to, 0.15)
+	tw.tween_callback(prism.queue_free)
+	tw.tween_callback(_impact_ring.bind(to, col, 1.5))
+	tw.tween_callback(_burst.bind(to, col, 1.1))
+	_beam(from - Vector3(0, 1.0, 0), to - Vector3(0, 1.0, 0), Color(col.r, col.g, col.b, 0.9), 0.3)
 
 
 func _tick_ricochet(u: Unit, delta: float) -> void:
@@ -2209,53 +3523,375 @@ func _tick_ricochet(u: Unit, delta: float) -> void:
 	if u.ricochet_tick > 0.0:
 		return
 	u.ricochet_tick = RICO_STEP
-	if u.position.distance_to(BOSS_POINT) > MELEE_RANGE:
-		u.ricochet_t = 0.0  # saiu de perto: a bala se perde
+	var boss_at := Vector3(0, 3.0, -11.5)
+	if u.get_meta("rico_fairy", false):
+		if fairy_t <= 0.0:
+			u.ricochet_t = 0.0  # a fada foi embora: acabou o vai e volta
+			return
+		if u.ricochet_out:
+			_rico_leg(FAIRY_AT, boss_at)
+			_damage_boss(u, RICO_DMG, true, false)
+		else:
+			_rico_leg(boss_at, FAIRY_AT)
+			_fairy_heal()
+		u.ricochet_out = not u.ricochet_out
 		return
-	var col := Color(0.8, 0.95, 1.0, 0.95)
+	if u.position.distance_to(BOSS_POINT) > MELEE_RANGE or u.salvo_t <= 0.0:
+		u.ricochet_t = 0.0  # saiu de perto, ou o escudo da Salva caiu: a bala se perde
+		return
+	var me := u.position + Vector3(0, 1.2, 0)
 	if u.ricochet_out:
-		_beam(u.position, Vector3(0, 2.0, -11.5), col, RICO_STEP)
+		_rico_leg(me, boss_at)
 		_damage_boss(u, RICO_DMG, true, false)
 	else:
-		_beam(Vector3(0, 2.0, -11.5), u.position, col, RICO_STEP)
+		_rico_leg(boss_at, me)
 		var room := u.max_hp - u.hp
 		u.hp = minf(u.max_hp, u.hp + RICO_HEAL)
 		if room < RICO_HEAL:
 			# o que passou da vida cheia vira escudo
 			u.shield_hp += RICO_HEAL - maxf(room, 0.0)
 			u.shield_t = maxf(u.shield_t, SHIELD_TIME)
-		_burst(u.position + Vector3(0, 1.0, 0), Color(0.8, 0.95, 1.0), 1.0)
 	u.ricochet_out = not u.ricochet_out
 
 
-## Salva Astral: descarrega 3 balas de uma vez numa área e ganha um escudo.
+## Salva Astral: consome SALVO_COST balas Rainbow numa rajada e ergue um escudo nela. Não tem recarga:
+## a restrição é ter as balas.
 func _salvo(u: Unit) -> void:
 	if u.bullets.size() < SALVO_COST:
-		u.set_action("Precisa de 3 balas", 2)
-		u.skill_cd[4] = 0.0
+		u.set_action("Precisa de %d balas" % SALVO_COST, 2)
 		return
 	u.face(BOSS_POINT - u.position)
-	for n in SALVO_COST:
+	# com EXATAMENTE 6 balas (o botão brilha): gasta as seis e solta a Fada Astral
+	var fairy := u.bullets.size() == SALVO_FAIRY
+	var cost := SALVO_FAIRY if fairy else SALVO_COST
+	for n in cost:
 		var col: Color = BULLETS[u.bullets.pop_front()]["col"]
-		get_tree().create_timer(n * 0.09, false).timeout.connect(_shot_fx.bind(u, col, false))
-	_damage_boss(u, SALVO_DMG * SALVO_COST, true, true)
+		get_tree().create_timer(n * 0.11, false).timeout.connect(func():
+			if is_instance_valid(u) and u.alive:
+				_shot_fx(u, col, false, 1.25))
+	_damage_boss(u, SALVO_DMG * cost + _use_aim(u), true, true)
+	if fairy:
+		_fairy_spawn(u)
 	u.shield_hp = maxf(u.shield_hp, SALVO_SHIELD)
 	u.shield_t = SHIELD_TIME
-	_burst(u.position, Color(0.45, 0.9, 1.0), 2.2)
+	u.salvo_t = SHIELD_TIME
+	# o escudo aparecendo: uma bolha que fecha em volta dela
+	var bub_m := Fx.mat(Color(0.45, 0.9, 1.0, 0.45), 4.0, true)
+	var bub := Fx.inst(u, Fx.sphere(1.0), bub_m, Vector3(0, 1.0, 0))
+	bub.scale = Vector3.ONE * 2.6
+	var tb := bub.create_tween().set_parallel(true)
+	tb.tween_property(bub, "scale", Vector3.ONE * 1.25, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tb.tween_property(bub_m, "albedo_color:a", 0.0, 0.7).set_delay(0.25)
+	tb.chain().tween_callback(bub.queue_free)
+	if u.controlled:
+		hud.toast(("FADA ASTRAL  ·  −%d BALAS" if fairy else "SALVA ASTRAL  ·  −%d BALAS") % cost, 1.2)
 
 
-## Canhão Estelar: gasta TODAS as balas guardadas; cada uma vale bem mais aqui do que solta.
+# ---- Fada Astral
+
+## A fada sai voando da Maga até perto da boss e fica lá FAIRY_TIME segundos. Ela atira com uma
+## varinha pequena: é o DoT "fada" (FAIRY_DPS), só que animado. Enquanto ela está em campo, o Ricochete
+## Prismático passa a quicar entre a boss e ela, e cada bala que ela recebe vira cura na party (_fairy_heal).
+func _fairy_spawn(u: Unit) -> void:
+	_fairy_clear()
+	fairy_t = FAIRY_TIME
+	fairy_owner = u
+	fairy_shot = 0.6
+	add_dot("fada", "Fada Astral", FAIRY_COL, FAIRY_TIME, FAIRY_DPS, u)
+	fairy_node = Node3D.new()
+	fx_root.add_child(fairy_node)
+	fairy_node.position = u.position + Vector3(0, 1.6, 0)
+	Fx.inst(fairy_node, Fx.sphere(0.26), Fx.mat(Color(1, 1, 1), 7.0, true))
+	Fx.inst(fairy_node, Fx.sphere(0.42), Fx.mat(Color(FAIRY_COL.r, FAIRY_COL.g, FAIRY_COL.b, 0.45), 4.0, true))
+	for s in [-1.0, 1.0]:
+		# asinhas: batem em _tick_fairy
+		var wing := BoxMesh.new()
+		wing.size = Vector3(0.62, 0.36, 0.03)
+		var pivot := Node3D.new()
+		pivot.name = "WingL" if s < 0.0 else "WingR"
+		fairy_node.add_child(pivot)
+		Fx.inst(pivot, wing, Fx.mat(Color(0.7, 0.95, 1.0, 0.75), 4.0, true), Vector3(s * 0.38, 0.14, 0.05))
+	# varinha com uma estrela na ponta
+	var wand := Node3D.new()
+	wand.name = "Wand"
+	wand.position = Vector3(-0.3, -0.05, -0.15)
+	wand.rotation.z = 0.6
+	fairy_node.add_child(wand)
+	Fx.inst(wand, Fx.cyl(0.025, 0.025, 0.5), Fx.mat(Color(1.0, 0.95, 0.6), 3.0, true), Vector3(0, 0.25, 0))
+	Fx.inst(wand, Fx.sphere(0.09), Fx.mat(Color(1.0, 0.9, 0.35), 8.0, true), Vector3(0, 0.52, 0))
+	fairy_node.create_tween().tween_property(fairy_node, "position", FAIRY_AT, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_burst(u.position + Vector3(0, 1.6, 0), FAIRY_COL, 2.4)
+
+
+func _tick_fairy(delta: float) -> void:
+	if fairy_t <= 0.0:
+		return
+	fairy_t -= delta
+	if fairy_t <= 0.0 or get_dot("fada").is_empty():
+		_fairy_clear()
+		return
+	if fairy_node == null or not is_instance_valid(fairy_node):
+		return
+	var t := Time.get_ticks_msec() * 0.001
+	# paira num oito pequeno e bate as asas
+	fairy_node.position = fairy_node.position.lerp(FAIRY_AT + Vector3(sin(t * 1.7) * 0.5, sin(t * 3.1) * 0.3, 0), delta * 6.0)
+	fairy_node.get_node("WingL").rotation.y = sin(t * 26.0) * 0.7
+	fairy_node.get_node("WingR").rotation.y = -sin(t * 26.0) * 0.7
+	# nos últimos 2 s ela pisca: está indo embora
+	fairy_node.visible = fairy_t > 2.0 or fmod(fairy_t, 0.2) > 0.08
+	fairy_shot -= delta
+	if fairy_shot <= 0.0:
+		fairy_shot = 1.0
+		# o tiro da varinha (só o desenho: o dano é o DoT)
+		var from: Vector3 = fairy_node.position + Vector3(-0.5, 0.3, -0.1)
+		var to := Vector3(randf_range(-0.8, 0.8), randf_range(4.5, 7.5), -11.4)
+		var bolt := Fx.inst(fx_root, Fx.sphere(0.11), Fx.mat(Color(1.0, 0.9, 0.5), 8.0, true), from)
+		var tw := bolt.create_tween()
+		tw.tween_property(bolt, "position", to, 0.16)
+		tw.tween_callback(bolt.queue_free)
+		tw.tween_callback(_impact_ring.bind(to, FAIRY_COL, 0.8))
+		var wand: Node3D = fairy_node.get_node("Wand")
+		wand.rotation.z = 1.3
+		wand.create_tween().tween_property(wand, "rotation:z", 0.6, 0.25)
+
+
+func _fairy_clear() -> void:
+	fairy_t = 0.0
+	remove_dot("fada")
+	if fairy_node != null and is_instance_valid(fairy_node):
+		_burst(fairy_node.position, FAIRY_COL, 1.6)
+		fairy_node.queue_free()
+	fairy_node = null
+	fairy_owner = null
+
+
+## A fada foi atingida por uma bala do Ricochete: ela entrega a cura pra party toda, em área.
+## FAIRY_HEAL da vida máxima de cada um; o que passar da vida cheia vira escudo.
+func _fairy_heal() -> void:
+	_burst(FAIRY_AT, Color(0.6, 1.0, 0.75), 2.6)
+	_impact_ring(FAIRY_AT, Color(0.6, 1.0, 0.75), 2.2)
+	for o in units:
+		if not o.alive:
+			continue
+		var amount := o.max_hp * FAIRY_HEAL
+		var room := maxf(0.0, o.max_hp - o.hp)
+		o.hp = minf(o.max_hp, o.hp + amount)
+		if room < amount:
+			o.shield_hp += amount - room
+			o.shield_t = maxf(o.shield_t, SHIELD_TIME)
+		_beam(FAIRY_AT - Vector3(0, 1.0, 0), o.position, Color(0.6, 1.0, 0.75, 0.6), 0.3)
+		_popup(int(round(amount)), Color(0.5, 1.0, 0.65), 34, o.position + Vector3(0, 2.6, 0), "+")
+
+
+# ---- Canhão Estelar
+
+## Preparo (a conjuração): a Maga materializa o canhão. O cano cresce, três anéis de energia acendem
+## um por um e a carga na boca do cano incha. Com as BULLET_MAX balas, elas orbitam a boca.
+## O conjunto fica guardado em meta "cannon" até o disparo (ou até ela andar e cancelar).
+func _cannon_charge(u: Unit, time: float) -> void:
+	_cannon_drop(u)
+	u.cannon_bonus = _use_aim(u)  # a marca do Tiro Perfurante é usada já no começo do preparo
+	u.face(BOSS_POINT - u.position)
+	var rig := Node3D.new()
+	u.add_child(rig)
+	rig.position = Vector3(0, 1.7, 0)
+	rig.look_at(Vector3(0, 4.0, -11.5), Vector3.UP)
+	u.set_meta("cannon", rig)
+	var super_shot := u.bullets.size() == BULLET_MAX
+	var metal := Fx.mat(Color(0.85, 0.88, 1.0, 0.92), 1.2)
+	var barrel := Fx.inst(rig, Fx.cyl(0.62, 0.48, 3.4), metal, Vector3(0, 0, -1.9))
+	barrel.rotation.x = PI / 2.0
+	barrel.scale = Vector3(0.05, 0.05, 0.05)
+	barrel.create_tween().tween_property(barrel, "scale", Vector3.ONE * (1.25 if super_shot else 1.0), time * 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	for n in 3:
+		var col: Color = RAINBOW[(n * 2) % RAINBOW.size()] if super_shot else u.color.lightened(0.3)
+		var ring := Fx.inst(rig, Fx.torus(0.78, 0.95), Fx.mat(col, 6.0, true), Vector3(0, 0, -0.9 - n * 1.1))
+		ring.rotation.x = PI / 2.0
+		ring.scale = Vector3.ZERO
+		var tr := ring.create_tween()
+		tr.tween_interval(time * (0.25 + n * 0.18))
+		tr.tween_property(ring, "scale", Vector3.ONE * (1.3 if super_shot else 1.0), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var charge_m := Fx.mat(Color(1.0, 0.95, 0.7, 0.9), 9.0, true)
+	var charge := Fx.inst(rig, Fx.sphere(0.5), charge_m, Vector3(0, 0, -3.8))
+	charge.scale = Vector3.ONE * 0.1
+	charge.create_tween().tween_property(charge, "scale", Vector3.ONE * (2.4 if super_shot else 1.5), time).set_ease(Tween.EASE_IN)
+	if super_shot:
+		# as oito balas orbitando a boca do canhão
+		var orbit := Node3D.new()
+		orbit.position = Vector3(0, 0, -3.8)
+		rig.add_child(orbit)
+		for n in u.bullets.size():
+			var a := n * TAU / u.bullets.size()
+			Fx.inst(orbit, Fx.sphere(0.2), Fx.mat(BULLETS[u.bullets[n]]["col"], 7.0, true), Vector3(cos(a), sin(a), 0) * 1.5)
+		orbit.create_tween().tween_property(orbit, "rotation:z", TAU * 2.0, time).set_ease(Tween.EASE_IN)
+		orbit.create_tween().tween_property(orbit, "scale", Vector3.ONE * 0.35, time).set_ease(Tween.EASE_IN)
+		if u.controlled:
+			hud.toast("SUPERCANHÃO: %d BALAS" % BULLET_MAX, 1.6)
+	elif u.controlled:
+		hud.toast("CARREGANDO O CANHÃO", 1.2)
+	# postura de disparo: ela firma os pés
+	u.visual.scale = Vector3(1.12, 0.9, 1.12)
+
+
+## Some com o canhão em preparo (ela andou e cancelou).
+func _cannon_drop(u: Unit) -> void:
+	if u.has_meta("cannon"):
+		var rig = u.get_meta("cannon")
+		if is_instance_valid(rig):
+			rig.queue_free()
+		u.remove_meta("cannon")
+		u.visual.scale = Vector3.ONE
+		u.cannon_bonus = 0.0
+
+
+## O disparo. Gasta TODAS as balas guardadas; cada uma vale bem mais aqui do que solta.
+## Com exatamente BULLET_MAX balas vira o supercanhão arco-íris (_cannon_super).
 func _cannon(u: Unit) -> void:
 	u.face(BOSS_POINT - u.position)
 	var loaded := u.bullets.size()
 	u.bullets.clear()
-	var amount := CANNON_DMG + CANNON_PER_BULLET * loaded
-	_beam(u.position, Vector3(0, 3.0, -12.0), Color(1, 1, 1, 0.98), 0.6)
-	_burst(Vector3(0, 4, -11.5), u.color.lightened(0.4), 6.0 + loaded)
-	hud.flash(Color(1.0, 0.9, 0.6, 0.35))
+	var amount := CANNON_DMG + CANNON_PER_BULLET * loaded + u.cannon_bonus
+	u.cannon_bonus = 0.0
+	var rig: Node3D = u.get_meta("cannon") if u.has_meta("cannon") else null
+	if rig != null and not is_instance_valid(rig):
+		rig = null
+	if u.has_meta("cannon"):
+		u.remove_meta("cannon")
+	u.visual.scale = Vector3.ONE
+	if loaded == BULLET_MAX:
+		_cannon_super(u, amount + CANNON_SUPER_BONUS, rig)
+		return
+	var from := u.position + Vector3(0, 1.7, 0)
+	var hit := Vector3(0, 4.0, -11.5)
+	# feixe grosso, branco com a cor dela em volta
+	_cannon_beam(from, hit, [Color(1, 1, 1), u.color.lightened(0.3)], 0.55, 0.45)
+	_impact_ring(hit, u.color.lightened(0.4), 6.0 + loaded * 0.5)
+	_impact_ring(hit, Color(1, 1, 1), 4.0)
+	_burst(hit, u.color.lightened(0.4), 6.0 + loaded)
+	hud.flash(Color(1.0, 0.9, 0.6), 0.28)
+	shake_t = 0.35
+	shake_amp = 0.35
 	hud.toast("CANHÃO ESTELAR" + (" ×%d" % loaded if loaded > 0 else ""), 1.6)
 	_damage_boss(u, amount, true, true)
 	_knock_back(u, 2.0)
+	if rig != null:
+		# recuo do cano e some
+		var tw := rig.create_tween()
+		tw.tween_property(rig, "position:z", rig.position.z + 0.9, 0.08)
+		tw.tween_property(rig, "scale", Vector3.ONE * 0.05, 0.3).set_ease(Tween.EASE_IN)
+		tw.tween_callback(rig.queue_free)
+
+
+## Feixe do canhão: cilindros concêntricos do ponto de saída até o alvo, que afinam e apagam.
+func _cannon_beam(from: Vector3, to: Vector3, cols: Array, radius: float, time: float) -> void:
+	var length := from.distance_to(to)
+	for k in cols.size():
+		var c: Color = cols[k]
+		var m := Fx.mat(Color(c.r, c.g, c.b, 0.95 - k * 0.3), 9.0 - k * 3.0, true)
+		var beam := Fx.inst(fx_root, Fx.cyl(radius * (1.0 + k * 0.7), radius * (1.0 + k * 0.7), length), m, (from + to) * 0.5)
+		beam.look_at(to, Vector3.UP)
+		beam.rotate_object_local(Vector3.RIGHT, PI / 2.0)
+		var tw := beam.create_tween().set_parallel(true)
+		tw.tween_property(beam, "scale", Vector3(0.05, 1.0, 0.05), time).set_ease(Tween.EASE_IN)
+		tw.tween_property(m, "albedo_color:a", 0.0, time)
+		tw.chain().tween_callback(beam.queue_free)
+
+
+## Supercanhão arco-íris (Canhão Estelar com as BULLET_MAX balas). Ela fica presa no lugar por
+## CANNON_SUPER_TIME, segurando o disparo: sete feixes coloridos girando em volta de um miolo branco,
+## anéis de choque correndo pelo feixe (o ar "rasgando"), estilhaços de luz, e o dano saindo em
+## CANNON_SUPER_TICKS batidas. Fecha com uma explosão e um recuo forte.
+func _cannon_super(u: Unit, total: float, rig: Node3D) -> void:
+	u.lock_t = CANNON_SUPER_TIME
+	u.invuln = maxf(u.invuln, 0.0)
+	var from := u.position + Vector3(0, 1.7, 0)
+	var hit := Vector3(0, 4.0, -11.5)
+	var length := from.distance_to(hit)
+	hud.toast("SUPERCANHÃO ARCO-ÍRIS", 2.0)
+	hud.flash(Color(1, 1, 1), 0.35)
+	shake_t = CANNON_SUPER_TIME
+	shake_amp = 0.3
+	var beam := Node3D.new()
+	fx_root.add_child(beam)
+	beam.position = from
+	beam.look_at(hit, Vector3.UP)
+	# miolo branco
+	var core_m := Fx.mat(Color(1, 1, 1, 0.98), 12.0, true)
+	var core := Fx.inst(beam, Fx.cyl(0.55, 0.55, length), core_m, Vector3(0, 0, -length * 0.5))
+	core.rotation.x = PI / 2.0
+	# sete feixes do arco-íris em volta, girando
+	var spin := Node3D.new()
+	beam.add_child(spin)
+	for n in RAINBOW.size():
+		var a := n * TAU / RAINBOW.size()
+		var strand := Fx.inst(spin, Fx.cyl(0.34, 0.34, length), Fx.mat(RAINBOW[n], 8.0, true), Vector3(cos(a) * 0.95, sin(a) * 0.95, -length * 0.5))
+		strand.rotation.x = PI / 2.0
+	spin.create_tween().tween_property(spin, "rotation:z", TAU * 3.0, CANNON_SUPER_TIME)
+	# bainha escura em volta: o espaço "rasgado" pelo disparo
+	var tear := Fx.inst(beam, Fx.cyl(1.9, 1.9, length), Fx.mat(Color(0.12, 0.0, 0.25, 0.45), 0.0, true), Vector3(0, 0, -length * 0.5))
+	tear.rotation.x = PI / 2.0
+	# o feixe abre, pulsa e fecha
+	beam.scale = Vector3(0.1, 0.1, 1.0)
+	var tb := beam.create_tween()
+	tb.tween_property(beam, "scale", Vector3(1.25, 1.25, 1.0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	for n in 6:
+		tb.tween_property(beam, "scale", Vector3(0.95, 0.95, 1.0), CANNON_SUPER_TIME * 0.07)
+		tb.tween_property(beam, "scale", Vector3(1.2, 1.2, 1.0), CANNON_SUPER_TIME * 0.07)
+	tb.tween_property(beam, "scale", Vector3(0.02, 0.02, 1.0), 0.18).set_ease(Tween.EASE_IN)
+	tb.tween_callback(beam.queue_free)
+	# batidas de dano, cada uma com um anel de choque correndo pelo feixe e estilhaços no alvo
+	for n in CANNON_SUPER_TICKS:
+		var at := 0.1 + (CANNON_SUPER_TIME - 0.3) * n / maxf(1.0, CANNON_SUPER_TICKS - 1.0)
+		get_tree().create_timer(at, false).timeout.connect(_cannon_super_tick.bind(u, total / CANNON_SUPER_TICKS, n, from, hit))
+	get_tree().create_timer(CANNON_SUPER_TIME, false).timeout.connect(func():
+		if ended:
+			return
+		# fecho: explosão arco-íris e o recuo que ela vinha segurando
+		for n in RAINBOW.size():
+			_impact_ring(hit, RAINBOW[n], 4.0 + n * 1.3)
+		_burst(hit, Color(1, 1, 1), 12.0)
+		hud.flash(Color(1, 1, 1), 0.4)
+		shake_t = 0.5
+		shake_amp = 0.6
+		if is_instance_valid(u) and u.alive:
+			_knock_back(u, 4.5))
+	if rig != null:
+		# o canhão treme enquanto dispara e some no fim
+		var tw := rig.create_tween()
+		for n in 16:
+			tw.tween_property(rig, "position:y", 1.7 + (0.08 if n % 2 == 0 else -0.08), CANNON_SUPER_TIME / 16.0)
+		tw.tween_property(rig, "scale", Vector3.ONE * 0.05, 0.25)
+		tw.tween_callback(rig.queue_free)
+
+
+func _cannon_super_tick(u: Unit, amount: float, n: int, from: Vector3, hit: Vector3) -> void:
+	if ended or not is_instance_valid(u) or not u.alive:
+		return
+	_damage_boss(u, amount, true, true)
+	u.kick(1.6)
+	var col: Color = RAINBOW[n % RAINBOW.size()]
+	# anel de choque que nasce na boca do canhão e corre até a boss, crescendo
+	var m := Fx.mat(Color(col.r, col.g, col.b, 0.95).lightened(0.2), 7.0, true)
+	var ring := Fx.inst(fx_root, Fx.torus(0.85, 1.0), m, from)
+	ring.look_at(hit, Vector3.UP)
+	ring.rotate_object_local(Vector3.RIGHT, PI / 2.0)
+	ring.scale = Vector3.ONE * 1.4
+	var tw := ring.create_tween().set_parallel(true)
+	tw.tween_property(ring, "position", hit, 0.3)
+	tw.tween_property(ring, "scale", Vector3.ONE * 4.2, 0.3)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.3).set_delay(0.12)
+	tw.chain().tween_callback(ring.queue_free)
+	_impact_ring(hit, col, 5.0)
+	_burst(hit + Vector3(randf_range(-2.5, 2.5), randf_range(-1.5, 2.5), 0), col, 3.4)
+	# estilhaços de luz saindo do feixe
+	for k in 3:
+		var along := from.lerp(hit, randf_range(0.15, 0.9))
+		var out := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0).normalized() * randf_range(1.6, 3.2)
+		var sp := Fx.inst(fx_root, Fx.sphere(0.14), Fx.mat(RAINBOW[(n + k) % RAINBOW.size()], 8.0, true), along)
+		var ts := sp.create_tween().set_parallel(true)
+		ts.tween_property(sp, "position", along + out, 0.35).set_ease(Tween.EASE_OUT)
+		ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.35)
+		ts.chain().tween_callback(sp.queue_free)
 
 
 # ---------------------------------------------------------------- Soulburner
@@ -2270,21 +3906,286 @@ func lance_damage() -> float:
 	return lerpf(LANCE_MIN, LANCE_MAX, aged)
 
 
+# ---- Brasas do Firmamento
+
+## Ataque básico: uma brasa celestial pequena (estrela comprimida), rastro ciano e um flash branco na batida.
+func _ember_fx(u: Unit) -> void:
+	var from := u.position + Vector3(0, 1.3, 0)
+	var to := Vector3(randf_range(-1.0, 1.0), randf_range(2.4, 4.2), -11.0)
+	var star := Node3D.new()
+	fx_root.add_child(star)
+	star.position = from
+	Fx.inst(star, Fx.sphere(0.16), Fx.mat(Color(1, 1, 1), 9.0, true))
+	for k in 3:
+		# três lâminas cruzadas: o brilho de estrela
+		var spike := BoxMesh.new()
+		spike.size = Vector3(0.07, 0.62, 0.07)
+		var s := Fx.inst(star, spike, Fx.mat(FIRE, 7.0, true))
+		s.rotation = Vector3(k * PI / 3.0, 0, k * PI / 3.0)
+	var tw := star.create_tween()
+	tw.tween_property(star, "position", to, 0.1)
+	tw.parallel().tween_property(star, "rotation:z", TAU, 0.1)
+	tw.tween_callback(star.queue_free)
+	tw.tween_callback(func():
+		# flash branco curto no impacto
+		var m := Fx.mat(Color(1, 1, 1, 0.95), 10.0, true)
+		var fl := Fx.inst(fx_root, Fx.sphere(0.5), m, to)
+		var tf := fl.create_tween().set_parallel(true)
+		tf.tween_property(fl, "scale", Vector3.ONE * 1.8, 0.12)
+		tf.tween_property(m, "albedo_color:a", 0.0, 0.12)
+		tf.chain().tween_callback(fl.queue_free)
+		_impact_ring(to, FIRE_CYAN, 1.1))
+	_beam(u.position + Vector3(0, 0.3, 0), to - Vector3(0, 1.0, 0), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.8), 0.25)
+	# partículas ciano soltas pelo caminho
+	for k in 3:
+		var at := from.lerp(to, 0.25 + k * 0.25)
+		var pm := Fx.mat(FIRE_CYAN, 6.0, true)
+		var p := Fx.inst(fx_root, Fx.sphere(0.07), pm, at)
+		var tp := p.create_tween().set_parallel(true)
+		tp.tween_property(p, "position", at + Vector3(randf_range(-0.4, 0.4), randf_range(0.2, 0.7), 0), 0.35)
+		tp.tween_property(p, "scale", Vector3.ONE * 0.1, 0.35)
+		tp.chain().tween_callback(p.queue_free)
+
+
+# ---- Marca do Zênite
+
+## O julgamento em cima da boss: um halo verde-marinho, um círculo mágico e símbolos girando em volta.
+## _tick_zenith deixa tudo mais luminoso conforme a marca envelhece: dá pra ver quando está no fim,
+## que é a hora da Lança Serafim.
+func _zenith_halo() -> void:
+	_zenith_clear()
+	zenith_node = Node3D.new()
+	# na altura da cabeça da boss e um pouco à frente: acima disso a barra de vida dela esconde
+	zenith_node.position = Vector3(0, 10.4, -11.6)
+	zenith_node.rotation.x = 0.4
+	fx_root.add_child(zenith_node)
+	zenith_mats = []
+	var halo_m := Fx.mat(FIRE, 3.0, true)
+	Fx.inst(zenith_node, Fx.torus(1.9, 2.2), halo_m)
+	zenith_mats.append(halo_m)
+	var circle_m := Fx.mat(Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.6), 2.0, true)
+	Fx.inst(zenith_node, Fx.torus(2.9, 2.98), circle_m)
+	Fx.inst(zenith_node, Fx.torus(1.2, 1.26), circle_m)
+	zenith_mats.append(circle_m)
+	var sym_m := Fx.mat(FIRE_MINT, 3.0, true)
+	for n in 6:
+		# símbolos: pequenas cruzes de luz em volta do halo
+		var a := n * TAU / 6.0
+		var holder := Node3D.new()
+		holder.position = Vector3(cos(a), 0, sin(a)) * 2.6
+		holder.rotation.y = -a
+		zenith_node.add_child(holder)
+		for size in [Vector3(0.1, 0.02, 0.5), Vector3(0.34, 0.02, 0.1)]:
+			var bm := BoxMesh.new()
+			bm.size = size
+			Fx.inst(holder, bm, sym_m)
+	zenith_mats.append(sym_m)
+	var core := Fx.inst(zenith_node, Fx.sphere(0.4), Fx.mat(Color(2.2, 2.2, 2.2, 0.9), 0.0, true))
+	core.name = "Core"
+	core.visible = false
+	zenith_node.scale = Vector3.ONE * 0.2
+	zenith_node.create_tween().tween_property(zenith_node, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_burst(Vector3(0, 10.4, -11.6), FIRE, 3.0)
+
+
+func _tick_zenith(delta: float) -> void:
+	if zenith_node == null:
+		return
+	var mark := get_dot("zenite")
+	if mark.is_empty():
+		_zenith_clear()
+		return
+	var aged: float = clampf(1.0 - mark["t"] / mark["total"], 0.0, 1.0)
+	zenith_node.rotation.y += delta * (0.8 + aged * 2.4)
+	var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012)
+	for k in zenith_mats.size():
+		var m: StandardMaterial3D = zenith_mats[k]
+		# do começo (apagado, escuro) ao fim (quase branco, estourando no brilho e pulsando).
+		# Esses materiais não têm sombra, então emissão não conta: o brilho vem da própria cor,
+		# que passa de 1 (HDR) e estoura no bloom.
+		var base: Color = [FIRE, FIRE_CYAN, FIRE_MINT][k]
+		var c := base.darkened(0.45).lerp(base, minf(aged * 2.0, 1.0)).lerp(Color(1, 1, 1), maxf(0.0, aged - 0.4) * 1.1)
+		var power := 0.8 + aged * aged * 2.6 + (pulse * 1.3 if aged >= LANCE_PERFECT else 0.0)
+		m.albedo_color = Color(c.r * power, c.g * power, c.b * power, 0.55 + aged * 0.45)
+	zenith_node.scale = Vector3.ONE * (0.85 + aged * 0.5)
+	# miolo de luz que só aparece no fim: a hora da Lança
+	var core: MeshInstance3D = zenith_node.get_node("Core")
+	core.visible = aged >= LANCE_PERFECT
+	core.scale = Vector3.ONE * (0.6 + pulse * 0.5)
+
+
+func _zenith_clear() -> void:
+	if zenith_node != null and is_instance_valid(zenith_node):
+		zenith_node.queue_free()
+	zenith_node = null
+	zenith_mats = []
+
+
+# ---- Lança Serafim
+
+## Modelo da lança celestial: ponta branca luminosa, haste verde-marinho e duas asinhas. Aponta pra baixo.
+func _lance_model() -> Node3D:
+	var lance := Node3D.new()
+	var shaft := Fx.inst(lance, Fx.cyl(0.16, 0.16, 6.5), Fx.mat(FIRE, 5.0, true), Vector3(0, 1.6, 0))
+	shaft.name = "Shaft"
+	Fx.inst(lance, Fx.cyl(0.55, 0.0, 2.6), Fx.mat(Color(1, 1, 1), 10.0, true), Vector3(0, -2.9, 0))
+	Fx.inst(lance, Fx.torus(0.34, 0.5), Fx.mat(FIRE_MINT, 6.0, true), Vector3(0, -1.5, 0))
+	for s in [-1.0, 1.0]:
+		for k in 2:
+			var wing := BoxMesh.new()
+			wing.size = Vector3(1.5 - k * 0.5, 0.3, 0.06)
+			var w := Fx.inst(lance, wing, Fx.mat(FIRE_MINT.lerp(Color(1, 1, 1), 0.3), 6.0, true), Vector3(s * (0.85 - k * 0.2), -0.6 + k * 0.5, 0))
+			w.rotation.z = s * (0.55 + k * 0.2)
+	return lance
+
+
+## O preparo (1 s de cast): ele ergue a mão, um círculo mágico abre em cima da boss e a lança vai se
+## formando no céu, cada vez mais luminosa. O dano é calculado AQUI, no começo: quem conjura com a marca
+## no fim não perde o bônus se ela expirar durante a animação.
+func _lance_charge(u: Unit, time: float) -> void:
+	_lance_drop(u)
+	u.lance_amount = lance_damage()
+	u.lance_marked = not get_dot("zenite").is_empty()
+	# grau do timing: 0 sem marca ou cedo demais · 1 bom · 2 perfeito (marca nos últimos instantes)
+	var grade := 0
+	if u.lance_marked:
+		var mk := get_dot("zenite")
+		var aged: float = 1.0 - mk["t"] / mk["total"]
+		grade = 2 if aged >= LANCE_PERFECT else (1 if aged >= LANCE_GOOD else 0)
+	u.set_meta("lance_grade", grade)
+	u.face(BOSS_POINT - u.position)
+	u.visual.scale = Vector3(0.92, 1.12, 0.92)  # braço pra cima
+	var rig := Node3D.new()
+	fx_root.add_child(rig)
+	rig.position = Vector3(0, 0, -12.0)
+	u.set_meta("lance", rig)
+	var circle := Node3D.new()
+	circle.position = Vector3(0, 12.2, 0)
+	circle.rotation.x = 0.35
+	rig.add_child(circle)
+	Fx.inst(circle, Fx.torus(2.6, 2.75), Fx.mat(FIRE_CYAN, 5.0, true))
+	Fx.inst(circle, Fx.torus(1.5, 1.58), Fx.mat(FIRE_MINT, 5.0, true))
+	circle.scale = Vector3.ONE * 0.1
+	circle.create_tween().tween_property(circle, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	circle.create_tween().tween_property(circle, "rotation:y", TAU, time)
+	var lance := _lance_model()
+	lance.name = "Lance"
+	lance.position = Vector3(0, 11.0, 1.4)
+	lance.scale = Vector3(0.1, 0.1, 0.1)
+	rig.add_child(lance)
+	var big: float = [1.0, 1.25, 1.6][grade] if u.lance_marked else 0.8
+	lance.create_tween().tween_property(lance, "scale", Vector3.ONE * big, time).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# o retorno do timing, na própria lança: quanto melhor, mais fogo celestial enrolado nela
+	if grade > 0:
+		var flames := Node3D.new()
+		flames.position = lance.position + Vector3(0, 0.6, 0)
+		rig.add_child(flames)
+		var count := 5 if grade == 1 else 12
+		for n in count:
+			var a := n * TAU / count
+			var col: Color = [FIRE, FIRE_CYAN, FIRE_MINT, Color(1, 1, 1)][n % (3 if grade == 1 else 4)]
+			var tongue := Fx.inst(flames, Fx.capsule(0.16, 1.5 + (n % 3) * 0.5), Fx.mat(Color(col.r * 2.2, col.g * 2.2, col.b * 2.2, 0.9), 0.0, true),
+				Vector3(cos(a) * 1.3, -2.5 + (n % 4) * 1.5, sin(a) * 1.3))
+			tongue.rotation.z = cos(a) * 0.35
+			tongue.rotation.x = sin(a) * 0.35
+		flames.scale = Vector3(0.1, 0.1, 0.1)
+		flames.create_tween().tween_property(flames, "scale", Vector3.ONE * (1.0 if grade == 1 else 1.35), time * 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		flames.create_tween().tween_property(flames, "rotation:y", TAU * (1.5 if grade == 1 else 3.0), time + LANCE_FALL)
+		lance.set_meta("flames", flames)
+	if grade == 2:
+		# perfeito: anéis de luz descendo pela lança e um clarão no céu
+		for n in 3:
+			var ring := Fx.inst(rig, Fx.torus(1.5, 1.7), Fx.mat(Color(2.5, 2.5, 2.5, 0.9), 0.0, true), lance.position + Vector3(0, 5.0, 0))
+			ring.scale = Vector3.ONE * 0.2
+			var tr := ring.create_tween()
+			tr.tween_interval(n * time * 0.28)
+			tr.tween_property(ring, "scale", Vector3.ONE * 1.6, 0.2)
+			tr.parallel().tween_property(ring, "position:y", lance.position.y - 3.0, time * 0.5)
+			tr.tween_callback(ring.queue_free)
+		_burst(Vector3(0, 11.0, -10.6), Color(1, 1, 1), 4.0)
+		if u.controlled:
+			hud.toast("LANÇA PERFEITA!", 1.2)
+			hud.flash(FIRE_MINT, 0.12)
+	elif grade == 1 and u.controlled:
+		hud.toast("BOA LANÇA", 0.9)
+	# fagulhas subindo da mão dele até o céu
+	_beam(u.position + Vector3(0, 1.2, 0), Vector3(0, 10.0, -10.6), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.5), time)
+
+
+func _lance_drop(u: Unit) -> void:
+	if u.has_meta("lance"):
+		var rig = u.get_meta("lance")
+		if is_instance_valid(rig):
+			rig.queue_free()
+		u.remove_meta("lance")
+		u.visual.scale = Vector3.ONE
+
+
+## O cast terminou: a lança despenca (LANCE_FALL) e o dano sai no impacto, com o valor travado no começo.
+## A marca é consumida.
 func _lance(u: Unit) -> void:
-	var amount := lance_damage()
-	var marked := not get_dot("zenite").is_empty()
+	var amount := u.lance_amount
+	var marked := u.lance_marked
+	if not u.has_meta("lance"):
+		# sem preparo (IA, teste): vale o estado de agora
+		amount = lance_damage()
+		marked = not get_dot("zenite").is_empty()
+		_lance_charge(u, 0.01)
 	remove_dot("zenite")
-	var m := Fx.mat(Color(1.0, 0.8, 0.35, 0.95), 4.0, true)
-	var spear := Fx.inst(fx_root, Fx.cyl(0.02, 0.45, 9.0), m, Vector3(0, 16, -12.5))
-	var tw := spear.create_tween()
-	tw.tween_property(spear, "position:y", 4.5, 0.16)
-	tw.tween_property(m, "albedo_color:a", 0.0, 0.3)
-	tw.tween_callback(spear.queue_free)
-	_burst(Vector3(0, 3, -11.5), FIRE if marked else Color(0.6, 0.6, 0.6), 5.0 if marked else 1.6)
-	_damage_boss(u, amount, true, amount > 60.0)
+	var rig: Node3D = u.get_meta("lance")
+	u.remove_meta("lance")
+	u.visual.scale = Vector3.ONE
+	var lance: Node3D = rig.get_node("Lance")
+	var tw := lance.create_tween()
+	tw.tween_property(lance, "position:y", 4.4, LANCE_FALL).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	if lance.has_meta("flames"):
+		var flames: Node3D = lance.get_meta("flames")
+		tw.parallel().tween_property(flames, "position:y", 5.0, LANCE_FALL).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	var grade: int = u.get_meta("lance_grade", 0)
+	tw.tween_callback(_lance_hit.bind(u, amount, marked, grade))
+	tw.tween_property(lance, "scale", Vector3.ONE * 0.05, 0.25)
+	tw.tween_callback(rig.queue_free)
 
 
-## Rasante Incandescente: dash rápido (na direção que está andando, ou pra trás) com explosão no ponto de partida.
+func _lance_hit(u: Unit, amount: float, marked: bool, grade := 0) -> void:
+	if ended:
+		return
+	var at := Vector3(0, 3.4, -11.5)
+	if grade == 2:
+		# perfeito: coluna de fogo celestial no ponto do impacto, mais ondas e o aviso em cima do dano
+		for k in 2:
+			var pc: Color = [FIRE, Color(1, 1, 1)][k]
+			var pm := Fx.mat(Color(pc.r * 2.4, pc.g * 2.4, pc.b * 2.4, 0.85), 0.0, true)
+			var pillar := Fx.inst(fx_root, Fx.cyl(1.6 - k * 0.9, 1.9 - k * 1.0, 16.0), pm, at + Vector3(0, 5.0, 0))
+			var tp := pillar.create_tween().set_parallel(true)
+			tp.tween_property(pillar, "scale", Vector3(0.05, 1.15, 0.05), 0.55).set_ease(Tween.EASE_IN)
+			tp.tween_property(pm, "albedo_color:a", 0.0, 0.55)
+			tp.chain().tween_callback(pillar.queue_free)
+		for k in 4:
+			_impact_ring(at, [Color(1, 1, 1), FIRE_MINT, FIRE, FIRE_CYAN][k], 6.0 + k * 2.0)
+		hud.toast("PERFEITO!", 0.9)
+	elif grade == 1:
+		_impact_ring(at, FIRE_MINT, 5.5)
+	if marked:
+		# explosão branca com fogo verde-marinho em volta
+		_burst(at, Color(1, 1, 1), 6.0)
+		_burst(at, FIRE, 4.6)
+		for k in 3:
+			_impact_ring(at, [Color(1, 1, 1), FIRE, FIRE_CYAN][k], 3.0 + k * 1.6)
+		hud.flash(FIRE_MINT, 0.18)
+		shake_t = 0.25
+		shake_amp = 0.25 + 0.25 * clampf((amount - LANCE_MIN) / (LANCE_MAX - LANCE_MIN), 0.0, 1.0)
+	else:
+		_burst(at, Color(0.6, 0.7, 0.7), 1.6)
+	boss.hit_flash()
+	if is_instance_valid(u):
+		_damage_boss(u, amount, true, amount > 60.0)
+
+
+# ---- Rasante Incandescente
+
+## Abre as asas, corta o campo num dash fluido (na direção que está andando, ou pra trás) e fecha.
+## Fogo celestial no rastro, uma explosão luminosa na saída e outra na chegada, penas soltando no caminho.
 func _swoop(u: Unit) -> void:
 	var d := _input_dir() if u.controlled else Vector3.ZERO
 	if d == Vector3.ZERO:
@@ -2296,29 +4197,157 @@ func _swoop(u: Unit) -> void:
 	if flat.length() > ARENA_R:
 		flat = flat.normalized() * ARENA_R
 		to = Vector3(flat.x, 0, flat.y)
+	u.wings_open(true, 0.08)
 	u.dash_fx()
 	u.invuln = maxf(u.invuln, 0.35)
-	_beam(from, to, FIRE, 0.5)
+	for k in 3:
+		_beam(from + Vector3(0, k * 0.35 - 0.3, 0), to + Vector3(0, k * 0.35 - 0.3, 0), [FIRE, FIRE_CYAN, FIRE_MINT][k], 0.5 + k * 0.15)
+	_burst(from, Color(1, 1, 1), 2.0)
 	_burst(from, FIRE, 3.2)
-	u.create_tween().tween_property(u, "position", to, 0.12)
+	var tw := u.create_tween()
+	tw.tween_property(u, "position", to, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_callback(func():
+		_burst(to, Color(1, 1, 1), 1.8)
+		_burst(to, FIRE_CYAN, 2.8)
+		u.wings_open(false, 0.3))
+	# penas de luz que se soltam das asas
+	for k in 7:
+		var at := from.lerp(to, k / 6.0) + Vector3(randf_range(-0.6, 0.6), 1.2, randf_range(-0.6, 0.6))
+		var feather := BoxMesh.new()
+		feather.size = Vector3(0.3, 0.05, 0.1)
+		var fm := Fx.mat(FIRE_MINT, 6.0, true)
+		var p := Fx.inst(fx_root, feather, fm, at)
+		p.rotation = Vector3(randf() * TAU, randf() * TAU, 0)
+		var tp := p.create_tween().set_parallel(true)
+		tp.tween_property(p, "position", at + Vector3(0, -0.9, 0), 0.6).set_delay(k * 0.02)
+		tp.tween_property(p, "rotation:z", TAU, 0.6)
+		tp.tween_property(p, "scale", Vector3.ONE * 0.1, 0.6)
+		tp.chain().tween_callback(p.queue_free)
 	_damage_boss(u, SWOOP_DMG, true, false)
 
 
-## Juízo Solar: um sol enorme explode na boss. Marcada, leva mais e fica queimando (a marca não é gasta).
+# ---- Chuva de Brasas
+
+## Um círculo mágico abre no céu em cima da boss e brasas verdes caem pelos 15 s do DoT, cada uma num
+## ponto diferente da área, com uma pequena explosão no chão (_tick_rain). Só visual: o dano é o DoT.
+func _rain_start() -> void:
+	rain_t = RAIN_TIME
+	rain_tick = 0.0
+	if rain_node != null and is_instance_valid(rain_node):
+		rain_node.queue_free()
+	rain_node = Node3D.new()
+	rain_node.position = Vector3(0, 10.6, -10.5)
+	rain_node.rotation.x = 0.3
+	fx_root.add_child(rain_node)
+	Fx.inst(rain_node, Fx.torus(4.6, 4.8), Fx.mat(FIRE, 5.0, true))
+	Fx.inst(rain_node, Fx.torus(3.2, 3.3), Fx.mat(FIRE_CYAN, 4.0, true))
+	Fx.inst(rain_node, Fx.disc(4.6, 0.02), Fx.mat(Color(FIRE.r, FIRE.g, FIRE.b, 0.18), 2.0, true))
+	for n in 8:
+		var a := n * TAU / 8.0
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.12, 0.03, 1.2)
+		var ray := Fx.inst(rain_node, bm, Fx.mat(FIRE_MINT, 4.0, true), Vector3(cos(a), 0, sin(a)) * 3.9)
+		ray.rotation.y = -a + PI / 2.0
+	rain_node.scale = Vector3.ONE * 0.1
+	rain_node.create_tween().tween_property(rain_node, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _tick_rain(delta: float) -> void:
+	if rain_t <= 0.0:
+		return
+	rain_t -= delta
+	if rain_node != null and is_instance_valid(rain_node):
+		rain_node.rotation.y += delta * 0.6
+	if rain_t <= 0.0 or get_dot("chuva").is_empty():
+		rain_t = 0.0
+		if rain_node != null and is_instance_valid(rain_node):
+			var gone := rain_node
+			rain_node = null
+			var tw := gone.create_tween()
+			tw.tween_property(gone, "scale", Vector3.ONE * 0.05, 0.3)
+			tw.tween_callback(gone.queue_free)
+		return
+	rain_tick -= delta
+	while rain_tick <= 0.0:
+		rain_tick += RAIN_EVERY * randf_range(0.6, 1.5)
+		# cada brasa cai num ponto sorteado da área, com tamanho e velocidade próprios
+		var a := randf() * TAU
+		var r := sqrt(randf()) * 4.4
+		var ground := Vector3(cos(a) * r, 0.1, -10.5 + sin(a) * r)
+		var col: Color = [FIRE, FIRE_CYAN, FIRE_MINT][randi() % 3]
+		var ember := Fx.inst(fx_root, Fx.capsule(0.09, 0.55 + randf() * 0.4), Fx.mat(col, 7.0, true), ground + Vector3(randf_range(-0.6, 0.6), 10.4, 0))
+		var tw := ember.create_tween()
+		tw.tween_property(ember, "position", ground, randf_range(0.32, 0.5)).set_ease(Tween.EASE_IN)
+		tw.tween_callback(ember.queue_free)
+		tw.tween_callback(_burst.bind(ground, col, randf_range(0.7, 1.2)))
+
+
+# ---- Juízo Solar
+
+## Sequência: ele sobe e abre as asas (SOLAR_RISE, preso), lança um sol celestial que leva SOLAR_TRAVEL
+## até a boss, e fica flutuando SOLAR_FLOAT depois do lançamento, já podendo andar e usar o resto do kit.
+## O dano sai no impacto. Com a boss marcada NA HORA EM QUE ELE USA: mais dano e o DoT (a marca fica).
 func _solar(u: Unit) -> void:
 	var marked := not get_dot("zenite").is_empty()
-	var m := Fx.mat(Color(1.0, 0.85, 0.35, 0.9), 5.0, true)
-	var sun := Fx.inst(fx_root, Fx.sphere(1.0), m, Vector3(0, 9, -12.0))
-	sun.scale = Vector3.ONE * 0.4
-	var tw := sun.create_tween()
-	tw.tween_property(sun, "scale", Vector3.ONE * 4.5, 0.4).set_ease(Tween.EASE_OUT)
-	tw.tween_property(m, "albedo_color:a", 0.0, 0.5)
-	tw.tween_callback(sun.queue_free)
-	hud.flash(Color(1.0, 0.85, 0.35, 0.4))
-	hud.toast("JUÍZO SOLAR", 1.6)
+	u.lock_t = SOLAR_RISE
+	u.face(BOSS_POINT - u.position)
+	u.wings_open(true, 0.35)
+	if u.controlled:
+		hud.toast("JUÍZO SOLAR", 1.6)
+	var up := u.visual.create_tween()
+	up.tween_property(u.visual, "position:y", SOLAR_HEIGHT, SOLAR_RISE).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	up.tween_interval(SOLAR_FLOAT)
+	up.tween_property(u.visual, "position:y", 0.0, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	up.tween_callback(u.wings_open.bind(false, 0.3))
+	_burst(u.position, FIRE, 3.0)
+	# o sol: uma estrela pequena. Núcleo branco, camadas de fogo verde-marinho e anéis orbitando.
+	var sun := Node3D.new()
+	fx_root.add_child(sun)
+	sun.position = u.position + Vector3(0, SOLAR_HEIGHT + 5.2, 0.5)
+	Fx.inst(sun, Fx.sphere(0.8), Fx.mat(Color(1, 1, 1), 12.0, true))
+	Fx.inst(sun, Fx.sphere(1.15), Fx.mat(Color(FIRE_MINT.r, FIRE_MINT.g, FIRE_MINT.b, 0.55), 6.0, true))
+	Fx.inst(sun, Fx.sphere(1.55), Fx.mat(Color(FIRE.r, FIRE.g, FIRE.b, 0.3), 4.0, true))
+	var rings: Array = []
+	for k in 3:
+		var ring := Fx.inst(sun, Fx.torus(1.9 + k * 0.25, 2.0 + k * 0.25), Fx.mat([FIRE_CYAN, FIRE, FIRE_MINT][k], 6.0, true))
+		ring.rotation = Vector3(0.6 + k * 0.9, 0, k * 1.1)
+		rings.append(ring)
+		ring.create_tween().set_loops().tween_property(ring, "rotation:y", TAU, 1.1 + k * 0.4).as_relative()
+	sun.scale = Vector3.ONE * 0.1
+	var hit := Vector3(0, 5.0, -11.5)
+	var ts := sun.create_tween()
+	ts.tween_property(sun, "scale", Vector3.ONE * 1.3, SOLAR_RISE).set_ease(Tween.EASE_OUT)
+	ts.tween_property(sun, "position", hit, SOLAR_TRAVEL).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	ts.parallel().tween_property(sun, "scale", Vector3.ONE * 2.6, SOLAR_TRAVEL)
+	ts.tween_callback(_solar_hit.bind(u, marked, hit))
+	ts.tween_callback(sun.queue_free)
+
+
+func _solar_hit(u: Unit, marked: bool, hit: Vector3) -> void:
+	if ended:
+		return
+	# grande explosão celestial: clarão branco, fogo verde-marinho, ondas de choque e partículas
+	_burst(hit, Color(1, 1, 1), 13.0)
+	_burst(hit, FIRE, 10.0)
+	for k in 5:
+		_impact_ring(hit, [Color(1, 1, 1), FIRE, FIRE_CYAN, FIRE_MINT, FIRE][k], 4.0 + k * 2.2)
+	for n in 18:
+		var a := n * TAU / 18.0
+		var pm := Fx.mat([FIRE, FIRE_CYAN, FIRE_MINT][n % 3], 8.0, true)
+		var p := Fx.inst(fx_root, Fx.sphere(0.2), pm, hit)
+		var tp := p.create_tween().set_parallel(true)
+		tp.tween_property(p, "position", hit + Vector3(cos(a), sin(a) * 0.7, 0.3) * randf_range(5.0, 9.0), 0.7).set_ease(Tween.EASE_OUT)
+		tp.tween_property(p, "scale", Vector3.ONE * 0.1, 0.7)
+		tp.chain().tween_callback(p.queue_free)
+	hud.flash(FIRE_MINT, 0.35)
+	shake_t = 0.55
+	shake_amp = 0.55
+	boss.hit_flash()
+	if not is_instance_valid(u):
+		return
 	_damage_boss(u, SOLAR_MARKED if marked else SOLAR_DMG, true, true)
 	if marked:
-		add_dot("solar", "Queimadura Solar", Color(1.0, 0.75, 0.2), SOLAR_DOT_TIME, SOLAR_DOT, u)
+		add_dot("solar", "Queimadura Solar", FIRE_MINT, SOLAR_DOT_TIME, SOLAR_DOT, u)
 
 
 # ---------------------------------------------------------------- Ringstar
@@ -2329,6 +4358,11 @@ func glow_slot(u: Unit) -> int:
 		return u.chain
 	if u.key == "maga" and u.pierce_next:
 		return 0
+	if u.key == "burner":
+		# a marca está nos últimos instantes: é a hora da Lança Serafim
+		var mk := get_dot("zenite")
+		if not mk.is_empty() and 1.0 - mk["t"] / mk["total"] >= LANCE_PERFECT:
+			return 2
 	if u.key == "sleepwalker":
 		if u.asleep:
 			return u.dream_step  # como combo de FFXIV: a próxima da ordem brilha
@@ -2524,11 +4558,13 @@ func buffs_of(u: Unit) -> Array:
 		[u.wall_t, "tank", 5, false],                                       # Muralha da Fé (a party toda)
 		[u.taste_t, "nurse", 1, false],                                     # Blood Taste
 		[u.party_t, "nurse", 4, false],                                     # Blood Party
+		[u.bath_t, "nurse", 5, false],                                      # Bloodbath (mitigação na party)
+		[u.mend_t if u.mend_rate == SHARE_REGEN else 0.0, "nurse", 2, false],  # Compartilhamento de Sangue
 		[u.frenzy_t, "assassina", 5, false],                                # Frenesi da Fera
 		[maxf(u.power_t, u.ward_t), "maga", 1, false],                      # bala Rainbow (dano / guarda)
 		[u.count_t, "ringstar", 3, false],                                  # Contagem Regressiva
 		[u.shield_t if u.shield_hp > 0.0 and u.shield_t < 60.0 else 0.0, "healer", 3, false],  # escudo
-		[u.mend_t, "apothecary", 4, false],                                 # regeneração da Tanatopraxia
+		[maxf(u.mend_t, u.haste_t), "apothecary", 4, false],                # regeneração e pressa da Tanatopraxia
 		[u.near_t, "sleepwalker", 0, true],                                 # Perto do Sonho
 		[dream_t if (u.key == "sleepwalker" and dream_stacks > 0) else 0.0, "sleepwalker", 1, false],  # Vulnerabilidade Onírica
 		[u.immortal_t if u.party_t <= 0.0 else 0.0, "tank", 2, false],      # imortal (Limit Break do Tank)
@@ -2541,6 +4577,39 @@ func buffs_of(u: Unit) -> Array:
 		if o.key == "apothecary" and o.alive and o.patient == u and o.patient_t > 0.0:
 			out.append({"icon": SkillInfo.icon("apothecary", 2), "t": o.patient_t})
 	return out
+
+
+## Velocidade de andar do herói agora: base x a da classe x a pressa, se tiver.
+func move_speed(u: Unit) -> float:
+	var haste := HASTE_MULT if u.haste_t > 0.0 else 1.0
+	if u.count_t > 0.0:
+		haste *= COUNT_SPEED  # Contagem Regressiva da Ringstar
+	# A lentidão de classe é pra quem o JOGADOR controla (é o peso do personagem na mão). A IA anda na
+	# velocidade-base: os tempos das mecânicas foram medidos com ela, e mais devagar a party morre nelas.
+	if not u.controlled:
+		return u.speed * haste
+	return u.speed * float(MOVE_MULT.get(u.key, MOVE_DEFAULT)) * haste
+
+
+## Primeiro aliado caído (ou null). `pick`: o escolhido no card tem prioridade, se estiver caído.
+func _fallen(pick := -1) -> Unit:
+	if pick >= 0 and not units[pick].alive:
+		return units[pick]
+	for o in units:
+		if not o.alive:
+			return o
+	return null
+
+
+## Levanta um aliado caído (reviver de habilidade): vida, Fraqueza, cartas de início e o aviso.
+func _raise(o: Unit, hp_ratio: float, col: Color) -> void:
+	o.revive(hp_ratio)
+	o.weak_t = WEAK_TIME
+	_spawn_cards(o)
+	_burst(o.position, Color(1, 1, 1), 2.4)
+	_burst(o.position, col, 3.4)
+	_impact_ring(o.position + Vector3(0, 0.3, 0), col, 3.0)
+	hud.toast(o.unit_name + " voltou", 2.0)
 
 
 ## Lista de habilidades que vale pro herói agora (o Sleepwalker tem uma lista por modo).
@@ -2609,6 +4678,7 @@ func _thanato(u: Unit) -> void:
 			continue
 		var each := CLOUD_HEAL * boost
 		o.hp = minf(o.max_hp, o.hp + each)
+		o.haste_t = HASTE_TIME  # a nuvem deixa todo mundo mais leve
 		o.mend_t = CLOUD_TIME
 		o.mend_rate = CLOUD_REGEN * boost
 		u.enmity += each * HEAL_ENMITY * 0.5
@@ -2920,17 +4990,52 @@ func _tick_sleep(u: Unit, delta: float) -> void:
 
 ## Lareira Celestial: fogueira espiritual no chão, onde a Soulflame está. Cura quem fica dentro.
 func _start_hearth(u: Unit) -> void:
+	var node := _hearth_node(Vector3(u.position.x, 0.05, u.position.z), false)
+	hearths.append({"node": node, "owner": u, "t": HEARTH_TIME, "tick": 0.0, "strong": false, "r": HEARTH_R, "hps": HEARTH_HPS})
+	_burst(u.position, FLAME, HEARTH_R)
+
+
+## O desenho da fogueira. Forte (depois do Renascimento): área maior, anel duplo, o dobro de línguas
+## de fogo, mais altas e com miolo branco.
+func _hearth_node(at: Vector3, strong: bool) -> Node3D:
 	var node := Node3D.new()
 	fx_root.add_child(node)
-	node.position = Vector3(u.position.x, 0.05, u.position.z)
-	Fx.inst(node, Fx.disc(HEARTH_R), Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.14), 0.0, true))
-	Fx.inst(node, Fx.torus(HEARTH_R - 0.1, HEARTH_R), Fx.mat(FLAME, 3.0, true))
-	# a chama: três línguas de fogo azul-esverdeado
-	for n in 3:
-		var tongue := Fx.inst(node, Fx.cyl(0.02, 0.34 - n * 0.08, 1.5 - n * 0.3), Fx.mat(FLAME.lightened(n * 0.25), 4.0, true), Vector3((n - 1) * 0.22, 0.75 - n * 0.1, 0))
+	node.position = at
+	var r := HEARTH_STRONG_R if strong else HEARTH_R
+	Fx.inst(node, Fx.disc(r), Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.22 if strong else 0.14), 0.0, true))
+	Fx.inst(node, Fx.torus(r - 0.1, r), Fx.mat(Color(FLAME.r * 0.9, FLAME.g * 0.9, FLAME.b * 0.9) if strong else FLAME.darkened(0.5), 3.0, true))
+	if strong:
+		Fx.inst(node, Fx.torus(r * 0.6 - 0.08, r * 0.6), Fx.mat(Color(1.0, 1.0, 0.8), 0.0, true), Vector3(0, 0.01, 0))
+	# a chama: línguas de fogo azul-esverdeado
+	var count := 7 if strong else 3
+	for n in count:
+		var a := n * TAU / count
+		var off := Vector3(cos(a), 0, sin(a)) * (0.5 if strong else 0.0) + Vector3((n - 1) * 0.22 if not strong else 0.0, 0, 0)
+		var tall := (2.6 - (n % 3) * 0.4) if strong else (1.5 - n * 0.3)
+		# (o brilho do fogo dela foi cortado pela metade: estava estourando na tela)
+		var col := FLAME.lightened((n % 3) * 0.25).darkened(0.5)
+		if strong:
+			col = FLAME.lightened((n % 3) * 0.25).darkened(0.05)
+		var tongue := Fx.inst(node, Fx.cyl(0.02, (0.5 if strong else 0.34) - (n % 3) * 0.08, tall), Fx.mat(col, 4.0, true), off + Vector3(0, tall * 0.5, 0))
 		tongue.set_meta("flame", n)
-	hearths.append({"node": node, "owner": u, "t": HEARTH_TIME, "tick": 0.0})
-	_burst(u.position, FLAME, HEARTH_R)
+	if strong:
+		Fx.inst(node, Fx.sphere(0.5), Fx.mat(Color(1.2, 1.2, 1.0), 0.0, true), Vector3(0, 0.6, 0))
+	return node
+
+
+## Renascimento passou pela Lareira: ela fica forte (mais cura, mais alcance, dura de novo) e o fogo cresce.
+func _hearth_empower(h: Dictionary) -> void:
+	var at: Vector3 = h["node"].position
+	h["node"].queue_free()
+	h["node"] = _hearth_node(at, true)
+	h["strong"] = true
+	h["t"] = HEARTH_STRONG_TIME
+	h["r"] = HEARTH_STRONG_R
+	h["hps"] = HEARTH_STRONG_HPS
+	_burst(at, Color(1, 1, 1), 4.0)
+	_burst(at, FLAME, HEARTH_STRONG_R)
+	_impact_ring(at + Vector3(0, 0.3, 0), FLAME, HEARTH_STRONG_R)
+	hud.toast("LAREIRA FORTALECIDA", 1.4)
 
 
 func _tick_hearths(delta: float) -> void:
@@ -2944,44 +5049,43 @@ func _tick_hearths(delta: float) -> void:
 		if h["tick"] <= 0.0:
 			h["tick"] = 1.0
 			var owner: Unit = h["owner"]
+			var hps: float = h["hps"]
+			if h["strong"]:
+				# fogo forte: fagulhas subindo por toda a área
+				for k in 6:
+					var a := randf() * TAU
+					var p: Vector3 = node.position + Vector3(cos(a), 0, sin(a)) * randf_range(0.5, float(h["r"]))
+					var em := Fx.mat(FLAME, 0.0, true)
+					var spark := Fx.inst(fx_root, Fx.sphere(0.09), em, p + Vector3(0, 0.2, 0))
+					var ts := spark.create_tween().set_parallel(true)
+					ts.tween_property(spark, "position:y", randf_range(2.0, 3.6), 0.9)
+					ts.tween_property(spark, "scale", Vector3.ONE * 0.1, 0.9)
+					ts.chain().tween_callback(spark.queue_free)
 			for o in units:
-				if o.alive and o.position.distance_to(node.position) <= HEARTH_R:
+				if o.alive and o.position.distance_to(node.position) <= float(h["r"]):
 					# fagulhas subindo em volta de quem está na fogueira
-					_burst(o.position + Vector3(0, 0.6, 0), FLAME, 1.1)
+					_burst(o.position + Vector3(0, 0.6, 0), FLAME, 1.6 if h["strong"] else 1.1)
 					if o.hp < o.max_hp:
-						o.hp = minf(o.max_hp, o.hp + HEARTH_HPS)
-						owner.enmity += HEARTH_HPS * HEAL_ENMITY
-						_popup(int(HEARTH_HPS), Color(0.5, 1.0, 0.85), 40, o.position + Vector3(0, 2.6, 0), "+")
+						o.hp = minf(o.max_hp, o.hp + hps)
+						owner.enmity += hps * HEAL_ENMITY
+						_popup(int(hps), Color(0.5, 1.0, 0.85), 40, o.position + Vector3(0, 2.6, 0), "+")
 		if h["t"] <= 0.0:
 			node.queue_free()
 			hearths.erase(h)
 
 
 ## Renascimento: uma fênix enorme atravessa o campo. Cura todos, levanta quem caiu, queima a boss
-## e deixa um DoT leve nela. Se houver uma Lareira acesa, é dela que a fênix nasce.
+## e deixa um DoT leve nela. Se houver uma Lareira acesa, é dela que a fênix nasce, e a Lareira
+## fica fortalecida (_hearth_empower).
 func _rebirth(u: Unit) -> void:
 	var from := u.position
 	if not hearths.is_empty():
+		# a fênix nasce da Lareira, e a Lareira fica mais forte em vez de sumir
 		var h: Dictionary = hearths[hearths.size() - 1]
 		from = h["node"].position
-		h["node"].queue_free()
-		hearths.erase(h)
-	var bird := Node3D.new()
-	fx_root.add_child(bird)
-	bird.position = from + Vector3(0, 1.5, 0)
-	var fire := Fx.mat(Color(1.0, 0.55, 0.15, 0.9), 4.0, true)
-	Fx.inst(bird, Fx.sphere(0.9), fire)
-	for side in [-1, 1]:
-		var wing := BoxMesh.new()
-		wing.size = Vector3(3.6, 0.16, 1.5)
-		var w := Fx.inst(bird, wing, Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.85), 4.0, true), Vector3(side * 2.0, 0.3, 0.2))
-		w.rotation.z = side * 0.35
-	var tw := bird.create_tween()
-	tw.tween_property(bird, "position", Vector3(0, 3.0, 0), 0.35)
-	tw.tween_property(bird, "position", Vector3(0, 5.0, -11.5), 0.4)
-	tw.tween_callback(bird.queue_free)
-	hud.flash(Color(1.0, 0.6, 0.2, 0.3))
+		_hearth_empower(h)
 	hud.toast("RENASCIMENTO", 1.6)
+	# cura e reviver saem já no nascimento
 	for o in units:
 		if not o.alive:
 			o.revive(0.5)
@@ -2994,6 +5098,179 @@ func _rebirth(u: Unit) -> void:
 			_burst(o.position, FLAME, 1.8)
 			_popup(int(REBIRTH_HEAL), Color(0.5, 1.0, 0.85), 56, o.position + Vector3(0, 2.6, 0), "+")
 		u.enmity += REBIRTH_HEAL * HEAL_ENMITY * 0.5
+	_phoenix(u, from)
+
+
+## A fênix do Renascimento. Nasce do fogo abrindo as asas, sobe, solta um grito (ondas de luz, tremor,
+## as chamas do campo respondem) e só então atravessa a arena devagar até a boss, batendo as asas e
+## largando fogo pelo caminho. O dano e o DoT saem quando ela chega.
+func _phoenix(u: Unit, from: Vector3) -> void:
+	var gold := Color(1.0, 0.7, 0.25)
+	var bird := Node3D.new()
+	fx_root.add_child(bird)
+	bird.position = from + Vector3(0, 0.6, 0)
+	# corpo, cabeça com crista, bico e cauda
+	Fx.inst(bird, Fx.sphere(0.9), Fx.mat(Color(gold.r * 1.3, gold.g * 1.3, gold.b * 1.3, 0.95), 0.0, true)).scale = Vector3(0.9, 0.9, 1.5)
+	Fx.inst(bird, Fx.sphere(0.5), Fx.mat(Color(1.4, 1.3, 1.0), 0.0, true), Vector3(0, 0.55, -1.2))
+	Fx.inst(bird, Fx.cyl(0.0, 0.16, 0.6), Fx.mat(Color(1.2, 0.9, 0.3), 0.0, true), Vector3(0, 0.5, -1.75)).rotation.x = -PI / 2.0
+	for n in 3:
+		var crest := Fx.inst(bird, Fx.cyl(0.0, 0.1, 0.8), Fx.mat(Color(FLAME.r * 1.2, FLAME.g * 1.2, FLAME.b * 1.2), 0.0, true), Vector3((n - 1) * 0.2, 1.1, -1.0))
+		crest.rotation.x = 0.5
+		crest.rotation.z = (n - 1) * -0.4
+	for n in 5:
+		var tail := BoxMesh.new()
+		tail.size = Vector3(0.3, 0.06, 3.2 - absf(n - 2) * 0.5)
+		var tm := Fx.inst(bird, tail, Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.85).lerp(gold, 0.3 * (n % 2)), 0.0, true), Vector3((n - 2) * 0.32, -0.1, 2.4))
+		tm.rotation.y = (n - 2) * -0.14
+	# asas: cada uma um leque de penas de fogo, num pivô que bate
+	var wings: Array = []
+	for side in [-1.0, 1.0]:
+		var pivot := Node3D.new()
+		pivot.position = Vector3(side * 0.6, 0.3, 0)
+		bird.add_child(pivot)
+		for k in 5:
+			var feather := BoxMesh.new()
+			feather.size = Vector3(3.4 - k * 0.45, 0.07, 0.9)
+			var col := gold.lerp(FLAME, k / 4.0)
+			var fm := Fx.inst(pivot, feather, Fx.mat(Color(col.r * 1.1, col.g * 1.1, col.b * 1.1, 0.9), 0.0, true), Vector3(side * (1.7 - k * 0.2), 0, 0.2 + k * 0.55))
+			fm.rotation.y = side * -k * 0.16
+		pivot.rotation.z = side * -1.3  # nasce com as asas fechadas pra cima
+		wings.append(pivot)
+	bird.scale = Vector3.ONE * 0.15
+	# 1. nascimento: sai do fogo, cresce e abre as asas
+	_burst(from, Color(1, 1, 1), 3.0)
+	_burst(from, gold, 5.0)
+	for k in 3:
+		_impact_ring(from + Vector3(0, 0.3, 0), [gold, FLAME, Color(1, 1, 1)][k], 2.5 + k * 1.5)
+	var pillar_m := Fx.mat(Color(gold.r, gold.g, gold.b, 0.6), 0.0, true)
+	var pillar := Fx.inst(fx_root, Fx.cyl(1.2, 1.8, 12.0), pillar_m, from + Vector3(0, 6.0, 0))
+	var tp := pillar.create_tween().set_parallel(true)
+	tp.tween_property(pillar, "scale", Vector3(0.05, 1.0, 0.05), REBIRTH_BIRTH).set_ease(Tween.EASE_IN)
+	tp.tween_property(pillar_m, "albedo_color:a", 0.0, REBIRTH_BIRTH)
+	tp.chain().tween_callback(pillar.queue_free)
+	var hover := from + Vector3(0, 4.6, 0)
+	var tw := bird.create_tween()
+	tw.tween_property(bird, "position", hover, REBIRTH_BIRTH).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(bird, "scale", Vector3.ONE * 1.5, REBIRTH_BIRTH).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	for k in wings.size():
+		var s := -1.0 if k == 0 else 1.0
+		tw.parallel().tween_property(wings[k], "rotation:z", s * 0.25, REBIRTH_BIRTH).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	bird.look_at_from_position(bird.position, Vector3(0, 5.0, -11.5), Vector3.UP)
+	# 2. o grito
+	tw.tween_callback(_phoenix_cry.bind(hover, gold))
+	tw.tween_property(bird, "scale", Vector3.ONE * 1.85, REBIRTH_CRY * 0.35)
+	tw.tween_property(bird, "scale", Vector3.ONE * 1.6, REBIRTH_CRY * 0.65)
+	# 3. o voo lento até a boss
+	var hit := Vector3(0, 5.2, -11.5)
+	tw.tween_property(bird, "position", hit, REBIRTH_FLY).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_callback(_phoenix_hit.bind(u, hit, gold))
+	tw.tween_property(bird, "scale", Vector3.ONE * 0.1, 0.25)
+	tw.tween_callback(bird.queue_free)
+	# batidas de asa durante o grito e o voo
+	var flap := bird.create_tween().set_loops(8)
+	flap.tween_interval(REBIRTH_BIRTH / 8.0)
+	for k in wings.size():
+		var s := -1.0 if k == 0 else 1.0
+		flap.parallel().tween_property(wings[k], "rotation:z", s * -0.45, 0.22).set_delay(REBIRTH_BIRTH / 8.0)
+	for k in wings.size():
+		var s := -1.0 if k == 0 else 1.0
+		flap.tween_property(wings[k], "rotation:z", s * 0.4, 0.2)
+	# fogo que fica no chão pelo caminho
+	var patches := 6
+	for n in patches:
+		var t := float(n + 1) / (patches + 1.0)
+		var ground := Vector3(from.x, 0, from.z).lerp(Vector3(0, 0, -9.5), t) + Vector3(randf_range(-1.4, 1.4), 0, randf_range(-0.8, 0.8))
+		get_tree().create_timer(REBIRTH_BIRTH + REBIRTH_CRY + REBIRTH_FLY * t, false).timeout.connect(_fire_patch.bind(ground, gold))
+		# e penas de fogo caindo dela
+		get_tree().create_timer(REBIRTH_BIRTH + REBIRTH_CRY + REBIRTH_FLY * t - 0.1, false).timeout.connect(func():
+			if not is_instance_valid(bird):
+				return
+			for k in 3:
+				var fb := BoxMesh.new()
+				fb.size = Vector3(0.5, 0.04, 0.16)
+				var fm := Fx.mat(Color(gold.r, gold.g, gold.b, 0.95), 0.0, true)
+				var feather := Fx.inst(fx_root, fb, fm, bird.position + Vector3(randf_range(-2.5, 2.5), 0, randf_range(-0.6, 0.6)))
+				var tf := feather.create_tween().set_parallel(true)
+				tf.tween_property(feather, "position:y", 0.2, 0.9).set_ease(Tween.EASE_IN)
+				tf.tween_property(feather, "rotation", Vector3(TAU, TAU * 0.5, TAU), 0.9)
+				tf.tween_property(fm, "albedo_color:a", 0.0, 0.9)
+				tf.chain().tween_callback(feather.queue_free))
+
+
+## O grito da fênix: som, ondas de luz saindo dela, clarão, tremor, e as chamas nos aliados respondendo.
+func _phoenix_cry(at: Vector3, gold: Color) -> void:
+	_sfx(_tone(1568.0, 0.45, false), -5.0)
+	_sfx(_tone(2093.0, 0.35, false), -9.0)
+	for k in 5:
+		var m := Fx.mat(Color([gold, FLAME, Color(1, 1, 1)][k % 3].r, [gold, FLAME, Color(1, 1, 1)][k % 3].g, [gold, FLAME, Color(1, 1, 1)][k % 3].b, 0.9), 0.0, true)
+		var ring := Fx.inst(fx_root, Fx.torus(0.9, 1.0), m, at)
+		ring.rotation.x = PI / 2.0
+		ring.scale = Vector3.ONE * 0.5
+		var tr := ring.create_tween().set_parallel(true)
+		tr.tween_property(ring, "scale", Vector3.ONE * (9.0 + k * 3.0), 0.7).set_delay(k * 0.08).set_ease(Tween.EASE_OUT)
+		tr.tween_property(m, "albedo_color:a", 0.0, 0.7).set_delay(k * 0.08)
+		tr.chain().tween_callback(ring.queue_free)
+	_impact_ring(Vector3(at.x, 0.3, at.z), gold, 12.0)
+	_burst(at, Color(1, 1, 1), 5.0)
+	hud.flash(Color(1.0, 0.75, 0.3), 0.26)
+	hud.toast("O GRITO DA FÊNIX", 1.2)
+	shake_t = REBIRTH_CRY
+	shake_amp = 0.4
+	for o in units:
+		if o.alive:
+			_impact_ring(o.position + Vector3(0, 0.3, 0), FLAME, 1.8)
+			_beam(at - Vector3(0, 1.0, 0), o.position, Color(gold.r, gold.g, gold.b, 0.5), 0.5)
+
+
+## Um foco de fogo que a fênix deixa no chão: fica aceso REBIRTH_PATCH segundos e apaga devagar.
+func _fire_patch(at: Vector3, gold: Color) -> void:
+	var node := Node3D.new()
+	fx_root.add_child(node)
+	node.position = at
+	var mats: Array = []
+	var ground_m := Fx.mat(Color(gold.r, gold.g * 0.8, gold.b * 0.5, 0.4), 0.0, true)
+	Fx.inst(node, Fx.disc(1.3, 0.03), ground_m, Vector3(0, 0.05, 0))
+	mats.append(ground_m)
+	for n in 5:
+		var a := n * TAU / 5.0
+		var tall := 1.0 + (n % 3) * 0.5
+		var col := gold.lerp(FLAME, (n % 2) * 0.6)
+		var m := Fx.mat(Color(col.r, col.g, col.b, 0.9), 0.0, true)
+		var tongue := Fx.inst(node, Fx.cyl(0.02, 0.26, tall), m, Vector3(cos(a) * 0.5, tall * 0.5, sin(a) * 0.5))
+		tongue.create_tween().set_loops().tween_property(tongue, "scale:y", 1.3, 0.25 + n * 0.05).set_trans(Tween.TRANS_SINE)
+		mats.append(m)
+	_burst(at, gold, 1.8)
+	node.scale = Vector3(0.2, 0.2, 0.2)
+	var tw := node.create_tween()
+	tw.tween_property(node, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(REBIRTH_PATCH - 1.25)
+	tw.tween_property(node, "scale", Vector3(1.0, 0.05, 1.0), 1.0)
+	for m in mats:
+		tw.parallel().tween_property(m, "albedo_color:a", 0.0, 1.0)
+	tw.tween_callback(node.queue_free)
+
+
+## A fênix chega na boss: a explosão, o dano e a Brasa da Fênix (o DoT).
+func _phoenix_hit(u: Unit, hit: Vector3, gold: Color) -> void:
+	if ended:
+		return
+	_burst(hit, Color(1, 1, 1), 9.0)
+	_burst(hit, gold, 12.0)
+	for k in 5:
+		_impact_ring(hit, [Color(1, 1, 1), gold, FLAME][k % 3], 4.0 + k * 2.0)
+	for n in 20:
+		var a := n * TAU / 20.0
+		var sp := Fx.inst(fx_root, Fx.sphere(0.18), Fx.mat([gold, FLAME][n % 2], 0.0, true), hit)
+		var ts := sp.create_tween().set_parallel(true)
+		ts.tween_property(sp, "position", hit + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 8.0), 0.7).set_ease(Tween.EASE_OUT)
+		ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.7)
+		ts.chain().tween_callback(sp.queue_free)
+	hud.flash(Color(1.0, 0.6, 0.2), 0.3)
+	shake_t = 0.5
+	shake_amp = 0.5
+	boss.hit_flash()
+	if not is_instance_valid(u):
+		return
 	_damage_boss(u, REBIRTH_DMG, true, true)
 	add_dot("brasa", "Brasa da Fênix", Color(1.0, 0.55, 0.15), REBIRTH_DOT_TIME, REBIRTH_DOT, u)
 
@@ -3032,7 +5309,9 @@ func _tick_dots(delta: float) -> void:
 		d["acc"] += delta
 		if d["acc"] >= 1.0 and d["dps"] > 0.0:
 			d["acc"] -= 1.0
+			plain_hit = d.get("plain", false)
 			_damage_boss(d["owner"], d["dps"], false, false)
+			plain_hit = false
 			_popup(int(d["dps"]), (d["col"] as Color).lightened(0.2), 30)
 			if ended:
 				return
@@ -3040,8 +5319,8 @@ func _tick_dots(delta: float) -> void:
 			boss_dots.erase(d)
 
 
-## Malpractice paga os próprios golpes com vida. Não é golpe da boss: não conta como parry nem
-## passa por mitigação ou escudo. Pode matar.
+## Malpractice paga os próprios golpes com vida. Não é golpe da boss: não conta como parry (o Blood
+## Taste só apara o que vem do inimigo, por hurt()) nem passa por mitigação ou escudo. Pode matar.
 func _bleed(u: Unit, cost: float) -> void:
 	if not u.alive or u.party_t > 0.0 or u.immortal_t > 0.0:
 		return
@@ -3135,8 +5414,8 @@ func _provoke(u: Unit, by_ai: bool) -> void:
 	_burst(u.position, Color(1.0, 0.35, 0.6), 3.2)
 	_beam(u.position, Vector3(0, 5.0, -11.5), Color(1.0, 0.35, 0.6, 0.95), 0.45)
 	boss.rage()
-	hud.show_biscoito()
-	hud.toast("BORA BISCOITAR", 1.6)
+	# confirmação de que a boss foi provocada: uma etiqueta pequena ao lado dela
+	hud.provoke_tag(cam.unproject_position(Vector3(4.6, 8.4, -12.0)))
 
 
 func _add_stacks(u: Unit, n: int) -> void:
@@ -3151,6 +5430,372 @@ func _lifesteal(u: Unit, amount: float) -> void:
 		_popup(int(amount), BLOOD.lightened(0.35), 48, u.position + Vector3(0, 2.6, 0), "+")
 
 
+## Cura da própria Malpractice durante o Blood Party (roubo de vida e Extração): a única que entra.
+func _party_heal(u: Unit, amount: float) -> void:
+	if not u.alive or amount <= 0.0:
+		return
+	var was := u.hp
+	u.hp = minf(u.max_hp, u.hp + amount)
+	u.party_hp = u.hp
+	if u.hp - was >= 1.0:
+		_popup(int(u.hp - was), BLOOD.lightened(0.35), 44, u.position + Vector3(0, 2.6, 0), "+")
+		_blood_return(u, 2)
+
+
+## Gotas de sangue voltando da boss até ela (toda cura que vem de sangue roubado), com uma cruzinha
+## médica subindo em cima dela.
+func _blood_return(u: Unit, count: int) -> void:
+	var from := BOSS_POINT + Vector3(0, 2.2, 1.6)
+	for n in count:
+		var drop := Fx.inst(fx_root, Fx.sphere(0.11), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), from + Vector3(randf_range(-0.8, 0.8), randf_range(-0.6, 0.8), 0))
+		var tw := drop.create_tween()
+		tw.tween_interval(n * 0.05)
+		tw.tween_property(drop, "position", u.position + Vector3(0, 1.2, 0), 0.24).set_ease(Tween.EASE_IN)
+		tw.tween_callback(drop.queue_free)
+	var cross := Node3D.new()
+	fx_root.add_child(cross)
+	cross.position = u.position + Vector3(randf_range(-0.4, 0.4), 2.0, 0.3)
+	var cm := Fx.mat(Color(1.6, 0.25, 0.35, 0.95), 0.0, true)
+	for size in [Vector3(0.1, 0.34, 0.04), Vector3(0.34, 0.1, 0.04)]:
+		var bar := BoxMesh.new()
+		bar.size = size
+		Fx.inst(cross, bar, cm)
+	var tc := cross.create_tween().set_parallel(true)
+	tc.tween_property(cross, "position:y", cross.position.y + 1.0, 0.6)
+	tc.tween_property(cm, "albedo_color:a", 0.0, 0.6)
+	tc.chain().tween_callback(cross.queue_free)
+
+
+## Syringe Poke: estocada rápida, uma perfuração pequena e um fio de sangue puxado da boss pra seringa.
+func _poke_fx(u: Unit) -> void:
+	u.syringe_stab(1.1)
+	var at := BOSS_POINT + Vector3(randf_range(-0.6, 0.6), 2.0, 1.7)
+	_impact_ring(at, BLOOD.lightened(0.2), 0.9)
+	_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.9), 0.28)
+	u.set_fill(0.55, 0.08)
+	u.create_tween().tween_callback(u.set_fill.bind(0.35, 0.3)).set_delay(0.2)
+	_blood_return(u, 1)
+
+
+## Blood Consumed: a seringa entra na boss e o reservatório enche de sangue; no fim, uma explosão de
+## gotas e o vermelho correndo pelo corpo dela (a vida recuperada).
+func _consumed_fx(u: Unit) -> void:
+	u.syringe_stab(1.5, 0.35)
+	u.set_fill(1.0, 0.35)
+	var at := BOSS_POINT + Vector3(0, 2.2, 1.7)
+	for n in 8:
+		# o sangue sendo sugado: gotas correndo da boss pra seringa
+		var drop := Fx.inst(fx_root, Fx.sphere(0.1), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-1.2, 1.2), randf_range(-0.8, 1.2), 0))
+		var tw := drop.create_tween()
+		tw.tween_interval(n * 0.04)
+		tw.tween_property(drop, "position", u.position + Vector3(0.4, 1.1, -0.6), 0.2).set_ease(Tween.EASE_IN)
+		tw.tween_callback(drop.queue_free)
+	_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.95), 0.45)
+	get_tree().create_timer(0.4, false).timeout.connect(func():
+		if not is_instance_valid(u) or not u.alive:
+			return
+		_burst(at, BLOOD, 3.2)
+		_impact_ring(at, BLOOD.lightened(0.2), 2.6)
+		for n in 10:
+			var a := n * TAU / 10.0
+			var sp := Fx.inst(fx_root, Fx.sphere(0.09), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), at)
+			var ts := sp.create_tween().set_parallel(true)
+			ts.tween_property(sp, "position", at + Vector3(cos(a), sin(a), 0.2) * randf_range(1.2, 2.4), 0.35).set_ease(Tween.EASE_OUT)
+			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.35)
+			ts.chain().tween_callback(sp.queue_free)
+		# o vermelho percorre o corpo: a vida voltando
+		u.body_mat.emission = BLOOD
+		u.body_mat.emission_energy_multiplier = 4.0
+		u.create_tween().tween_property(u.body_mat, "emission_energy_multiplier", 0.25, 0.5)
+		u.create_tween().tween_callback(func(): u.body_mat.emission = u.color).set_delay(0.5)
+		u.set_fill(0.35, 0.4)
+		_blood_return(u, 3))
+
+
+## Blood Taste (parry): uma proteção vermelha com cruzes médicas em volta dela pela janela do parry.
+func _parry_guard(u: Unit) -> void:
+	var dome_m := Fx.mat(Color(BLOOD.r * 1.5, BLOOD.g, BLOOD.b, 0.3), 0.0, true)
+	var dome := Fx.inst(u, Fx.sphere(1.35), dome_m, Vector3(0, 1.0, 0))
+	dome.scale = Vector3.ONE * 0.4
+	var cm := Fx.mat(Color(2.2, 2.2, 2.2, 0.95), 0.0, true)
+	for n in 4:
+		var a := n * TAU / 4.0 + 0.4
+		var cross := Node3D.new()
+		cross.position = Vector3(cos(a) * 1.3, 0.2, sin(a) * 1.3)
+		cross.rotation.y = -a + PI / 2.0
+		dome.add_child(cross)
+		for size in [Vector3(0.12, 0.42, 0.04), Vector3(0.42, 0.12, 0.04)]:
+			var bar := BoxMesh.new()
+			bar.size = size
+			Fx.inst(cross, bar, cm)
+	var tw := dome.create_tween()
+	tw.tween_property(dome, "scale", Vector3.ONE, 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(dome, "rotation:y", 1.6, TASTE_TIME)
+	tw.tween_interval(maxf(0.0, TASTE_TIME - 0.2))
+	tw.tween_property(dome_m, "albedo_color:a", 0.0, 0.1)
+	tw.tween_callback(dome.queue_free)
+	if u.med_shield != null:
+		# o escudo vem pra frente
+		u.med_shield.position = Unit.SHIELD_HOME + Vector3(0.45, 0.1, -0.35)
+		u.med_shield.create_tween().tween_property(u.med_shield, "position", Unit.SHIELD_HOME, 0.3).set_delay(TASTE_TIME)
+
+
+## Indicador de provocação em cima da boss (Emergency Response): uma seta vermelha apontando pra baixo.
+func _taunt_mark() -> void:
+	var node := Node3D.new()
+	fx_root.add_child(node)
+	node.position = Vector3(0, 9.6, -10.8)
+	var m := Fx.mat(Color(2.0, 0.2, 0.35, 0.95), 0.0, true)
+	Fx.inst(node, Fx.cyl(0.0, 0.7, 1.1), m, Vector3(0, -0.2, 0)).rotation.x = PI
+	Fx.inst(node, Fx.cyl(0.24, 0.24, 0.9), m, Vector3(0, 0.75, 0))
+	Fx.inst(node, Fx.torus(0.95, 1.1), m, Vector3(0, -1.0, 0))
+	var tw := node.create_tween()
+	for n in 4:
+		tw.tween_property(node, "position:y", 9.0, 0.16)
+		tw.tween_property(node, "position:y", 9.6, 0.16)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.25)
+	tw.tween_callback(node.queue_free)
+
+
+# ---- Bloodbath
+
+## Bloodbath: ela ergue a seringa e o sangue sobe numa fonte e chove em volta, cobrindo quem está na
+## área (BATH_R; o dobro no Blood Party): 20% menos dano por BATH_TIME. Depois dela, as habilidades que
+## podem ser fortalecidas (BATH_SLOTS) brilham vermelho por BATH_WINDOW: a próxima sai mais forte.
+## No Blood Party: sai de graça, vale pras três próximas e deixa o DoT Pure Blood na boss.
+func _bloodbath(u: Unit) -> void:
+	var ult := u.party_t > 0.0
+	if ult and u.bath_free:
+		u.bath_free = false  # o Bloodbath grátis do Blood Party: um só
+	else:
+		u.stacks -= BATH_COST
+	var r := BATH_R * (2.0 if ult else 1.0)
+	u.bath_window = BATH_WINDOW
+	u.bath_charges = BATH_CHARGES_ULT if ult else 1
+	u.syringe_raise(0.9)
+	var at := u.position
+	for o in units:
+		if o.alive and o.position.distance_to(at) <= r:
+			o.bath_t = BATH_TIME
+			# o sangue escorre em cada um que foi coberto
+			_impact_ring(o.position + Vector3(0, 0.25, 0), BLOOD.lightened(0.2), 1.6)
+			_burst(o.position + Vector3(0, 1.4, 0), BLOOD, 1.4)
+	if ult:
+		add_dot("pure", "Pure Blood", Color(1.0, 0.45, 0.6), PURE_TIME, PURE_DPS, u)
+		get_dot("pure")["plain"] = true
+	# a fonte: um jato vermelho subindo da agulha
+	var jet_m := Fx.mat(Color(BLOOD.r * 2.2, BLOOD.g * 1.5, BLOOD.b * 1.5, 0.95), 0.0, true)
+	var jet := Fx.inst(fx_root, Fx.cyl(0.5, 0.12, 9.0), jet_m, at + Vector3(0.4, 7.2, 0))
+	jet.scale = Vector3(1.0, 0.05, 1.0)
+	var tj := jet.create_tween()
+	tj.tween_property(jet, "scale", Vector3.ONE, 0.16).set_ease(Tween.EASE_OUT)
+	tj.tween_interval(0.35)
+	tj.tween_property(jet_m, "albedo_color:a", 0.0, 0.4)
+	tj.tween_callback(jet.queue_free)
+	# a nuvem no alto e o chão coberto, do tamanho exato da área
+	var cloud_m := Fx.mat(Color(BLOOD.r * 1.6, BLOOD.g, BLOOD.b, 0.5), 0.0, true)
+	var cloud := Fx.inst(fx_root, Fx.disc(r, 0.5), cloud_m, at + Vector3(0, 11.0, 0))
+	cloud.scale = Vector3(0.1, 1.0, 0.1)
+	var tc := cloud.create_tween()
+	tc.tween_property(cloud, "scale", Vector3.ONE, 0.3).set_delay(0.12).set_ease(Tween.EASE_OUT)
+	tc.tween_interval(0.7)
+	tc.tween_property(cloud_m, "albedo_color:a", 0.0, 0.5)
+	tc.tween_callback(cloud.queue_free)
+	var pool_m := Fx.mat(Color(BLOOD.r * 1.4, BLOOD.g, BLOOD.b, 0.42), 0.0, true)
+	var pool := Fx.inst(fx_root, Fx.disc(r, 0.03), pool_m, at + Vector3(0, 0.06, 0))
+	pool.scale = Vector3(0.1, 1.0, 0.1)
+	var tp := pool.create_tween()
+	tp.tween_property(pool, "scale", Vector3.ONE, 0.5).set_delay(0.3).set_ease(Tween.EASE_OUT)
+	tp.tween_property(pool_m, "albedo_color:a", 0.0, 1.6)
+	tp.tween_callback(pool.queue_free)
+	_impact_ring(at + Vector3(0, 0.3, 0), BLOOD.lightened(0.2), r)
+	# a chuva: gotas grossas caindo por toda a área durante um segundo
+	var drops := 46 if ult else 26
+	for n in drops:
+		var a := randf() * TAU
+		var d := sqrt(randf()) * r
+		var ground := at + Vector3(cos(a) * d, 0.1, sin(a) * d)
+		var drop := Fx.inst(fx_root, Fx.capsule(0.1, 0.7), Fx.mat(Color(BLOOD.r * 2.0, BLOOD.g * 1.4, BLOOD.b * 1.4), 0.0, true), ground + Vector3(0, 11.0, 0))
+		drop.visible = false
+		var td := drop.create_tween()
+		td.tween_interval(0.3 + randf() * 0.9)
+		td.tween_callback(func(): drop.visible = true)
+		td.tween_property(drop, "position", ground, 0.3).set_ease(Tween.EASE_IN)
+		td.tween_callback(drop.queue_free)
+		td.tween_callback(_burst.bind(ground, BLOOD, 0.8))
+	hud.flash(BLOOD, 0.2)
+	shake_t = 0.25
+	shake_amp = 0.25
+	if u.controlled:
+		hud.toast("BLOODBATH: ESCOLHA A HABILIDADE FORTALECIDA" + ("  (x%d)" % BATH_CHARGES_ULT if ult else ""), 1.8)
+
+
+## A habilidade do slot vai sair fortalecida pelo Bloodbath? Se sim, gasta uma carga (e, sobrando carga,
+## abre de novo o tempo de escolha).
+func _bath_use(u: Unit, slot: int) -> bool:
+	if u.bath_window <= 0.0 or u.bath_charges <= 0 or not BATH_SLOTS.has(slot):
+		return false
+	u.bath_charges -= 1
+	u.bath_window = BATH_WINDOW if u.bath_charges > 0 else 0.0
+	return true
+
+
+## Blood Consumed fortalecido: cura grande, regeneração nela e o Compartilhamento de Sangue na party toda.
+func _consumed_big(u: Unit) -> void:
+	var heal := u.max_hp * CONSUMED_BIG_HEAL
+	if u.party_t > 0.0:
+		_party_heal(u, heal)
+	else:
+		u.hp = minf(u.max_hp, u.hp + heal)
+		_popup(int(heal), BLOOD.lightened(0.35), 58, u.position + Vector3(0, 2.8, 0), "+")
+	u.mend_t = SHARE_TIME
+	u.mend_rate = CONSUMED_REGEN
+	for o in units:
+		if not o.alive or o == u:
+			continue
+		o.mend_t = SHARE_TIME
+		o.mend_rate = SHARE_REGEN
+		# o sangue passa dela pra cada aliado
+		_beam(u.position, o.position, Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.9), 0.5)
+		_impact_ring(o.position + Vector3(0, 0.3, 0), BLOOD.lightened(0.3), 1.6)
+		_burst(o.position + Vector3(0, 1.0, 0), BLOOD.lightened(0.2), 1.3)
+	_burst(u.position + Vector3(0, 1.0, 0), Color(1, 1, 1), 2.2)
+	_blood_return(u, 6)
+	if u.controlled:
+		hud.toast("COMPARTILHAMENTO DE SANGUE", 1.4)
+
+
+## Extração fortalecida pelo Bloodbath (no Blood Party): ela carrega a seringa na boss por EXTRACT_BIG_TIME.
+## O sangue vem cada vez mais grosso, uma esfera cresce na ponta da agulha, e quando ela solta a
+## explosão é enorme: muito dano e quase a vida inteira de volta.
+func _extract_big(u: Unit) -> void:
+	u.skill_cd[1] = EXTRACT_CD
+	u.lock_t = EXTRACT_BIG_TIME
+	u.channel_t = EXTRACT_BIG_TIME  # barra de conjuração no HUD (o disparo é pelo timer abaixo)
+	u.channel_total = EXTRACT_BIG_TIME
+	u.channel_slot = 1
+	u.set_meta("extracting", true)
+	u.face(BOSS_POINT - u.position)
+	u.syringe_stab(1.5, EXTRACT_BIG_TIME - 0.1)
+	u.set_fill(0.05, 0.0)
+	u.set_fill(1.0, EXTRACT_BIG_TIME)
+	var at := BOSS_POINT + Vector3(0, 2.4, 1.7)
+	if u.controlled:
+		hud.toast("EXTRAÇÃO TOTAL", 1.6)
+	# a esfera de sangue crescendo na boss
+	var orb_m := Fx.mat(Color(BLOOD.r * 2.6, BLOOD.g * 1.6, BLOOD.b * 1.6, 0.85), 0.0, true)
+	var orb := Fx.inst(fx_root, Fx.sphere(1.0), orb_m, at)
+	orb.scale = Vector3.ONE * 0.2
+	orb.create_tween().tween_property(orb, "scale", Vector3.ONE * 2.6, EXTRACT_BIG_TIME).set_ease(Tween.EASE_IN)
+	var steps := 24
+	for n in steps:
+		get_tree().create_timer(EXTRACT_BIG_TIME * n / steps, false).timeout.connect(func():
+			if not is_instance_valid(u) or not u.alive:
+				return
+			var k := float(n) / steps
+			_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * (1.5 + k * 2.5), BLOOD.g, BLOOD.b, 0.95), 0.14)
+			for j in 3:
+				var drop := Fx.inst(fx_root, Fx.sphere(0.1 + k * 0.12), Fx.mat(Color(1.8 + k * 2.0, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-2.4, 2.4), randf_range(-1.4, 3.0), 0))
+				var tw := drop.create_tween()
+				tw.tween_property(drop, "position", at, 0.16).set_ease(Tween.EASE_IN)
+				tw.tween_callback(drop.queue_free)
+			if n % 4 == 0:
+				_impact_ring(at, BLOOD.lightened(k * 0.4), 1.5 + k * 3.0)
+			shake_t = 0.12
+			shake_amp = 0.08 + k * 0.2
+			for m in u.syringe_mats:
+				(m as StandardMaterial3D).albedo_color = Color(3.2 + k * 6.0, 0.2 + k * 0.6, 0.4 + k * 0.6))
+	get_tree().create_timer(EXTRACT_BIG_TIME, false).timeout.connect(func():
+		if is_instance_valid(orb):
+			orb.queue_free()
+		if ended or not is_instance_valid(u) or not u.alive:
+			return
+		u.channel_t = 0.0
+		u.remove_meta("extracting")
+		# a explosão: clarão, coluna de sangue, ondas e uma chuva de gotas pra todo lado
+		_burst(at, Color(1, 1, 1), 9.0)
+		_burst(at, BLOOD, 13.0)
+		for k in 6:
+			_impact_ring(at, [Color(1, 1, 1), BLOOD, BLOOD.lightened(0.3)][k % 3], 4.0 + k * 2.2)
+		var col_m := Fx.mat(Color(BLOOD.r * 2.4, BLOOD.g * 1.5, BLOOD.b * 1.5, 0.9), 0.0, true)
+		var pillar := Fx.inst(fx_root, Fx.cyl(2.2, 2.8, 20.0), col_m, at + Vector3(0, 7.0, 0))
+		var tp := pillar.create_tween().set_parallel(true)
+		tp.tween_property(pillar, "scale", Vector3(0.05, 1.1, 0.05), 0.7).set_ease(Tween.EASE_IN)
+		tp.tween_property(col_m, "albedo_color:a", 0.0, 0.7)
+		tp.chain().tween_callback(pillar.queue_free)
+		for n in 28:
+			var a := n * TAU / 28.0
+			var sp := Fx.inst(fx_root, Fx.sphere(0.2), Fx.mat(Color(2.2, 0.15, 0.3), 0.0, true), at)
+			var ts := sp.create_tween().set_parallel(true)
+			ts.tween_property(sp, "position", at + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 9.0), 0.7).set_ease(Tween.EASE_OUT)
+			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.7)
+			ts.chain().tween_callback(sp.queue_free)
+		hud.flash(BLOOD, 0.45)
+		shake_t = 0.6
+		shake_amp = 0.7
+		boss.hit_flash()
+		_damage_boss(u, EXTRACT_BIG_DMG / (PARTY_DMG_MULT if u.party_t > 0.0 else 1.0), true, true)
+		if u.party_t > 0.0:
+			_party_heal(u, u.max_hp * EXTRACT_BIG_HEAL)
+		else:
+			u.hp = minf(u.max_hp, u.hp + u.max_hp * EXTRACT_BIG_HEAL)
+		_blood_return(u, 10)
+		for m in u.syringe_mats:
+			(m as StandardMaterial3D).albedo_color = Color(3.2, 0.2, 0.4) if u.party_t > 0.0 else Color(1.5, 0.08, 0.2)
+		u.set_fill(0.4, 0.4))
+
+
+## Extração (o slot do parry durante o Blood Party): ela crava a seringa na boss e fica EXTRACT_TIME
+## sugando. A seringa enche e brilha cada vez mais; no fim, explosão de sangue e uma cura grande.
+func _extract(u: Unit, big := false) -> void:
+	if big:
+		_extract_big(u)
+		return
+	u.skill_cd[1] = EXTRACT_CD
+	u.lock_t = EXTRACT_TIME
+	u.face(BOSS_POINT - u.position)
+	u.syringe_stab(1.5, EXTRACT_TIME - 0.1)
+	u.set_fill(0.05, 0.0)
+	u.set_fill(1.0, EXTRACT_TIME)
+	var at := BOSS_POINT + Vector3(0, 2.2, 1.7)
+	if u.controlled:
+		hud.toast("EXTRAÇÃO", 1.0)
+	var steps := 10
+	for n in steps:
+		get_tree().create_timer(EXTRACT_TIME * n / steps, false).timeout.connect(func():
+			if not is_instance_valid(u) or not u.alive:
+				return
+			# fluxo de sangue da boss pra seringa, cada vez mais forte
+			_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * (1.5 + n * 0.25), BLOOD.g, BLOOD.b, 0.9), 0.16)
+			for k in 2:
+				var drop := Fx.inst(fx_root, Fx.sphere(0.1 + n * 0.008), Fx.mat(Color(1.8 + n * 0.15, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-1.4, 1.4), randf_range(-1.0, 1.6), 0))
+				var tw := drop.create_tween()
+				tw.tween_property(drop, "position", u.position + Vector3(0.4, 1.1, -0.6), 0.14).set_ease(Tween.EASE_IN)
+				tw.tween_callback(drop.queue_free)
+			for m in u.syringe_mats:
+				(m as StandardMaterial3D).albedo_color = Color(3.2 + n * 0.5, 0.2 + n * 0.05, 0.4 + n * 0.05))
+	get_tree().create_timer(EXTRACT_TIME, false).timeout.connect(func():
+		if ended or not is_instance_valid(u) or not u.alive:
+			return
+		_burst(at, Color(1, 1, 1), 3.0)
+		_burst(at, BLOOD, 5.5)
+		for k in 3:
+			_impact_ring(at, BLOOD.lightened(k * 0.15), 3.0 + k * 1.5)
+		hud.flash(BLOOD, 0.22)
+		shake_t = 0.3
+		shake_amp = 0.35
+		boss.hit_flash()
+		_damage_boss(u, EXTRACT_DMG / PARTY_DMG_MULT, true, true)
+		if u.party_t > 0.0:
+			_party_heal(u, u.max_hp * EXTRACT_HEAL)
+		else:
+			u.hp = minf(u.max_hp, u.hp + u.max_hp * EXTRACT_HEAL)
+		_blood_return(u, 6)
+		for m in u.syringe_mats:
+			(m as StandardMaterial3D).albedo_color = Color(3.2, 0.2, 0.4) if u.party_t > 0.0 else Color(1.5, 0.08, 0.2)
+		u.set_fill(0.4, 0.4))
+
+
 ## Fim do Blood Taste: a vida volta ao que era antes. Se um golpe acertou durante a janela (parry
 ## perfeito), ela guarda metade do que ganhou e a recarga cai pra 10 s.
 func _end_taste(u: Unit) -> void:
@@ -3160,10 +5805,19 @@ func _end_taste(u: Unit) -> void:
 	if not u.alive:
 		return
 	if u.taste_hit:
+		# o Sangue só entra aqui: parry que não aparou nada não rende nada
+		_add_stacks(u, TASTE_STACKS)
 		var keep := gained * TASTE_KEEP
 		u.hp = minf(u.max_hp, u.taste_prev + keep)
 		u.skill_cd[1] = minf(u.skill_cd[1], TASTE_CD_PARRY - TASTE_TIME)
 		_burst(u.position, Color(1.0, 0.95, 0.9), 3.0)
+		# parry bem-sucedido: explosão de sangue e energia, bem visível
+		_burst(u.position + Vector3(0, 1.0, 0), BLOOD, 4.6)
+		for k in 3:
+			_impact_ring(u.position + Vector3(0, 0.4 + k * 0.5, 0), [Color(1, 1, 1), BLOOD, BLOOD.lightened(0.3)][k], 2.6 + k * 1.2)
+		shake_t = 0.25
+		shake_amp = 0.3
+		_blood_return(u, 4)
 		_popup(int(u.hp - u.taste_prev), BLOOD.lightened(0.35), 60, u.position + Vector3(0, 2.6, 0), "+")
 		if u.controlled:
 			hud.flash(Color(1.0, 1.0, 1.0, 0.25))
@@ -3177,19 +5831,41 @@ func _tick_blood(u: Unit, delta: float) -> void:
 		u.taste_t -= delta
 		if u.taste_t <= 0.0:
 			_end_taste(u)
-	if u.party_t > 0.0:
-		u.party_t -= delta
+	if u.blood_orbit != null:
+		# as gotas de sangue giram em volta dela; mais rápido no Blood Party e com a vida baixa
+		u.blood_orbit.rotation.y += delta * (5.0 if u.party_t > 0.0 else (2.6 if u.hp / u.base_hp < 0.35 else 1.2))
+		u.blood_orbit.scale = Vector3.ONE * (1.6 if u.party_t > 0.0 else 1.0)
+	if u.key == "nurse" and u.alive and u.party_t <= 0.0 and u.hp / u.base_hp <= 0.3:
+		# vida baixa: pulso de sangue no chão, no ritmo de um coração
 		u.party_tick -= delta
 		if u.party_tick <= 0.0:
-			u.party_tick = PARTY_TICK
-			_burst(u.position, BLOOD, 4.4)
-			if u.position.distance_to(BOSS_POINT) <= PARTY_R:
-				_damage_boss(u, PARTY_DMG, true, false)
+			u.party_tick = 0.8
+			_impact_ring(u.position + Vector3(0, 0.15, 0), BLOOD, 1.5)
+	if u.party_t > 0.0:
+		u.party_t -= delta
+		# cura e escudo de fora não entram: a vida que vale é a que ela mesma roubou
+		if u.hp > u.party_hp:
+			u.hp = u.party_hp
+		u.party_hp = u.hp
+		u.shield_hp = 0.0
+		u.party_tick -= delta
+		if u.party_tick <= 0.0:
+			# aura de energia sanguínea, mais rápida conforme o tempo acaba (a urgência)
+			u.party_tick = lerpf(0.25, 0.8, clampf(u.party_t / PARTY_TIME, 0.0, 1.0))
+			_impact_ring(u.position + Vector3(0, 0.3, 0), BLOOD.lightened(0.2) if u.hp < u.max_hp else Color(1, 1, 1), 2.2)
 		if u.party_t <= 0.0:
-			# acabou: ela fica com 1 de vida e precisa se recuperar
 			u.party_t = 0.0
-			u.hp = 1.0
-			_burst(u.position, BLOOD.darkened(0.4), 2.0)
+			u.bath_free = false  # não usou: perdeu
+			u.blood_party_end()
+			if u.hp >= u.max_hp - 0.5:
+				# conseguiu: sai com a vida cheia
+				u.hp = u.max_hp
+				_burst(u.position, Color(1, 1, 1), 3.0)
+				if u.controlled:
+					hud.toast("SOBREVIVEU AO BLOOD PARTY", 1.6)
+			else:
+				_burst(u.position, BLOOD.darkened(0.3), 5.0)
+				kill(u, "não recuperou a vida toda no Blood Party")
 
 
 # ---------------------------------------------------------------- Limit Break
@@ -4042,6 +6718,15 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 		dmg *= 1.2
 	if boss_hp / boss_max < 0.3 and Knowledge.has(u.hero, "executor"):
 		dmg *= 1.25
+	if not get_dot("ferida").is_empty():
+		dmg *= WOUND_MULT  # Ferimento das Garras Cruzadas: vale pra party toda
+	if not u.controlled and Knowledge.has(u.hero, "dps"):
+		dmg *= AI_ROT_MULT  # IA com a carta Rotação: joga o kit inteiro, com parte do dano do jogador
+	if u.key == "nurse" and u.party_t > 0.0:
+		# Blood Party: bate o dobro e rouba vida em cima do dano causado (menos o DoT Pure Blood)
+		dmg *= PARTY_DMG_MULT
+		if not plain_hit:
+			_party_heal(u, dmg * PARTY_STEAL)
 	# Malpractice com o gauge de sangue cheio: cada golpe direto devolve um pedaço da vida máxima
 	if u.key == "nurse" and show and u.stacks >= PARTY_NEED:
 		_lifesteal(u, u.base_hp * GAUGE_STEAL)
@@ -4049,6 +6734,8 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 	lb = minf(1.0, lb + dmg / (boss_max * LB_NEED) * (1.5 if Knowledge.has(u.hero, "spark") else 1.0))
 	u.dmg_total += dmg
 	u.dmg_bucket += dmg
+	if u.key == "assassina" and u.frenzy_t > 0.0:
+		u.frenzy_dmg += dmg
 	u.enmity += dmg * (TANK_STANCE if u.tank else 1.0)
 	if show:
 		boss.hit_flash()
@@ -4099,6 +6786,12 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 	if u.immortal_t > 0.0:
 		_burst(u.position, Color(1.0, 0.9, 0.5), 1.4)
 		return
+	if u.parry_t > 0.0 and dmg > 0.0 and u.mercy_frenzy:
+		# Misericórdia em Frenesi: o golpe não entra e ela nem perde o corte
+		_burst(u.position + Vector3(0, 1.0, 0), Color(0.75, 0.2, 1.0), 2.4)
+		if u.controlled:
+			hud.toast("INTOCÁVEL", 0.7)
+		return
 	if u.parry_t > 0.0 and dmg > 0.0:
 		# Golpe de Misericórdia usado como parry: o golpe da boss não entra e o corte não sai.
 		# (Mecânica que mata na hora passa por kill(), não por aqui: essa o parry não salva.)
@@ -4113,6 +6806,8 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 		u.taste_hit = true  # golpe durante o Blood Taste = parry perfeito
 	if u.guard_t > 0.0:
 		dmg *= MITIGATION
+	if u.bath_t > 0.0:
+		dmg *= BATH_MULT  # coberto pelo Bloodbath
 	if u.wall_t > 0.0:
 		dmg *= WALL_MULT
 	if u.ward_t > 0.0:
@@ -4131,6 +6826,10 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 			_burst(u.position, Color(0.45, 0.9, 1.0), 1.4)
 			return
 	u.hp -= dmg
+	if u.party_t > 0.0:
+		# Blood Party: o golpe entra, mas ela não morre enquanto dura
+		u.hp = maxf(1.0, u.hp)
+		u.party_hp = u.hp
 	hit_count[reason] = hit_count.get(reason, 0) + 1
 	u.flash_hit(dmg / u.max_hp)
 	_popup(int(dmg), DANGER.lightened(0.3), 72, u.position + Vector3(0, 2.6, 0), "-")
@@ -4146,6 +6845,10 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 
 func kill(u: Unit, reason: String, force := false) -> void:
 	if not u.alive:
+		return
+	# Blood Party: não morre enquanto dura (só a Fúria passa)
+	if u.party_t > 0.0 and not force:
+		_burst(u.position, BLOOD, 2.0)
 		return
 	# imortal (Limit Break do Tank) ignora até as mecânicas que matam na hora; só a Fúria passa
 	if u.immortal_t > 0.0 and not force:

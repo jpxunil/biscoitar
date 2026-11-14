@@ -19,6 +19,8 @@ var skill_asleep := false  # o Sleepwalker troca de barra quando dorme
 var skill_tip: SkillTip
 var _cut: Control  # destaque de habilidade importante em cena (só um por vez)
 var buff_layer: Control  # ícones dos buffs ativos, à direita do card de cada herói
+var party_fx: ColorRect  # Blood Party: a tela pulsando vermelho e roxo, cada vez mais forte
+var _party_mat: ShaderMaterial
 var swap_name: Label
 var swap_bar: Control
 var time_bar: Control
@@ -95,6 +97,18 @@ func setup(game) -> void:
 	biscoito.pivot_offset = Vector2(130, 130)
 	biscoito.modulate.a = 0.0
 	root.add_child(biscoito)
+	# visão psicodélica do Blood Party: ondas vermelhas e roxas nas bordas, somadas à imagem. O meio
+	# da tela fica limpo pra luta continuar legível.
+	party_fx = ColorRect.new()
+	party_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	party_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	party_fx.visible = false
+	var psh := Shader.new()
+	psh.code = PARTY_SHADER
+	_party_mat = ShaderMaterial.new()
+	_party_mat.shader = psh
+	party_fx.material = _party_mat
+	root.add_child(party_fx)
 	flash_rect = ColorRect.new()
 	flash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -219,7 +233,7 @@ func _build_party() -> void:
 		card.face = load("res://assets/portraits/%s_face.png" % g.units[i].key)
 		party.add_child(card)
 		cards.append(card)
-		# clicar foca o herói; quem troca de personagem é o Tab
+		# um clique foca o herói; dois cliques (ou o Tab) trocam de personagem
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
 		card.gui_input.connect(_on_card_input.bind(i))
 	party.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT, Control.PRESET_MODE_MINSIZE, 22)
@@ -253,7 +267,8 @@ func _draw_buffs() -> void:
 func _on_card_input(event: InputEvent, i: int) -> void:
 	if not (event is InputEventMouseButton) or not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
 		return
-	g.pick_hero(i)
+	# um clique foca o herói (alvo de cura, escudo, reviver); dois cliques trocam o controle pra ele
+	g.click_unit(i, event.double_click)
 
 
 func _build_legend() -> void:
@@ -304,6 +319,14 @@ func _build_skills() -> void:
 	skill_tip = SkillTip.new()
 	skill_tip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	fight_ui.add_child(skill_tip)
+
+
+## Clique num slot da barra: usa a habilidade, igual à tecla dele.
+func _on_slot_input(event: InputEvent, slot: int) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if not g.prep and not g.ended and not g.fury:
+			g.use_skill(g.units[g.ctrl], slot)
+		get_viewport().set_input_as_handled()
 
 
 func _tip_on(ui: SkillSlot, key: String, slot: int, asleep: bool) -> void:
@@ -372,7 +395,8 @@ func _build_lb() -> void:
 	holder.add_child(lb_text)
 
 	lb_button = Button.new()
-	lb_button.text = "LIMIT BREAK   I"
+	lb_button.text = "LIMIT BREAK   %s" % Binds.label("limit")
+	lb_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	lb_button.focus_mode = Control.FOCUS_NONE
 	lb_button.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	lb_button.add_theme_font_size_override("font_size", 18)
@@ -390,6 +414,8 @@ func _pill(col: Color, border: int, border_col: Color) -> StyleBoxFlat:
 	return sb
 
 
+var skill_rev := -1
+
 func _show_skills(i: int) -> void:
 	skill_for = i
 	skill_ui.clear()
@@ -400,15 +426,20 @@ func _show_skills(i: int) -> void:
 	var list: Array = g.kit(u)
 	skill_asleep = u.asleep
 	skill_tip.hide_tip()
-	for n in list.size():
+	skill_rev = Knowledge.layout_rev
+	for pos in list.size():
+		# a barra segue a ordem que o jogador arrumou na tela SKILLS: n é a habilidade nesta posição
+		var n: int = Knowledge.skill_at(u.hero, pos, list.size())
 		if list[n] == null:
 			continue
-		# ícone da habilidade + a TECLA atual do slot (Binds). O mesmo arquivo de ícone da tela SKILLS.
+		# ícone da habilidade + a TECLA atual da posição (Binds). O mesmo arquivo de ícone da tela SKILLS.
 		var ui := SkillSlot.new()
 		ui.icon = SkillInfo.icon(u.key, n, u.asleep)
-		ui.key_text = Binds.label("skill_%d" % (n + 1))
+		ui.key_text = Binds.label("skill_%d" % (pos + 1))
 		ui.accent = u.color.lightened(0.25)
 		ui.mouse_entered.connect(_tip_on.bind(ui, u.key, n, u.asleep))
+		ui.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		ui.gui_input.connect(_on_slot_input.bind(n))
 		ui.mouse_exited.connect(skill_tip.hide_tip)
 		skill_row.add_child(ui)
 		skill_ui.append({"slot": n, "ui": ui, "total": list[n]["cd"], "stacks": int(list[n].get("stacks", 0))})
@@ -498,11 +529,53 @@ func _process(delta: float) -> void:
 	var glow: int = g.glow_slot(me)
 	buff_layer.queue_redraw()
 	_tick_bullets(me)
+	if skill_rev != Knowledge.layout_rev and skill_for >= 0:
+		_show_skills(skill_for)  # a ordem da barra mudou na tela SKILLS
+		return
 	for s in skill_ui:
 		var n: int = s["slot"]
 		var ui: SkillSlot = s["ui"]
 		# habilidade fortalecida (sequência da Ringstar, Disparo da Maga, próxima do sonho): o slot brilha
 		ui.glow = n == glow
+		ui.rainbow = false
+		ui.glow_color = Color(1.0, 0.95, 0.6)
+		if me.key == "nurse" and me.bath_window > 0.0 and me.bath_charges > 0 and g.BATH_SLOTS.has(n):
+			# Bloodbath: as habilidades que podem sair fortalecidas brilham vermelho enquanto dá tempo de escolher
+			ui.glow = true
+			ui.glow_color = Color(1.0, 0.25, 0.35)
+		if me.key == "nurse" and n == 5:
+			var free: bool = me.party_t > 0.0 and me.bath_free
+			if free:
+				# Blood Party começou: o Bloodbath brilha porque agora sai de graça (uma vez)
+				ui.glow = true
+				ui.glow_color = Color(1.0, 0.25, 0.35)
+		if me.key == "assassina" and (n == 3 or n == 4) and me.frenzy_t > 0.0:
+			# Frenesi: Dança Carmesim (furacão) e Golpe de Misericórdia (serra) brilham roxo, estão mais fortes
+			ui.glow = true
+			ui.glow_color = Color(0.8, 0.3, 1.0)
+		if me.key == "assassina" and n == 5:
+			# janela da Última Dança: o botão do Frenesi troca de ícone, brilha e fica livre da recarga
+			var bonus: bool = me.finisher_t > 0.0
+			if bonus != s.get("bonus", false):
+				s["bonus"] = bonus
+				ui.icon = SkillInfo.bonus_icon("assassina") if bonus else SkillInfo.icon("assassina", 5)
+			if bonus:
+				ui.glow = true
+				ui.rainbow = true
+				ui.usable = true
+				ui.cd_left = 0.0
+				continue
+		if me.key == "burner" and n == 5 and me.skill_cd[5] <= 0.0 and not g.get_dot("zenite").is_empty():
+			# Juízo Solar pronto com a boss marcada: brilha em fogo verde, porque agora ele sai fortalecido
+			ui.glow = true
+			ui.glow_color = Color(0.3, 1.0, 0.45)
+		if me.key == "maga":
+			# Salva Astral com exatamente 6 balas (vai soltar a fada) e Canhão Estelar com o pente cheio
+			if n == 4 and me.bullets.size() == g.SALVO_FAIRY:
+				ui.glow = true
+			if n == 5 and me.bullets.size() == g.BULLET_MAX:
+				ui.glow = true
+				ui.rainbow = true
 		ui.locked = me.silence_t > 0.0 or me.air_t > 0.0
 		ui.cast_k = (1.0 - me.channel_t / me.channel_total) if (me.channel_t > 0.0 and me.channel_slot == n) else -1.0
 		if s["stacks"] > 0:
@@ -511,6 +584,15 @@ func _process(delta: float) -> void:
 			ui.cd_left = me.party_t
 			continue
 		ui.usable = true
+		if me.key == "nurse" and n == 5:
+			# Bloodbath: precisa do Sangue, a não ser o grátis do Blood Party
+			ui.usable = (me.party_t > 0.0 and me.bath_free) or me.stacks >= g.BATH_COST
+		if me.key == "maga" and n == 1:
+			# Rainbow Shots: precisa de pelo menos uma bala guardada
+			ui.usable = not me.bullets.is_empty()
+		if me.key == "maga" and n == 4:
+			# Salva Astral: sem recarga, só acende com as balas pra pagar
+			ui.usable = me.bullets.size() >= g.SALVO_COST
 		if me.key == "sleepwalker" and me.asleep and n < 5:
 			# dormindo: só a próxima da ordem, e só com Torpor pra pagar
 			ui.usable = n == me.dream_step and (n == 0 or me.torpor >= float(g.SKILLS_ASLEEP[n]["cost"]))
@@ -579,6 +661,21 @@ func _process(delta: float) -> void:
 		if toast_t <= 0.0:
 			toast_slab.visible = false
 	flash_rect.color.a = maxf(0.0, flash_rect.color.a - delta * 1.6)
+	# Blood Party de quem o jogador controla: a tela pulsa, e aperta conforme o tempo acaba
+	var in_party: bool = me.alive and me.party_t > 0.0 and not g.ended
+	var in_frenzy: bool = me.alive and me.key == "assassina" and me.frenzy_t > 0.0 and not g.ended
+	party_fx.visible = in_party or in_frenzy
+	if in_party:
+		_party_mat.set_shader_parameter("urgency", 1.0 - clampf(me.party_t / g.PARTY_TIME, 0.0, 1.0))
+		_party_mat.set_shader_parameter("col_a", Vector3(1.0, 0.08, 0.2))
+		_party_mat.set_shader_parameter("col_b", Vector3(0.62, 0.12, 1.0))
+		_party_mat.set_shader_parameter("gain", 1.0)
+	elif in_frenzy:
+		# Frenesi da Fera: a mesma pulsação, em roxo, apertando conforme o Frenesi acaba
+		_party_mat.set_shader_parameter("urgency", 1.0 - clampf(me.frenzy_t / g.FRENZY_TIME, 0.0, 1.0))
+		_party_mat.set_shader_parameter("col_a", Vector3(0.55, 0.1, 1.0))
+		_party_mat.set_shader_parameter("col_b", Vector3(0.95, 0.2, 0.9))
+		_party_mat.set_shader_parameter("gain", 1.35)
 
 
 ## Faixa de recurso da classe, em cima da barra de habilidades. Só aparece pra quem tem recurso:
@@ -619,16 +716,38 @@ func _draw_bullets() -> void:
 				bullet_row.draw_rect(Rect2(420.0 * n / 4.0 - 1, 40, 2, 26), UiStyle.INK)
 			bullet_row.draw_string(f, Vector2(8, 58), "SANGUE  %d / %d" % [me.stacks, need], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, UiStyle.PAPER)
 			if me.party_t > 0.0:
+				# Blood Party: o tempo que falta e a vida que ainda precisa recuperar, bem à vista
+				var left: float = me.party_t / g.PARTY_TIME
+				var ok: bool = me.hp >= me.max_hp - 0.5
+				var warn := Color(0.4, 1.0, 0.6) if ok else Color(1.0, 0.3 + 0.5 * pulse, 0.35)
+				bullet_row.draw_rect(Rect2(-8, -6, 436, 40), UiStyle.INK)
+				bullet_row.draw_rect(Rect2(-4, -2, 428.0 * left, 10), warn)
+				bullet_row.draw_rect(Rect2(-4, 12, 428, 18), Color(0.2, 0.03, 0.08))
+				bullet_row.draw_rect(Rect2(-4, 12, 428.0 * clampf(me.hp / me.max_hp, 0.0, 1.0), 18), warn)
+				bullet_row.draw_string(f, Vector2(0, 26), ("VIDA CHEIA: AGUENTE %d s" % ceili(me.party_t)) if ok else ("RECUPERE A VIDA: %d / %d   ·   %d s" % [int(me.hp), int(me.max_hp), ceili(me.party_t)]), HORIZONTAL_ALIGNMENT_CENTER, 420, 13, UiStyle.INK if ok else UiStyle.PAPER)
 				bullet_row.draw_string(f, Vector2(0, 58), "BLOOD PARTY  %d s" % ceili(me.party_t), HORIZONTAL_ALIGNMENT_RIGHT, 412, 14, UiStyle.PAPER)
 			elif full:
 				bullet_row.draw_string(f, Vector2(0, 58), "CHEIO: CADA GOLPE CURA %d%%" % roundi(g.GAUGE_STEAL * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 412, 14, UiStyle.PAPER)
-			if me.hp / me.base_hp <= g.LOW_HP_FLOOR + 0.25:
+			if me.bath_window > 0.0 and me.bath_charges > 0:
+				# tempo de escolher a habilidade fortalecida pelo Bloodbath
+				var by := 78.0
+				bullet_row.draw_rect(Rect2(60, by, 300, 18), UiStyle.INK)
+				bullet_row.draw_rect(Rect2(62, by + 2, 296.0 * me.bath_window / g.BATH_WINDOW, 14), Color(1.0, 0.25, 0.35))
+				bullet_row.draw_string(f, Vector2(60, by + 14), "ESCOLHA: %d FORTALECIDA%s" % [me.bath_charges, "S" if me.bath_charges > 1 else ""], HORIZONTAL_ALIGNMENT_CENTER, 300, 12, UiStyle.PAPER)
+			if me.party_t <= 0.0 and me.hp / me.base_hp <= g.LOW_HP_FLOOR + 0.25:
 				bullet_row.draw_rect(Rect2(110, 12, 200, 20), UiStyle.INK)
 				bullet_row.draw_string(f, Vector2(110, 27), "VIDA BAIXA: +%d%% DE DANO" % roundi((g.low_hp_mult(me) - 1.0) * 100.0), HORIZONTAL_ALIGNMENT_CENTER, 200, 12, UiStyle.YELLOW)
 		"maga":
-			bullet_row.draw_rect(Rect2(60, 40, 300, 28), UiStyle.INK)
+			var all: bool = me.bullets.size() >= g.BULLET_MAX
+			bullet_row.draw_rect(Rect2(50, 40, 320, 28), UiStyle.INK)
+			if all:
+				# pente cheio: o Canhão Estelar vira o supercanhão
+				var hue := fmod(Time.get_ticks_msec() * 0.0006, 1.0)
+				bullet_row.draw_rect(Rect2(46, 36, 328, 36), Color.from_hsv(hue, 0.7, 1.0), false, 4.0)
+				bullet_row.draw_rect(Rect2(110, 14, 200, 20), UiStyle.INK)
+				bullet_row.draw_string(f, Vector2(110, 29), "SUPERCANHÃO PRONTO", HORIZONTAL_ALIGNMENT_CENTER, 200, 12, Color.from_hsv(hue, 0.5, 1.0))
 			for n in g.BULLET_MAX:
-				var c := Vector2(84 + n * 37, 54)
+				var c := Vector2(76 + n * 38, 54)
 				if n < me.bullets.size():
 					var col: Color = g.BULLETS[me.bullets[n]]["col"]
 					bullet_row.draw_circle(c, 12.0 if n == 0 else 9.0, UiStyle.PAPER)
@@ -714,6 +833,31 @@ func toast(text: String, time := 2.5) -> void:
 	toast_t = time
 
 
+## "PROVOKE!": etiqueta pequena do kit de papel que carimba ao lado da boss quando alguém pega a atenção dela.
+func provoke_tag(at: Vector2) -> void:
+	var tag := Chip.new()
+	tag.px = 20
+	tag.pad = 14.0
+	tag.border = 4.0
+	tag.fill = Paper.GOLD
+	tag.ink = Color("B0181A")
+	tag.shadow = Vector2(-4, 5)
+	tag.text = "PROVOKE!"
+	fight_ui.add_child(tag)
+	tag.position = at - tag.size * 0.5
+	tag.pivot_offset = tag.size * 0.5
+	tag.rotation = deg_to_rad(-7.0)
+	tag.scale = Vector2.ONE * 2.0
+	tag.modulate.a = 0.0
+	var tw := tag.create_tween()
+	tw.tween_property(tag, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(tag, "modulate:a", 1.0, 0.08)
+	tw.tween_property(tag, "rotation", deg_to_rad(-3.0), 0.5)
+	tw.tween_property(tag, "position:y", tag.position.y - 18.0, 0.35)
+	tw.parallel().tween_property(tag, "modulate:a", 0.0, 0.35)
+	tw.tween_callback(tag.queue_free)
+
+
 ## Mostra o rosto do biscoito: entra com fade e um leve crescimento, segura e some.
 func show_biscoito(hold := 0.7) -> void:
 	if _biscoito_tw != null:
@@ -787,11 +931,50 @@ func limit_cut(u: Unit) -> void:
 	holder.add_child(face)
 
 
+const PARTY_SHADER := "shader_type canvas_item;
+render_mode blend_add;
+uniform float urgency = 0.0;
+uniform vec3 col_a = vec3(1.0, 0.08, 0.2);
+uniform vec3 col_b = vec3(0.62, 0.12, 1.0);
+uniform float gain = 1.0;
+void fragment() {
+	vec2 d = UV - vec2(0.5);
+	float r = length(d * vec2(1.0, 0.72)) * 2.0;
+	float ang = atan(d.y, d.x);
+	// o pulso acelera com a urgência: de um batimento calmo a um piscar nervoso
+	float beat = 0.5 + 0.5 * sin(TIME * (5.0 + urgency * 16.0));
+	// ondas que giram e respiram: alternam vermelho e roxo em volta da tela
+	float wave = 0.5 + 0.5 * sin(ang * 3.0 + TIME * (1.5 + urgency * 4.0) + sin(r * 6.0 - TIME * 3.0));
+	vec3 col = mix(col_a, col_b, wave);
+	float edge = smoothstep(0.55 - urgency * 0.3, 1.25, r);
+	float a = edge * (0.22 + urgency * 0.5) * (0.55 + 0.45 * beat) * gain;
+	COLOR = vec4(col * a, a);
+}
+"
+
 ## Destaque de habilidade importante (game.gd marca com "big": true), só pra quem o JOGADOR controla:
 ## brilho pulsando nas bordas da tela na cor do herói, a arte dele entrando pela direita com halo e
 ## faíscas, e o nome da habilidade. Um por vez: usar outra troca o destaque em cena.
 const CUT_SHADER := "shader_type canvas_item;\nrender_mode blend_add;\nuniform vec4 tint : source_color = vec4(1.0);\nuniform float power = 0.0;\nvoid fragment() {\n\tvec2 d = abs(UV - vec2(0.5)) * 2.0;\n\tfloat edge = max(pow(d.x, 3.0), pow(d.y, 2.2));\n\tfloat corner = pow(d.x * d.y, 1.5);\n\tfloat a = clamp(smoothstep(0.35, 1.0, edge) * 0.8 + corner * 0.9, 0.0, 1.0) * power;\n\tCOLOR = vec4(tint.rgb * (1.0 + a), a);\n}\n"
 const CUT_HOLD := 0.95
+
+## Brilho rápido nas bordas e nos cantos da tela, na cor dada (golpes pesados de quem o jogador controla).
+func edge_glow(col: Color, power := 1.0, time := 0.5) -> void:
+	var edge := ColorRect.new()
+	edge.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = CUT_SHADER
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	mat.set_shader_parameter("tint", col)
+	edge.material = mat
+	fight_ui.add_child(edge)
+	var tw := edge.create_tween()
+	tw.tween_method(func(v: float): mat.set_shader_parameter("power", v), 0.0, power, 0.06)
+	tw.tween_method(func(v: float): mat.set_shader_parameter("power", v), power, 0.0, time)
+	tw.tween_callback(edge.queue_free)
+
 
 func skill_cut(u: Unit, skill_name: String) -> void:
 	if _cut != null and is_instance_valid(_cut):

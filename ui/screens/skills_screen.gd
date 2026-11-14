@@ -7,6 +7,9 @@ extends Control
 ## O número do slot é a posição na barra; a tecla vem do Binds e muda junto com os atalhos.
 ## Os ícones e os textos são os mesmos da barra da luta (SkillInfo).
 ##   A D / ← → personagem · W S / ↑ ↓ habilidade · TAB modo (Sleepwalker) · ESC volta.
+## ARRUMAR A BARRA: segure uma linha e arraste até outra pra trocar as duas de posição (R restaura a
+## ordem original). Cada linha é uma POSIÇÃO da barra, com a tecla dela; a ordem fica em
+## Knowledge.layouts, por herói e por save, e vale na luta (barra, teclas e clique).
 
 signal back_pressed
 
@@ -39,6 +42,61 @@ var _d_desc: Label
 var _d_slot: Label
 var _pointer: Control
 var _t := 0.0
+var _drop_at := -1   # linha embaixo do que está sendo arrastado
+
+
+## A habilidade do kit que está na posição `pos` da barra deste herói.
+func _slot_at(pos: int) -> int:
+	return Knowledge.skill_at(hero, pos, SkillInfo.kit(_key(), asleep).size())
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_DRAG_END and _drop_at >= 0:
+		_drop_at = -1
+		for r in _rows:
+			r["root"].queue_redraw()
+
+
+func _drag_row(n: int) -> Variant:
+	sel = n
+	_show_detail(false)
+	var ghost := Control.new()
+	var pic := TextureRect.new()
+	pic.texture = SkillInfo.icon(_key(), _slot_at(n), asleep)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.size = Vector2(72, 72)
+	pic.position = Vector2(-36, -36)
+	pic.rotation = deg_to_rad(-6.0)
+	pic.modulate.a = 0.92
+	ghost.add_child(pic)
+	set_drag_preview(ghost)
+	return {"skill_pos": n, "hero": hero, "asleep": asleep}
+
+
+func _can_drop_row(n: int, data: Variant) -> bool:
+	var ok: bool = data is Dictionary and data.get("hero", -1) == hero and data.has("skill_pos") and int(data["skill_pos"]) != n
+	var at := n if ok else -1
+	if at != _drop_at:
+		_drop_at = at
+		for r in _rows:
+			r["root"].queue_redraw()
+	return ok
+
+
+func _drop_row(n: int, data: Variant) -> void:
+	_drop_at = -1
+	Knowledge.swap_skills(hero, int(data["skill_pos"]), n, SkillInfo.kit(_key(), asleep).size())
+	sel = n
+	_fill_list()
+	_show_detail(true)
+	# as duas linhas trocadas dão um pulinho
+	for at in [n, int(data["skill_pos"])]:
+		if at < _rows.size():
+			var slot: Control = _rows[at]["slot"]
+			slot.pivot_offset = slot.size * 0.5
+			slot.scale = Vector2.ONE * 1.35
+			slot.create_tween().tween_property(slot, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _ready() -> void:
@@ -216,9 +274,9 @@ func _build() -> void:
 	_d_desc.size = Vector2(350, 256)
 	_stage.add_child(_d_desc)
 
-	var hint := Paper.label("A D personagem  ·  W S habilidade  ·  ESC volta", 14, DIM, Paper.body(700))
-	hint.position = Vector2(930, 694)
-	hint.size = Vector2(330, 20)
+	var hint := Paper.label("SEGURE E ARRASTE pra trocar de slot  ·  R restaura  ·  A D personagem  ·  W S habilidade  ·  ESC volta", 14, DIM, Paper.body(700))
+	hint.position = Vector2(500, 694)
+	hint.size = Vector2(760, 20)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_stage.add_child(hint)
 
@@ -305,7 +363,9 @@ func _fill_list() -> void:
 	_mode_btn.fill = Color("C04BFF") if asleep else Paper.CREAM
 	_mode_btn.fg = Paper.CREAM if asleep else Paper.INK
 	for n in list.size():
-		var info := SkillInfo.info(key, n, asleep)
+		# n é a POSIÇÃO na barra; k é a habilidade do kit que o jogador pôs nela
+		var k := _slot_at(n)
+		var info := SkillInfo.info(key, k, asleep)
 		var row := Control.new()
 		row.position = Vector2(0, n * ROW_H)
 		row.size = Vector2(446, ROW_H - 8)
@@ -316,12 +376,15 @@ func _fill_list() -> void:
 				sel = n
 				_show_detail(true))
 		row.draw.connect(_draw_row.bind(row, n))
+		row.set_drag_forwarding(func(_at: Vector2): return _drag_row(n),
+			func(_at: Vector2, data: Variant): return _can_drop_row(n, data),
+			func(_at: Vector2, data: Variant): _drop_row(n, data))
 		_list.add_child(row)
 		var slot := SkillSlot.new()
 		slot.custom_minimum_size = Vector2(62, 62)
 		slot.size = Vector2(62, 62)
 		slot.position = Vector2(34, 6)
-		slot.icon = SkillInfo.icon(key, n, asleep)
+		slot.icon = SkillInfo.icon(key, k, asleep)
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.set_process(false)
 		row.add_child(slot)
@@ -390,6 +453,10 @@ func _draw_row(row: Control, n: int) -> void:
 		row.draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]), Paper.GOLD, 3.0, true)
 	else:
 		row.draw_colored_polygon(pts, Color(0.07, 0.08, 0.2, 0.55))
+	if n == _drop_at:
+		# é aqui que a habilidade arrastada vai cair
+		row.draw_colored_polygon(pts, Color(Paper.GOLD.r, Paper.GOLD.g, Paper.GOLD.b, 0.22))
+		row.draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]), Paper.GOLD, 4.0, true)
 
 
 func _show_detail(animate: bool) -> void:
@@ -401,8 +468,8 @@ func _show_detail(animate: bool) -> void:
 		_rows[n]["slot"].selected = n == sel
 		_rows[n]["slot"].queue_redraw()
 	_pointer.position = Vector2(14, _list.position.y + sel * ROW_H + 21)
-	var info := SkillInfo.info(key, sel, asleep)
-	_d_icon.texture = SkillInfo.icon(key, sel, asleep)
+	var info := SkillInfo.info(key, _slot_at(sel), asleep)
+	_d_icon.texture = SkillInfo.icon(key, _slot_at(sel), asleep)
 	_d_slot.text = "SLOT %d%s" % [sel + 1, "  ·  DORMINDO" if asleep else ""]
 	_d_name.text = String(info["name"]).to_upper()
 	var px := 26
@@ -496,6 +563,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			sel = posmod(sel + 1, count)
 			_show_detail(true)
 		KEY_TAB: _toggle_mode()
+		KEY_R:
+			Knowledge.reset_layout(hero)
+			_fill_list()
+			_show_detail(true)
 		KEY_ESCAPE: back_pressed.emit()
 		_: return
 	get_viewport().set_input_as_handled()

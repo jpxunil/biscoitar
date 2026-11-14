@@ -26,7 +26,7 @@ const HEROES := [
 	{"key": "nurse", "name": "Malpractice", "role": "Tanque de Sangue", "color": Color(0.36, 0.4, 0.95), "hp": 80, "tank": true,
 		"blurb": "De papel: sangra a cada golpe. Vive de parry e bate mais forte quase morta."},
 	# Classes novas (design/classes-v2.md).
-	{"key": "burner", "name": "Soulburner", "role": "DPS à distância", "color": Color(1.0, 0.55, 0.25), "hp": 90,
+	{"key": "burner", "name": "Soulburner", "role": "DPS à distância", "color": Color(0.12, 0.82, 0.78), "hp": 90,
 		"blurb": "Anjo do fogo: marca o inimigo e estoura a marca com uma lança na hora certa."},
 	{"key": "ringstar", "name": "Ringstar", "role": "DPS corpo a corpo", "color": Color(1.0, 0.45, 0.75), "hp": 110,
 		"blurb": "Boxeadora estelar: Jab, Direto, Gancho. O botão que brilha é o próximo."},
@@ -105,8 +105,8 @@ const CARDS := {
 	"spark": {"name": "Faísca de Limite", "kind": "gold", "cat": "utility", "price": 200,
 		"desc": "O dano dele enche o Limit Break 50% mais rápido."},
 	# ---- roxas
-	"dps": {"name": "Rotação", "kind": "purple", "cat": "attack", "earn": "Segure um DPS bom com o herói por 20 s.",
-		"desc": "Bate mais forte. Assassina e Maga soltam o golpe de 20 s sempre que dá."},
+	"dps": {"name": "Rotação", "kind": "purple", "cat": "attack", "earn": "Jogue bem com o herói: DPS bom e rotação limpa por 25 s.",
+		"desc": "Consegue fazer uma rotação funcional com um DPS bom: usa as habilidades do próprio kit, na ordem certa, logo que elas voltam."},
 	"mark": {"name": "Marca Elemental", "kind": "purple", "cat": "special", "earn": "Passe pelo Cataclismo com a party inteira viva.",
 		"desc": "Resolve a Marca Elemental sozinho: zona oposta, par e abrigo."},
 	"revive": {"name": "Reviver Automático", "kind": "purple", "cat": "special", "who": ["healer"], "ticket": 1,
@@ -157,7 +157,7 @@ const SECRETS := {
 	"breath": ["Até o adversário mais doce deixa algo pra trás.",
 		"Algumas recompensas esperam atrás da luta que quase ninguém leva a sério."],
 	"dps": ["Cada herói tem um ritmo próprio.",
-		"Quem sustenta esse ritmo com as próprias mãos, por tempo suficiente, ensina o herói a dançar sozinho."],
+		"Não basta bater forte: quem não deixa botão parado nem golpe esperando ensina o herói a dançar sozinho."],
 	"mark": ["A tempestade respeita quem a cruza inteiro.",
 		"Há um cataclismo que cobra um preço de quase todo grupo. Passe por ele sem deixar ninguém pra trás."],
 	# loja, por moedas (ela abre depois da primeira vitória)
@@ -202,8 +202,8 @@ const RANK_COINS := [20, 40, 60, 90, 120, 160, 220, 300, 400]
 const MINI_REWARD := 0.4
 const LOW_HP := 0.5
 ## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói pra liberar a Rotação.
-const DPS_GOAL := {"tank": 14.0, "nurse": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0, "burner": 34.0, "ringstar": 36.0, "apothecary": 22.0, "sleepwalker": 45.0}
-const DPS_WINDOW := 20
+const DPS_GOAL := {"tank": 14.0, "nurse": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0, "burner": 26.0, "ringstar": 36.0, "apothecary": 22.0, "sleepwalker": 45.0}
+const DPS_WINDOW := 25
 ## Saves: SLOT_COUNT arquivos independentes (user://save_1.json ...). Cada um guarda o progresso,
 ## as cartas e a party daquele save; nada passa de um pro outro. LEGACY_SAVE é o arquivo único de
 ## antes dos slots: na primeira vez ele vira o save 1.
@@ -231,6 +231,11 @@ static var shop_unlocked := false
 ## personagem (has_new) e pelo selo NOVO na carta (is_new). Sai da lista quando o jogador passa o
 ## mouse na carta, na tela de cartas daquele herói (see_new). Vai pro save.
 static var fresh := {}
+## Ordem das habilidades na barra, por herói: layouts[hero][posição] = habilidade do kit. O jogador
+## arruma na tela SKILLS (arrastando). Quem não mexeu não tem entrada: vale a ordem do kit. As teclas
+## (Binds skill_1..6) são das POSIÇÕES, então trocar a ordem troca qual tecla solta cada habilidade.
+static var layouts := {}
+static var layout_rev := 0
 ## Rotação é de cada herói: chave do herói -> true.
 static var dps_known := {}
 ## Melhor ranking por boss (índice -> índice em RANKS). Boss vencido libera o próximo.
@@ -552,6 +557,56 @@ static func reward(boss_i: int, rank: int) -> Dictionary:
 
 # ---------------------------------------------------------------- save
 
+static func layout(hero: int, count := 6) -> Array:
+	var base: Array = range(count)
+	if sandbox or not layouts.has(hero):
+		return base
+	var l: Array = layouts[hero]
+	# só vale se for mesmo uma permutação das habilidades do kit
+	if l.size() != count:
+		return base
+	for n in count:
+		if not l.has(n):
+			return base
+	return l
+
+
+## A habilidade do kit que está na posição `pos` da barra do herói.
+static func skill_at(hero: int, pos: int, count := 6) -> int:
+	if pos < 0 or pos >= count:
+		return pos
+	return int(layout(hero, count)[pos])
+
+
+## Em que posição da barra está a habilidade `slot` do kit.
+static func pos_of(hero: int, slot: int, count := 6) -> int:
+	var at: int = layout(hero, count).find(slot)
+	return slot if at < 0 else at
+
+
+## Troca de lugar o que está em duas posições da barra do herói, e grava.
+static func swap_skills(hero: int, a: int, b: int, count := 6) -> void:
+	if a == b or a < 0 or b < 0 or a >= count or b >= count:
+		return
+	var l: Array = layout(hero, count).duplicate()
+	var keep = l[a]
+	l[a] = l[b]
+	l[b] = keep
+	if l == range(count):
+		layouts.erase(hero)
+	else:
+		layouts[hero] = l
+	layout_rev += 1
+	save()
+
+
+static func reset_layout(hero: int) -> void:
+	if layouts.has(hero):
+		layouts.erase(hero)
+		layout_rev += 1
+		save()
+
+
 ## Tutorial (scripts/tutorial.gd): o jogador treina com um conjunto de cartas só do tutorial.
 ## enter_sandbox guarda o progresso de verdade e zera as cartas; leave_sandbox devolve tudo.
 ## Enquanto dura, nada é gravado em disco.
@@ -658,6 +713,9 @@ static func save() -> void:
 		"owned": owned.keys(), "decks": {}, "mastery": mastery, "money": money, "tickets": tickets,
 		"shop": shop_unlocked, "dps": dps_known.keys(), "rank": {}, "hero": start_hero, "boss": boss, "party": party,
 	}
+	data["layouts"] = {}
+	for h in layouts:
+		data["layouts"][str(h)] = layouts[h]
 	data["fresh"] = {}
 	for h in fresh:
 		data["fresh"][str(h)] = fresh[h]
@@ -674,6 +732,8 @@ static func save() -> void:
 static func reset_progress() -> void:
 	owned = {"dodge": true}
 	fresh = {}
+	layouts = {}
+	layout_rev += 1
 	decks = {}
 	mastery = {}
 	money = 0
@@ -780,6 +840,17 @@ static func _read(path: String) -> void:
 	boss = clampi(int(parsed.get("boss", 1)), 0, BOSS_INFO.size() - 1)
 	if not boss_open(boss):
 		boss = 1
+	# ordem das habilidades na barra (layout() confere se é uma permutação válida na hora de usar)
+	var saved_layouts: Dictionary = parsed.get("layouts", {})
+	for sh in saved_layouts:
+		var h := int(sh)
+		if h < 0 or h >= HEROES.size() or not (saved_layouts[sh] is Array):
+			continue
+		var l: Array = []
+		for v in saved_layouts[sh]:
+			l.append(int(v))
+		layouts[h] = l
+	layout_rev += 1
 	# cartas novas ainda não vistas: só as que existem e são do jogador
 	var news: Dictionary = parsed.get("fresh", {})
 	for sh in news:

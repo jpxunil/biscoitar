@@ -55,6 +55,44 @@ var bullet_t := 0.0
 var power_t := 0.0     # bala vermelha: mais dano
 var ward_t := 0.0      # bala azul: toma menos dano
 var pierce_next := false  # depois de uma bala, o próximo Disparo Rúnico sai fortalecido
+var salvo_t := 0.0     # escudo da Salva Astral de pé: só com ele o Ricochete volta nela
+var lock_t := 0.0      # presa no lugar e sem agir (supercanhão disparando)
+var cannon_bonus := 0.0  # dano da marca do Tiro Perfurante, travado quando o Canhão começou a conjurar
+var mercy_frenzy := false  # Golpe de Misericórdia dado em Frenesi: não toma dano e o corte sai mesmo assim
+## Malpractice: a seringa gigante (arma) e o escudo médico. São nós próprios, filhos de `visual`: quando
+## existir o modelo definitivo dela, é só pendurá-los nas mãos dele. `syringe_liquid` é o sangue dentro
+## do cilindro (set_fill enche e esvazia).
+var syringe: Node3D
+var syringe_liquid: MeshInstance3D
+var syringe_mats: Array = []
+var med_shield: Node3D
+var blood_orbit: Node3D
+var party_hp := 0.0    # vida "oficial" durante o Blood Party (cura de fora não entra)
+var bath_t := 0.0      # coberto pelo Bloodbath: toma menos dano (qualquer herói)
+var bath_free := false # Blood Party acabou de começar: o próximo Bloodbath sai de graça (uma vez só)
+var bath_window := 0.0 # Malpractice: tempo que resta pra escolher a habilidade fortalecida pelo Bloodbath
+var bath_charges := 0  # ... e quantas ainda saem fortalecidas (1; 3 no Blood Party)
+var poke_rush_t := 0.0 # Syringe Poke fortalecido: estocadas ainda mais rápidas enquanto dura
+var _party_tws: Array = []  # animações da transformação (canceladas se o Blood Party acabar antes delas)
+const SYRINGE_HOME := Vector3(0.52, 1.0, -0.2)
+const SHIELD_HOME := Vector3(-0.56, 0.95, -0.42)
+const SYRINGE_LEN := 1.5
+## Assassina: as duas adagas ([esquerda, direita]) e a habilidade bônus que aparece quando o Frenesi acaba.
+var daggers: Array[Node3D] = []
+var dagger_next := 0
+var _dagger_tw: Tween
+var frenzy_dmg := 0.0  # dano causado durante o Frenesi: a Última Dança devolve parte dele no corte final
+var finisher_t := 0.0  # janela da Última Dança (aberta por FINISH_WINDOW quando o Frenesi termina)
+## IA com a carta Rotação: quanto falta pra ela apertar cada habilidade que já voltou (-1 = em recarga).
+var ai_ready := [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+var haste_t := 0.0     # pressa (nuvem do Apotecário): anda mais rápido enquanto dura
+var gun: Node3D        # a pistola arcana (só a Maga tem)
+## Soulburner: as duas asas (fechadas nas costas; abrem no Rasante e no Juízo Solar) e o que a Lança
+## Serafim travou quando começou a ser conjurada.
+var wings: Array[Node3D] = []
+var _wing_tw: Tween
+var lance_amount := 0.0
+var lance_marked := false
 var dash_next := false    # bala amarela: o próximo Disparo dá um dash pra trás
 var ricochet_t := 0.0
 var ricochet_tick := 0.0
@@ -165,6 +203,67 @@ func setup(i: int, d: Dictionary) -> void:
 	Fx.inst(visual, Fx.sphere(0.3), Fx.mat(Color(1.0, 0.88, 0.8)), Vector3(0, 1.62, 0))
 	# faixa pra dar "frente" ao boneco
 	Fx.inst(visual, Fx.sphere(0.12), Fx.mat(Color.WHITE, 1.5), Vector3(0, 1.0, -0.36))
+	if key == "assassina":
+		# duas adagas curvas, uma em cada mão: lâmina clara, guarda dourada e cabo roxo
+		for s in [-1.0, 1.0]:
+			var hand := Node3D.new()
+			hand.position = _dagger_home(s)
+			visual.add_child(hand)
+			for k in 3:
+				# a lâmina em três gomos, pra fazer a curva
+				var seg := BoxMesh.new()
+				seg.size = Vector3(0.05, 0.13 - k * 0.03, 0.3)
+				var bm := Fx.inst(hand, seg, Fx.mat(Color(1.5, 1.7, 2.0), 0.0, true), Vector3(s * k * 0.05, k * 0.03, -0.2 - k * 0.27))
+				bm.rotation.y = s * -k * 0.18
+			var guard := BoxMesh.new()
+			guard.size = Vector3(0.26, 0.06, 0.06)
+			Fx.inst(hand, guard, Fx.mat(Color(1.0, 0.8, 0.25), 0.8), Vector3(0, 0, -0.03))
+			var grip := BoxMesh.new()
+			grip.size = Vector3(0.07, 0.07, 0.24)
+			Fx.inst(hand, grip, Fx.mat(Color(0.5, 0.24, 0.85), 0.4), Vector3(0, 0, 0.12))
+			daggers.append(hand)
+	if key == "nurse":
+		_build_syringe()
+		_build_med_shield()
+		# gotas de sangue flutuando em volta dela (giram em game._tick_blood)
+		blood_orbit = Node3D.new()
+		blood_orbit.position = Vector3(0, 1.3, 0)
+		visual.add_child(blood_orbit)
+		for n in 3:
+			var a := n * TAU / 3.0
+			var drop := Fx.inst(blood_orbit, Fx.sphere(0.07), Fx.mat(Color(1.6, 0.1, 0.25), 0.0, true), Vector3(cos(a) * 0.95, sin(a * 2.0) * 0.25, sin(a) * 0.95))
+			drop.scale = Vector3(1.0, 1.5, 1.0)
+	if key == "burner":
+		# asas de fogo celestial: duas lâminas verde-marinho nas costas, fechadas até a hora de abrir
+		for s in [-1.0, 1.0]:
+			var pivot := Node3D.new()
+			pivot.position = Vector3(s * 0.18, 1.25, 0.3)
+			visual.add_child(pivot)
+			for k in 3:
+				var feather := BoxMesh.new()
+				feather.size = Vector3(1.5 - k * 0.3, 0.34, 0.05)
+				var fm := Fx.inst(pivot, feather, Fx.mat(Color(0.2, 0.92, 0.8, 0.85).lerp(Color(0.85, 1.0, 0.95, 0.85), k * 0.3), 3.0, true),
+					Vector3(s * (0.7 - k * 0.12), 0.25 - k * 0.3, 0))
+				fm.rotation.z = s * (0.5 - k * 0.3)
+			pivot.scale = Vector3(0.25, 0.6, 1.0)
+			pivot.rotation.y = s * -1.1
+			wings.append(pivot)
+	if key == "maga":
+		# pistola arcana pequena na mão direita, de cristal azulado translúcido. Recua a cada disparo (kick).
+		gun = Node3D.new()
+		gun.position = Vector3(0.42, 1.05, -0.38)
+		visual.add_child(gun)
+		var glass := Color(0.45, 0.82, 1.0, 0.55)
+		var body := BoxMesh.new()
+		body.size = Vector3(0.15, 0.2, 0.6)
+		Fx.inst(gun, body, Fx.mat(glass, 1.6))
+		var barrel := Fx.inst(gun, Fx.cyl(0.055, 0.055, 0.3), Fx.mat(Color(0.7, 0.95, 1.0, 0.7), 2.2), Vector3(0, 0.03, -0.42))
+		barrel.rotation.x = PI / 2.0
+		var grip := BoxMesh.new()
+		grip.size = Vector3(0.12, 0.28, 0.15)
+		Fx.inst(gun, grip, Fx.mat(Color(0.4, 0.7, 1.0, 0.6), 1.2), Vector3(0, -0.2, 0.18))
+		# o núcleo de energia, visível por dentro do cristal
+		Fx.inst(gun, Fx.sphere(0.08), Fx.mat(Color(0.85, 1.0, 1.0), 5.0, true), Vector3(0, 0.02, -0.05))
 	if key == "ringstar":
 		# luvas de boxe: as mãos dela. Ficam em guarda na frente do corpo e batem com as habilidades.
 		for s in [-1.0, 1.0]:
@@ -185,7 +284,8 @@ func setup(i: int, d: Dictionary) -> void:
 	target_ring = Fx.inst(self, Fx.torus(0.92, 1.0), Fx.mat(Color(1.0, 0.12, 0.32), 3.0, true), Vector3(0, 0.05, 0))
 	target_ring.visible = false
 	# anel ciano fino = alvo escolhido pras suas curas
-	chosen_ring = Fx.inst(self, Fx.torus(0.8, 0.84), Fx.mat(Color(0.3, 0.9, 1.0), 3.0, true), Vector3(0, 0.06, 0))
+	# círculo em volta de quem está em foco (clique no card ou no boneco), como no lobby
+	chosen_ring = Fx.inst(self, Fx.torus(0.96, 1.12), Fx.mat(Color(0.3, 0.95, 1.0), 0.0, true), Vector3(0, 0.07, 0))
 	chosen_ring.visible = false
 	channel_ring = Fx.inst(self, Fx.torus(0.9, 1.0), Fx.mat(d["color"], 3.0, true), Vector3(0, 0.08, 0))
 	channel_ring.visible = false
@@ -307,6 +407,278 @@ func set_action(text: String, kind := 0) -> void:
 func face(dir: Vector3) -> void:
 	if dir.length() > 0.01:
 		visual.rotation.y = atan2(-dir.x, -dir.z)
+
+
+## Seringa gigante da Malpractice, apontando pra frente (-z): cilindro de vidro com o sangue dentro,
+## marcações de medida, flanges, êmbolo com cabo e uma agulha comprida de metal.
+func _build_syringe() -> void:
+	syringe = Node3D.new()
+	syringe.position = SYRINGE_HOME
+	visual.add_child(syringe)
+	var metal := Fx.mat(Color(0.82, 0.85, 0.92), 0.4)
+	var glass := Fx.mat(Color(0.75, 0.92, 1.0, 0.32), 0.6)
+	var blood := Fx.mat(Color(1.5, 0.08, 0.2), 0.0, true)
+	syringe_mats = [blood]
+	var along := func(mi: MeshInstance3D) -> MeshInstance3D:
+		mi.rotation.x = PI / 2.0
+		return mi
+	# sangue dentro (o comprimento muda com set_fill)
+	syringe_liquid = along.call(Fx.inst(syringe, Fx.cyl(0.17, 0.17, SYRINGE_LEN), blood, Vector3(0, 0, -SYRINGE_LEN * 0.5)))
+	# vidro
+	along.call(Fx.inst(syringe, Fx.cyl(0.22, 0.22, SYRINGE_LEN + 0.06), glass, Vector3(0, 0, -SYRINGE_LEN * 0.5)))
+	# marcações de medida
+	for n in 6:
+		var tick := BoxMesh.new()
+		tick.size = Vector3(0.16 if n % 2 == 0 else 0.1, 0.02, 0.025)
+		Fx.inst(syringe, tick, Fx.mat(Color(0.07, 0.08, 0.16)), Vector3(0, 0.225, -0.18 - n * 0.22))
+	# bico e agulha
+	along.call(Fx.inst(syringe, Fx.cyl(0.07, 0.2, 0.22), metal, Vector3(0, 0, -SYRINGE_LEN - 0.12)))
+	along.call(Fx.inst(syringe, Fx.cyl(0.006, 0.035, 1.25), Fx.mat(Color(0.95, 0.96, 1.0), 1.2), Vector3(0, 0, -SYRINGE_LEN - 0.85)))
+	# flanges (onde os dedos apoiam) e anel de metal
+	var flange := BoxMesh.new()
+	flange.size = Vector3(0.78, 0.07, 0.1)
+	Fx.inst(syringe, flange, metal, Vector3(0, 0, 0.03))
+	along.call(Fx.inst(syringe, Fx.cyl(0.25, 0.25, 0.08), metal, Vector3(0, 0, -0.04)))
+	# êmbolo: haste e cabo
+	var plunger := Node3D.new()
+	plunger.name = "Plunger"
+	syringe.add_child(plunger)
+	along.call(Fx.inst(plunger, Fx.cyl(0.06, 0.06, 0.8), metal, Vector3(0, 0, 0.42)))
+	along.call(Fx.inst(plunger, Fx.cyl(0.24, 0.24, 0.07), Fx.mat(Color(0.8, 0.1, 0.2), 0.5), Vector3(0, 0, 0.84)))
+	set_fill(0.35, 0.0)
+
+
+## Escudo médico: placa azul-marinho com aro de metal, cruz vermelha no centro e rebites.
+func _build_med_shield() -> void:
+	med_shield = Node3D.new()
+	med_shield.position = SHIELD_HOME
+	visual.add_child(med_shield)
+	var plate := BoxMesh.new()
+	plate.size = Vector3(0.95, 1.4, 0.1)
+	Fx.inst(med_shield, plate, Fx.mat(Color(0.12, 0.14, 0.34), 0.2))
+	var rim := BoxMesh.new()
+	rim.size = Vector3(1.05, 1.5, 0.06)
+	Fx.inst(med_shield, rim, Fx.mat(Color(0.8, 0.83, 0.9), 0.4), Vector3(0, 0, 0.03))
+	var red := Fx.mat(Color(1.4, 0.1, 0.2), 0.0, true)
+	for size in [Vector3(0.2, 0.7, 0.04), Vector3(0.6, 0.2, 0.04)]:
+		var bar := BoxMesh.new()
+		bar.size = size
+		Fx.inst(med_shield, bar, red, Vector3(0, 0.08, -0.07))
+	var white := BoxMesh.new()
+	white.size = Vector3(0.74, 0.84, 0.03)
+	Fx.inst(med_shield, white, Fx.mat(Color(0.95, 0.95, 1.0), 0.3), Vector3(0, 0.08, -0.055))
+	for p in [Vector2(-0.38, 0.6), Vector2(0.38, 0.6), Vector2(-0.38, -0.6), Vector2(0.38, -0.6)]:
+		Fx.inst(med_shield, Fx.sphere(0.045), Fx.mat(Color(0.85, 0.87, 0.95), 0.5), Vector3(p.x, p.y, -0.06))
+
+
+## Enche ou esvazia o reservatório da seringa (0..1) em `time` segundos; o êmbolo acompanha.
+func set_fill(v: float, time := 0.2) -> void:
+	if syringe == null:
+		return
+	v = clampf(v, 0.02, 1.0)
+	var plunger: Node3D = syringe.get_node("Plunger")
+	var back := -SYRINGE_LEN * (1.0 - v)
+	if time <= 0.0:
+		syringe_liquid.scale.y = v
+		syringe_liquid.position.z = -SYRINGE_LEN * (1.0 - v * 0.5)
+		plunger.position.z = back
+		return
+	var tw := syringe.create_tween().set_parallel(true)
+	tw.tween_property(syringe_liquid, "scale:y", v, time)
+	tw.tween_property(syringe_liquid, "position:z", -SYRINGE_LEN * (1.0 - v * 0.5), time)
+	tw.tween_property(plunger, "position:z", back, time)
+
+
+## Estocada com a seringa: vai `reach` pra frente, segura `hold` e volta.
+func syringe_stab(reach := 1.1, hold := 0.0) -> void:
+	if syringe == null:
+		return
+	syringe.rotation = Vector3.ZERO
+	syringe.position = SYRINGE_HOME + Vector3(0, 0, 0.3)
+	var tw := syringe.create_tween()
+	tw.tween_property(syringe, "position", SYRINGE_HOME + Vector3(-0.2, 0.1, -reach), 0.07)
+	if hold > 0.0:
+		tw.tween_interval(hold)
+	tw.tween_property(syringe, "position", SYRINGE_HOME, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _dagger_home(s: float) -> Vector3:
+	return Vector3(s * 0.5, 0.95, -0.28)
+
+
+## Golpe com as adagas da Assassina, no ritmo de cada habilidade. `move`:
+##   "cut" um corte com a próxima mão (alterna esquerda e direita) · "both" as duas cruzando ·
+##   "claws" três cortes rápidos alternados · "spin" as duas abertas pros lados (Dança Carmesim) ·
+##   "raise" as duas erguidas e depois descendo juntas (Golpe de Misericórdia) · "thrust" as duas pra frente.
+func dagger_anim(move: String, time := 0.4) -> void:
+	if daggers.is_empty():
+		return
+	if _dagger_tw != null:
+		_dagger_tw.kill()
+	var l := daggers[0]
+	var r := daggers[1]
+	var lh := _dagger_home(-1.0)
+	var rh := _dagger_home(1.0)
+	for d in daggers:
+		d.rotation = Vector3.ZERO
+		d.scale = Vector3.ONE
+	l.position = lh
+	r.position = rh
+	_dagger_tw = create_tween()
+	var tw := _dagger_tw
+	match move:
+		"cut":
+			var d: Node3D = daggers[dagger_next]
+			var s := -1.0 if dagger_next == 0 else 1.0
+			var home := _dagger_home(s)
+			dagger_next = 1 - dagger_next
+			d.position = home + Vector3(s * 0.5, 0.5, 0.1)
+			d.rotation = Vector3(-0.6, 0, s * -0.9)
+			tw.tween_property(d, "position", home + Vector3(s * -0.6, -0.2, -0.9), 0.06)
+			tw.parallel().tween_property(d, "rotation", Vector3(0.5, 0, s * 0.9), 0.06)
+			tw.tween_property(d, "position", home, 0.12)
+			tw.parallel().tween_property(d, "rotation", Vector3.ZERO, 0.12)
+		"both":
+			tw.tween_property(l, "position", lh + Vector3(0.7, 0.2, -0.9), 0.07)
+			tw.parallel().tween_property(r, "position", rh + Vector3(-0.7, 0.2, -0.9), 0.07)
+			tw.tween_property(l, "position", lh, 0.16)
+			tw.parallel().tween_property(r, "position", rh, 0.16)
+		"claws":
+			for n in 3:
+				var d: Node3D = daggers[n % 2]
+				var s := -1.0 if n % 2 == 0 else 1.0
+				var home := _dagger_home(s)
+				tw.tween_property(d, "position", home + Vector3(s * -0.5, 0.3 - n * 0.3, -1.0), 0.05)
+				tw.tween_property(d, "position", home, 0.05)
+		"spin":
+			tw.tween_property(l, "position", Vector3(-1.3, 1.1, 0), 0.06)
+			tw.parallel().tween_property(r, "position", Vector3(1.3, 0.9, 0), 0.06)
+			tw.parallel().tween_property(l, "rotation", Vector3(0, PI / 2.0, 0), 0.06)
+			tw.parallel().tween_property(r, "rotation", Vector3(0, -PI / 2.0, 0), 0.06)
+			tw.parallel().tween_property(l, "scale", Vector3.ONE * 1.6, 0.06)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE * 1.6, 0.06)
+			tw.tween_interval(time)
+			tw.tween_property(l, "position", lh, 0.12)
+			tw.parallel().tween_property(r, "position", rh, 0.12)
+			tw.parallel().tween_property(l, "rotation", Vector3.ZERO, 0.12)
+			tw.parallel().tween_property(r, "rotation", Vector3.ZERO, 0.12)
+			tw.parallel().tween_property(l, "scale", Vector3.ONE, 0.12)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE, 0.12)
+		"raise":
+			tw.tween_property(l, "position", Vector3(-0.25, 2.2, -0.1), 0.12)
+			tw.parallel().tween_property(r, "position", Vector3(0.25, 2.2, -0.1), 0.12)
+			tw.parallel().tween_property(l, "rotation", Vector3(-1.4, 0, 0), 0.12)
+			tw.parallel().tween_property(r, "rotation", Vector3(-1.4, 0, 0), 0.12)
+			tw.parallel().tween_property(l, "scale", Vector3.ONE * 1.5, 0.12)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE * 1.5, 0.12)
+			tw.tween_interval(maxf(0.0, time - 0.2))
+			tw.tween_property(l, "position", lh + Vector3(0.3, -0.3, -1.0), 0.07)
+			tw.parallel().tween_property(r, "position", rh + Vector3(-0.3, -0.3, -1.0), 0.07)
+			tw.parallel().tween_property(l, "rotation", Vector3(0.7, 0, 0), 0.07)
+			tw.parallel().tween_property(r, "rotation", Vector3(0.7, 0, 0), 0.07)
+			tw.tween_interval(0.12)
+			tw.tween_property(l, "position", lh, 0.14)
+			tw.parallel().tween_property(r, "position", rh, 0.14)
+			tw.parallel().tween_property(l, "rotation", Vector3.ZERO, 0.14)
+			tw.parallel().tween_property(r, "rotation", Vector3.ZERO, 0.14)
+			tw.parallel().tween_property(l, "scale", Vector3.ONE, 0.14)
+			tw.parallel().tween_property(r, "scale", Vector3.ONE, 0.14)
+		"thrust":
+			tw.tween_property(l, "position", lh + Vector3(0.15, 0.1, -1.0), 0.05)
+			tw.parallel().tween_property(r, "position", rh + Vector3(-0.15, 0.1, -1.0), 0.05)
+			tw.tween_interval(0.1)
+			tw.tween_property(l, "position", lh, 0.14)
+			tw.parallel().tween_property(r, "position", rh, 0.14)
+
+
+## Bloodbath: ergue a seringa pro alto (a agulha apontando pro céu) e segura enquanto o sangue chove.
+func syringe_raise(hold := 0.9) -> void:
+	if syringe == null:
+		return
+	var tw := syringe.create_tween()
+	tw.tween_property(syringe, "rotation", Vector3(PI / 2.0, 0, 0), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(syringe, "position", Vector3(0.45, 1.9, 0.0), 0.14)
+	tw.tween_callback(set_fill.bind(0.05, hold * 0.8))
+	tw.tween_interval(hold)
+	tw.tween_property(syringe, "rotation", Vector3.ZERO, 0.2)
+	tw.parallel().tween_property(syringe, "position", SYRINGE_HOME, 0.2)
+	tw.tween_callback(set_fill.bind(0.35, 0.3))
+
+
+## Blood Party: joga o escudo longe (arremesso em arco, girando), vira a seringa contra si e injeta.
+func blood_party_start() -> void:
+	if syringe == null:
+		return
+	for old in _party_tws:
+		if old != null:
+			old.kill()
+	var st := med_shield.create_tween().set_parallel(true)
+	st.tween_property(med_shield, "position", SHIELD_HOME + Vector3(-5.0, 0.4, 2.5), 0.5).set_ease(Tween.EASE_OUT)
+	st.tween_property(med_shield, "position:y", 3.4, 0.25).set_ease(Tween.EASE_OUT)
+	st.tween_property(med_shield, "rotation", Vector3(TAU * 1.5, TAU, 0.6), 0.5)
+	st.chain().tween_property(med_shield, "position:y", -0.6, 0.2).set_ease(Tween.EASE_IN)
+	st.chain().tween_callback(func(): med_shield.visible = false)
+	# a seringa vira e entra no próprio peito
+	var sy := syringe.create_tween()
+	sy.tween_property(syringe, "rotation", Vector3(0, PI * 0.82, 0), 0.16)
+	sy.parallel().tween_property(syringe, "position", Vector3(1.5, 1.25, -0.7), 0.16)
+	sy.tween_property(syringe, "position", Vector3(0.85, 1.2, -0.4), 0.08)
+	sy.tween_callback(set_fill.bind(0.05, 0.22))
+	sy.tween_interval(0.26)
+	sy.tween_property(syringe, "rotation", Vector3(-0.2, 0, 0), 0.14)
+	sy.parallel().tween_property(syringe, "position", SYRINGE_HOME + Vector3(0.1, 0.15, -0.25), 0.14)
+	# postura agressiva e a seringa em brasa
+	var pose := create_tween()
+	pose.tween_property(visual, "scale", Vector3(1.18, 1.12, 1.18), 0.3).set_delay(0.3)
+	_party_tws = [st, sy, pose]
+	for m in syringe_mats:
+		(m as StandardMaterial3D).albedo_color = Color(3.2, 0.2, 0.4)
+	set_fill(1.0, 0.4)
+
+
+func blood_party_end() -> void:
+	if syringe == null:
+		return
+	for old in _party_tws:
+		if old != null:
+			old.kill()
+	_party_tws = []
+	for m in syringe_mats:
+		(m as StandardMaterial3D).albedo_color = Color(1.5, 0.08, 0.2)
+	visual.scale = Vector3.ONE
+	syringe.rotation = Vector3.ZERO
+	syringe.position = SYRINGE_HOME
+	set_fill(0.35, 0.3)
+	med_shield.visible = true
+	med_shield.rotation = Vector3.ZERO
+	med_shield.position = SHIELD_HOME + Vector3(0, 2.5, 0)
+	med_shield.create_tween().tween_property(med_shield, "position", SHIELD_HOME, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Abre (ou fecha) as asas do Soulburner em `time` segundos. Abertas, elas batem de leve.
+func wings_open(open: bool, time := 0.2) -> void:
+	if wings.is_empty():
+		return
+	if _wing_tw != null:
+		_wing_tw.kill()
+	_wing_tw = create_tween().set_parallel(true)
+	for k in wings.size():
+		var s := -1.0 if k == 0 else 1.0
+		_wing_tw.tween_property(wings[k], "scale", Vector3(1.25, 1.2, 1.0) if open else Vector3(0.25, 0.6, 1.0), time).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_wing_tw.tween_property(wings[k], "rotation:y", s * (-0.25 if open else -1.1), time)
+
+
+## Recuo da pistola da Maga: a arma sobe e volta. `power` 1 = tiro comum; mais = tiro pesado.
+func kick(power := 1.0) -> void:
+	if gun == null:
+		return
+	gun.position = Vector3(0.42, 1.05 + 0.1 * power, -0.38 + 0.22 * power)
+	gun.rotation.x = 0.35 * power
+	var tw := gun.create_tween().set_parallel(true)
+	tw.tween_property(gun, "position", Vector3(0.42, 1.05, -0.38), 0.16 + 0.06 * power).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(gun, "rotation:x", 0.0, 0.16 + 0.06 * power)
+	visual.position.z = 0.12 * power
+	visual.create_tween().tween_property(visual, "position:z", 0.0, 0.14)
 
 
 func _glove_home(s: float) -> Vector3:
@@ -431,6 +803,16 @@ func die() -> void:
 	guard_t = 0.0
 	asleep = false
 	silence_t = 0.0
+	lock_t = 0.0
+	finisher_t = 0.0
+	bath_t = 0.0
+	bath_window = 0.0
+	bath_free = false
+	bath_charges = 0
+	poke_rush_t = 0.0
+	haste_t = 0.0
+	salvo_t = 0.0
+	cannon_bonus = 0.0
 	torpor_hold = 0.0
 	air_t = 0.0
 	torpor = 0.0

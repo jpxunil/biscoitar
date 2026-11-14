@@ -42,7 +42,7 @@ func _initialize() -> void:
 
 	# ---- menu principal -> opções
 	check(hud.menus.title.visible, "começa na tela inicial")
-	hud.menus.title.get_node("BtnOptions").pressed.emit()
+	hud.menus.title.get_node("Stage/BtnOptions").pressed.emit()
 	await process_frame
 	check(opt.visible, "OPÇÕES do menu principal abre a tela")
 	await key(KEY_ENTER)
