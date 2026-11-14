@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="sleepwalker_2_bg" cx="0.45" cy="0.6" r="0.75">
+<stop offset="0" stop-color="#8f8cf0"/><stop offset="0.55" stop-color="#4f51bd"/><stop offset="1" stop-color="#1c1b52"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#sleepwalker_2_bg)" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5"/>
+<!-- pull streaks -->
+<line x1="18" y1="40" x2="40" y2="24" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+<line x1="14" y1="58" x2="28" y2="48" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+<line x1="44" y1="16" x2="58" y2="12" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+<!-- billowing sheet -->
+<path d="M88,30 Q54,28 32,54 Q16,76 15,106 Q26,97 36,110 Q46,97 58,110 Q69,97 80,110 Q92,97 102,106 Q106,64 88,30 Z" fill="#ffffff" stroke="#121429" stroke-width="4.5" stroke-linejoin="round"/>
+<path d="M88,30 Q78,62 80,110 Q92,97 102,106 Q106,64 88,30 Z" fill="#cfc6ff"/>
+<path d="M88,30 Q60,40 46,62" fill="none" stroke="#B9A8FF" stroke-width="3" stroke-linecap="round"/>
+<path d="M60,84 Q58,96 58,106" fill="none" stroke="#B9A8FF" stroke-width="3" stroke-linecap="round"/>
+<path d="M34,82 Q34,94 36,106" fill="none" stroke="#B9A8FF" stroke-width="3" stroke-linecap="round"/>
+<path d="M26,72 Q32,56 44,46" fill="none" stroke="#fff5f8" stroke-width="3" stroke-linecap="round"/>
+<!-- ghostly hollows -->
+<ellipse cx="44" cy="72" rx="5" ry="7.5" fill="#3a3a8f" transform="rotate(12 44 72)"/>
+<ellipse cx="64" cy="66" rx="5" ry="7.5" fill="#3a3a8f" transform="rotate(12 64 66)"/>
+<ellipse cx="56" cy="88" rx="4" ry="5" fill="#7882E6"/>
+<!-- sleeve and fist -->
+<line x1="113" y1="13" x2="97" y2="24" stroke="#121429" stroke-width="19"/>
+<line x1="114" y1="12" x2="98" y2="23" stroke="#ffb3c7" stroke-width="11"/>
+<line x1="103" y1="12" x2="110" y2="22" stroke="#e98aa6" stroke-width="2.5"/>
+<circle cx="91" cy="29" r="10.5" fill="#FFEBDD" stroke="#121429" stroke-width="4.5"/>
+<path d="M84,30 Q88,36 94,37" fill="none" stroke="#121429" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M86,25 Q90,31 97,31" fill="none" stroke="#121429" stroke-width="2.5" stroke-linecap="round"/>
+<!-- accents -->
+<path d="M110,56 Q110,63 117,63 Q110,63 110,70 Q110,63 103,63 Q110,63 110,56 Z" fill="#ffffff"/>
+<path d="M22,18 Q22,23 27,23 Q22,23 22,28 Q22,23 17,23 Q22,23 22,18 Z" fill="#ffffff"/>
+<circle cx="112" cy="92" r="2.5" fill="#ffd6e6"/>
+<circle cx="110" cy="112" r="2" fill="#ffffff"/>
+</svg>

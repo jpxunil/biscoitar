@@ -21,6 +21,10 @@ static var THEMES := {
 	"healer": {"bg": Color("1f8a4c"), "bg2": Color("3fb86b"), "deep": Color("0e3320"), "deep2": Color("175030"), "acc": Color("ffcc40"), "acc_t": Color("121429")},
 	"assassina": {"bg": Color("5b2bb8"), "bg2": Color("7a3fe0"), "deep": Color("1e2460"), "deep2": Color("2b3384"), "acc": Color("ff5999"), "acc_t": Color("121429")},
 	"maga": {"bg": Color("e08a14"), "bg2": Color("ffc233"), "deep": Color("2b1509"), "deep2": Color("4a2612"), "acc": Color("c4201c"), "acc_t": Color("f7f1dc")},
+	"burner": {"bg": Color("d9622a"), "bg2": Color("ff9a4d"), "deep": Color("2b1206"), "deep2": Color("4a2010"), "acc": Color("3ff2e0"), "acc_t": Color("121429")},
+	"ringstar": {"bg": Color("d9408f"), "bg2": Color("ff73be"), "deep": Color("2a0f3a"), "deep2": Color("45195c"), "acc": Color("4fb8ff"), "acc_t": Color("121429")},
+	"apothecary": {"bg": Color("2f7a5c"), "bg2": Color("46a082"), "deep": Color("0c2018"), "deep2": Color("163a2c"), "acc": Color("4cff5a"), "acc_t": Color("121429")},
+	"sleepwalker": {"bg": Color("5a5fc8"), "bg2": Color("8a8ff0"), "deep": Color("191a45"), "deep2": Color("2a2c6b"), "acc": Color("ffc8e6"), "acc_t": Color("121429")},
 	# Gothic Nurse: azul-marinho, preto e branco, com o vermelho do sangue como destaque.
 	# `stage` (fundo atrás da arte) é claro porque a personagem é escura; `stripe3` é a terceira faixa.
 	"nurse": {"bg": Color("3a46b8"), "bg2": Color("5566e0"), "deep": Color("0e1030"), "deep2": Color("1a1e52"), "acc": Color("c0183a"), "acc_t": Color("f7f1dc"), "stage": Color("d9dcf5"), "stripe3": Color("0e1030")},

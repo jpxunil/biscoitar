@@ -148,10 +148,9 @@ func _initialize() -> void:
 	await key(KEY_ESCAPE)
 	check(not opt.visible and hud.pause.visible and paused, "ESC nas opções volta pro PAUSE, com a luta pausada")
 	var shown := false
-	for slab in hud.skill_row.get_children():
-		for l in slab.find_children("*", "Label", true, false):
-			if l.text == "M":
-				shown = true
+	for s in hud.skill_ui:
+		if s["slot"] == 1 and s["ui"].key_text == "M":
+			shown = true
 	var has_slot2: bool = main.SKILLS[main.units[main.ctrl].key].size() > 1 and main.SKILLS[main.units[main.ctrl].key][1] != null
 	check(shown or not has_slot2, "a barra de habilidades mostra a tecla nova do slot 2")
 	await key(KEY_F10)

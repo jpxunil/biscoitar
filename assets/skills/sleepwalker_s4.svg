@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="sleepwalker_s4_bg" cx="0.6" cy="0.55" r="0.8">
+<stop offset="0" stop-color="#4a2a8c"/><stop offset="0.55" stop-color="#221850"/><stop offset="1" stop-color="#0d0824"/>
+</radialGradient>
+<linearGradient id="sleepwalker_s4_light" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#eafff8"/><stop offset="0.5" stop-color="#7dffe0"/><stop offset="1" stop-color="#C04BFF"/>
+</linearGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#sleepwalker_s4_bg)" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1.5"/>
+<!-- light spilling on the floor -->
+<polygon points="70,112 96,112 112,120 50,120" fill="#7dffe0" opacity="0.4"/>
+<polygon points="84,20 100,16 116,10 118,40" fill="#7dffe0" opacity="0.12"/>
+<!-- crooked frame -->
+<polygon points="26,114 36,14 98,9 104,114" fill="#6a4aa8" stroke="#121429" stroke-width="5" stroke-linejoin="round"/>
+<polygon points="35,112 43,22 91,18 95,112" fill="url(#sleepwalker_s4_light)" stroke="#121429" stroke-width="4" stroke-linejoin="round"/>
+<!-- eye peeking through the gap -->
+<ellipse cx="84" cy="52" rx="7.5" ry="10" fill="#ffffff" stroke="#121429" stroke-width="3.5"/>
+<circle cx="83" cy="53" r="4.5" fill="#C04BFF" stroke="#121429" stroke-width="2"/>
+<circle cx="83" cy="53" r="1.6" fill="#121429"/>
+<!-- door leaf, ajar -->
+<polygon points="43,22 74,33 74,104 35,112" fill="#3b2a7a" stroke="#121429" stroke-width="4.5" stroke-linejoin="round"/>
+<polygon points="48,34 67,41 67,60 47,58" fill="#2A1E5C" stroke="#121429" stroke-width="2.5" stroke-linejoin="round"/>
+<polygon points="46,70 67,70 67,96 43,101" fill="#2A1E5C" stroke="#121429" stroke-width="2.5" stroke-linejoin="round"/>
+<line x1="45" y1="28" x2="40" y2="100" stroke="#6a4aa8" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="74" y1="34" x2="74" y2="103" stroke="#b9fff0" stroke-width="2" stroke-linecap="round"/>
+<circle cx="68" cy="65" r="3.8" fill="#f3ecd8" stroke="#121429" stroke-width="2.5"/>
+<!-- tendrils creeping out -->
+<g fill="none" stroke-linecap="round">
+<path d="M80,108 Q100,104 108,88 Q113,74 104,72 Q98,72 100,79" stroke="#121429" stroke-width="8.5"/>
+<path d="M80,108 Q100,104 108,88 Q113,74 104,72 Q98,72 100,79" stroke="#C04BFF" stroke-width="4"/>
+<path d="M82,84 Q94,74 98,56 Q102,42 112,44" stroke="#121429" stroke-width="8"/>
+<path d="M82,84 Q94,74 98,56 Q102,42 112,44" stroke="#e079ff" stroke-width="3.5"/>
+<path d="M78,100 Q64,104 56,114 Q52,118 46,115" stroke="#121429" stroke-width="8"/>
+<path d="M78,100 Q64,104 56,114 Q52,118 46,115" stroke="#C04BFF" stroke-width="3.5"/>
+<path d="M82,28 Q84,40 78,42" stroke="#121429" stroke-width="7"/>
+<path d="M82,28 Q84,40 78,42" stroke="#e079ff" stroke-width="3"/>
+</g>
+<!-- accents -->
+<circle cx="16" cy="30" r="2" fill="#7dffe0"/><circle cx="18" cy="76" r="2.2" fill="#efb8ff"/>
+<path d="M112,96 Q112,101 117,101 Q112,101 112,106 Q112,101 107,101 Q112,101 112,96 Z" fill="#b9fff0"/>
+</svg>

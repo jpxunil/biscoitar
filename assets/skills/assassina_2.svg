@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs><radialGradient id="assassina_2_bg" cx="0.5" cy="0.46" r="0.74"><stop offset="0" stop-color="#C22A4C"/><stop offset="0.55" stop-color="#5E1230"/><stop offset="1" stop-color="#1A0A1E"/></radialGradient></defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#assassina_2_bg)" stroke="#121429" stroke-width="6"/>
+<path d="M8 62 L70 38 L92 60 L70 84 Z" fill="#7CF29C" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M22 62 L68 47 L80 60 L68 74 Z" fill="#E4FFE9"/>
+<line x1="8" y1="40" x2="40" y2="30" stroke="#7CF29C" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+<line x1="8" y1="86" x2="34" y2="84" stroke="#7CF29C" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+<path d="M10 112 C40 103 92 101 119 106 C92 107 44 113 10 112 Z" fill="#E4FFE9" opacity="0.8"/>
+<g transform="translate(66 62)">
+<polygon points="-16,4 -4,16 -40,36 -47,27" fill="#8A3DD9" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="-14,6 -1,2 18,24 9,47 -3,44 3,28" fill="#8A3DD9" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="3,28 12,26 9,47 -3,44" fill="#5E1FA3"/>
+<polygon points="-16,6 -2,18 22,-6 10,-18" fill="#2A1238" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="6,-14 12,-2 34,6 37,-2" fill="#FF4D6A" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="34,-4 53,-1 36,10" fill="#F4F8FF" stroke="#121429" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M18 -32 C2 -40 -18 -34 -34 -16 C-20 -22 -8 -20 8 -12 Z" fill="#7CF29C" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="22" cy="-20" r="11" fill="#FF4D6A" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M12 -25 C16 -34 28 -35 34 -27 C26 -28 18 -26 12 -25 Z" fill="#7CF29C" stroke="#121429" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="25,-30 33,-40 33,-27" fill="#2A1238" stroke="#121429" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="24,-20 31,-18 25,-15" fill="#FFF36B"/>
+</g>
+<g transform="translate(110 28) scale(0.8)"><polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="#ffffff" /></g>
+<g transform="translate(106 90) scale(0.6)"><polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="#E4FFE9" /></g>
+<g transform="translate(22 18) scale(0.5)"><polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="#ffffff" /></g>
+<rect x="7.5" y="7.5" width="113" height="113" rx="12" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.22"/>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+</svg>

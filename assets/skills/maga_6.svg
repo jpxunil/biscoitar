@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="maga_6_bg" cx="0.6" cy="0.42" r="0.8">
+<stop offset="0" stop-color="#FFE08A"/>
+<stop offset="0.4" stop-color="#FF8A3A"/>
+<stop offset="1" stop-color="#3A1446"/>
+</radialGradient>
+<radialGradient id="maga_6_ball" cx="0.4" cy="0.4" r="0.7">
+<stop offset="0" stop-color="#FFFFFF"/>
+<stop offset="0.55" stop-color="#FFF08A"/>
+<stop offset="1" stop-color="#FFB02E"/>
+</radialGradient>
+<linearGradient id="maga_6_beam" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0" stop-color="#FFFFFF"/>
+<stop offset="1" stop-color="#7DF0FF"/>
+</linearGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#maga_6_bg)"/>
+<g transform="translate(56,76) rotate(-35)">
+<polygon points="6,-21 48,-27 58,-18 51,-9 61,0 51,9 58,18 48,27 6,21" fill="url(#maga_6_beam)" stroke="#121429" stroke-width="4.5" stroke-linejoin="round"/>
+<polygon points="6,-10 46,-13 52,-6 46,0 52,6 46,13 6,10" fill="#FFFFFF"/>
+<polygon points="-40,-15 0,-21 0,21 -40,15" fill="#FF5FA8" stroke="#121429" stroke-width="5" stroke-linejoin="round"/>
+<polygon points="-39,6 0,9 0,20 -39,14" fill="#D93684"/>
+<polygon points="-36,-11 -3,-16 -3,-11 -36,-7" fill="#FFC2DE"/>
+<polygon points="-27,-17.5 -19,-18.7 -19,18.7 -27,17.5" fill="#FFFFFF" stroke="#121429" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="-12,-19.5 -7,-20.3 -7,20.3 -12,19.5" fill="#5FE6F2" stroke="#121429" stroke-width="2.5" stroke-linejoin="round"/>
+<ellipse cx="-40" cy="0" rx="5" ry="15" fill="#FFD93B" stroke="#121429" stroke-width="4"/>
+<ellipse cx="2" cy="0" rx="11" ry="29" fill="#FFAA46" stroke="#121429" stroke-width="5"/>
+<ellipse cx="4" cy="0" rx="6.5" ry="22" fill="#3A1446"/>
+<path d="M-4,-22 A9,27 0 0 0 -6,-4" fill="none" stroke="#FFE9A0" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="17" cy="0" r="18" fill="url(#maga_6_ball)" stroke="#121429" stroke-width="4.5"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(17,0) rotate(35) scale(1.25)" fill="#FFFFFF" stroke="#FF5FA8" stroke-width="2" stroke-linejoin="round"/>
+</g>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(30,34) rotate(-15) scale(1.0)" fill="#FFE14D" stroke="#121429" stroke-width="3.2" stroke-linejoin="round"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(100,100) rotate(20) scale(0.9)" fill="#7DF0FF" stroke="#121429" stroke-width="3.4" stroke-linejoin="round"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(56,22) scale(0.7)" fill="#FFFFFF"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(74,110) scale(0.6)" fill="#FFFFFF"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(18,60) scale(0.55)" fill="#FF8FCC"/>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.25"/>
+</svg>

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<linearGradient id="burner_5_bg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#1A1042"/>
+<stop offset="0.6" stop-color="#4A2490"/>
+<stop offset="1" stop-color="#C8502E"/>
+</linearGradient>
+<radialGradient id="burner_5_glow" cx="0.5" cy="0.5" r="0.5">
+<stop offset="0" stop-color="#FFD23B" stop-opacity="0.7"/>
+<stop offset="1" stop-color="#F08246" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#burner_5_bg)"/>
+<ellipse cx="64" cy="100" rx="58" ry="30" fill="url(#burner_5_glow)"/>
+<ellipse cx="64" cy="106" rx="47" ry="11" fill="#F0562E" stroke="#121429" stroke-width="4.5"/>
+<ellipse cx="64" cy="106" rx="36" ry="7" fill="#FF9A2E"/>
+<ellipse cx="64" cy="106" rx="22" ry="4" fill="#FFE14D"/>
+<path d="M-8,0 C-11,-9 -3,-13 0,-24 C4,-15 11,-10 8,0 Z" transform="translate(30,105) scale(0.7)" fill="#FF9A2E" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+<path d="M-8,0 C-11,-9 -3,-13 0,-24 C4,-15 11,-10 8,0 Z" transform="translate(98,105) scale(0.7)" fill="#FF9A2E" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+<path d="M-8,0 C-11,-9 -3,-13 0,-24 C4,-15 11,-10 8,0 Z" transform="translate(60,106) scale(0.6)" fill="#FFE14D" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="5.5"/>
+<line x1="0" y1="-20" x2="0" y2="-34" transform="translate(30,40) rotate(18) scale(0.95)" stroke="#FFD27A" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+<path d="M0,-16 C6,-5 8,1 8,6 A8,8 0 1 1 -8,6 C-8,1 -6,-5 0,-16 Z" transform="translate(30,40) rotate(18) scale(0.95)" fill="#FF8A2E" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.6"/>
+<path d="M0,-6 C3,0 4,3 4,6 A4,4 0 1 1 -4,6 C-4,3 -3,0 0,-6 Z" transform="translate(30,40) rotate(18) scale(0.95)" fill="#FFE14D"/>
+<circle cx="-1" cy="8" r="2" transform="translate(30,40) rotate(18) scale(0.95)" fill="#FFFFFF"/>
+<line x1="0" y1="-20" x2="0" y2="-34" transform="translate(60,30) rotate(18) scale(1.1)" stroke="#FFD27A" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+<path d="M0,-16 C6,-5 8,1 8,6 A8,8 0 1 1 -8,6 C-8,1 -6,-5 0,-16 Z" transform="translate(60,30) rotate(18) scale(1.1)" fill="#F0562E" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.2"/>
+<path d="M0,-6 C3,0 4,3 4,6 A4,4 0 1 1 -4,6 C-4,3 -3,0 0,-6 Z" transform="translate(60,30) rotate(18) scale(1.1)" fill="#FFE14D"/>
+<circle cx="-1" cy="8" r="2" transform="translate(60,30) rotate(18) scale(1.1)" fill="#FFFFFF"/>
+<line x1="0" y1="-20" x2="0" y2="-34" transform="translate(94,34) rotate(18) scale(0.95)" stroke="#FFD27A" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+<path d="M0,-16 C6,-5 8,1 8,6 A8,8 0 1 1 -8,6 C-8,1 -6,-5 0,-16 Z" transform="translate(94,34) rotate(18) scale(0.95)" fill="#FF8A2E" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.6"/>
+<path d="M0,-6 C3,0 4,3 4,6 A4,4 0 1 1 -4,6 C-4,3 -3,0 0,-6 Z" transform="translate(94,34) rotate(18) scale(0.95)" fill="#FFE14D"/>
+<circle cx="-1" cy="8" r="2" transform="translate(94,34) rotate(18) scale(0.95)" fill="#FFFFFF"/>
+<line x1="0" y1="-20" x2="0" y2="-34" transform="translate(44,72) rotate(18) scale(1.2)" stroke="#FFD27A" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+<path d="M0,-16 C6,-5 8,1 8,6 A8,8 0 1 1 -8,6 C-8,1 -6,-5 0,-16 Z" transform="translate(44,72) rotate(18) scale(1.2)" fill="#F0562E" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3.8"/>
+<path d="M0,-6 C3,0 4,3 4,6 A4,4 0 1 1 -4,6 C-4,3 -3,0 0,-6 Z" transform="translate(44,72) rotate(18) scale(1.2)" fill="#FFE14D"/>
+<circle cx="-1" cy="8" r="2" transform="translate(44,72) rotate(18) scale(1.2)" fill="#FFFFFF"/>
+<line x1="0" y1="-20" x2="0" y2="-34" transform="translate(78,66) rotate(18) scale(1.5)" stroke="#FFD27A" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+<path d="M0,-16 C6,-5 8,1 8,6 A8,8 0 1 1 -8,6 C-8,1 -6,-5 0,-16 Z" transform="translate(78,66) rotate(18) scale(1.5)" fill="#FF8A2E" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3.2"/>
+<path d="M0,-6 C3,0 4,3 4,6 A4,4 0 1 1 -4,6 C-4,3 -3,0 0,-6 Z" transform="translate(78,66) rotate(18) scale(1.5)" fill="#FFE14D"/>
+<circle cx="-1" cy="8" r="2" transform="translate(78,66) rotate(18) scale(1.5)" fill="#FFFFFF"/>
+<line x1="0" y1="-20" x2="0" y2="-34" transform="translate(106,72) rotate(18) scale(0.9)" stroke="#FFD27A" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+<path d="M0,-16 C6,-5 8,1 8,6 A8,8 0 1 1 -8,6 C-8,1 -6,-5 0,-16 Z" transform="translate(106,72) rotate(18) scale(0.9)" fill="#F0562E" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.8"/>
+<path d="M0,-6 C3,0 4,3 4,6 A4,4 0 1 1 -4,6 C-4,3 -3,0 0,-6 Z" transform="translate(106,72) rotate(18) scale(0.9)" fill="#FFE14D"/>
+<circle cx="-1" cy="8" r="2" transform="translate(106,72) rotate(18) scale(0.9)" fill="#FFFFFF"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(18,22) scale(0.5)" fill="#3FF2E0"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(112,22) scale(0.55)" fill="#FFFFFF"/>
+<circle cx="18" cy="86" r="2" fill="#FFD23B"/>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.25"/>
+</svg>

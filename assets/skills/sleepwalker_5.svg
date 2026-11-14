@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="sleepwalker_5_bg" cx="0.35" cy="0.75" r="0.85">
+<stop offset="0" stop-color="#c9b8ff"/><stop offset="0.5" stop-color="#5d5fd0"/><stop offset="1" stop-color="#1c1b52"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#sleepwalker_5_bg)" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5"/>
+<!-- falling streaks -->
+<line x1="96" y1="12" x2="90" y2="28" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+<line x1="78" y1="12" x2="74" y2="24" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+<line x1="112" y1="22" x2="108" y2="34" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+<!-- impact burst -->
+<polygon points="38,72 48,88 66,82 58,97 76,106 57,109 54,119 42,110 27,119 28,106 10,104 24,95 14,80 30,88" fill="#FFF3A6" stroke="#121429" stroke-width="4" stroke-linejoin="round"/>
+<polygon points="39,86 46,95 56,93 51,100 60,105 49,105 44,110 36,104 28,106 32,99 26,92 35,94" fill="#ffffff"/>
+<!-- crashing bed -->
+<g transform="rotate(-20 64 64)" stroke-linejoin="round">
+<rect x="96" y="84" width="9" height="16" rx="3" fill="#e3c79a" stroke="#121429" stroke-width="4"/>
+<rect x="24" y="30" width="13" height="60" rx="5" fill="#FFE9C9" stroke="#121429" stroke-width="4.5"/>
+<rect x="27" y="35" width="3.5" height="46" rx="1.5" fill="#ffffff"/>
+<rect x="98" y="48" width="11" height="40" rx="4.5" fill="#FFE9C9" stroke="#121429" stroke-width="4.5"/>
+<rect x="34" y="56" width="68" height="19" rx="6" fill="#ffffff" stroke="#121429" stroke-width="4.5"/>
+<ellipse cx="46" cy="51" rx="11" ry="6.5" fill="#ffd6e6" stroke="#121429" stroke-width="4"/>
+<path d="M56,53 L102,53 L102,80 Q95,88 88,80 Q81,88 74,80 Q67,88 60,80 L56,80 Z" fill="#B9A8FF" stroke="#121429" stroke-width="4.5"/>
+<path d="M102,66 L102,80 Q95,88 88,80 Q81,88 74,80 Q67,88 60,80 L56,80 L56,74 Q82,78 102,66 Z" fill="#8f80e0"/>
+<path d="M60,58 L98,58" fill="none" stroke="#e6dcff" stroke-width="3" stroke-linecap="round"/>
+</g>
+<!-- broken leg and splinters -->
+<g transform="rotate(48 84 102)">
+<polygon points="79,94 89,94 89,110 86,106 83,111 79,107" fill="#FFE9C9" stroke="#121429" stroke-width="3.5" stroke-linejoin="round"/>
+</g>
+<line x1="66" y1="112" x2="72" y2="116" stroke="#121429" stroke-width="3" stroke-linecap="round"/>
+<line x1="100" y1="110" x2="108" y2="108" stroke="#121429" stroke-width="3" stroke-linecap="round"/>
+<!-- impact stars -->
+<path d="M106,76 Q106,84 114,84 Q106,84 106,92 Q106,84 98,84 Q106,84 106,76 Z" fill="#ffffff"/>
+<path d="M18,56 Q18,62 24,62 Q18,62 18,68 Q18,62 12,62 Q18,62 18,56 Z" fill="#ffffff"/>
+<circle cx="20" cy="24" r="2.2" fill="#ffd6e6"/>
+<circle cx="50" cy="20" r="2" fill="#ffffff"/>
+</svg>

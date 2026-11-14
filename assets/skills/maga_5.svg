@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="maga_5_bg" cx="0.55" cy="0.4" r="0.8">
+<stop offset="0" stop-color="#E0608A"/>
+<stop offset="0.5" stop-color="#7A2E8A"/>
+<stop offset="1" stop-color="#1E1240"/>
+</radialGradient>
+<radialGradient id="maga_5_bub" cx="0.35" cy="0.3" r="0.8">
+<stop offset="0" stop-color="#FFFFFF" stop-opacity="0.75"/>
+<stop offset="0.5" stop-color="#7DF0FF" stop-opacity="0.45"/>
+<stop offset="1" stop-color="#3FA8E0" stop-opacity="0.55"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#maga_5_bg)"/>
+<path d="M46,70 Q34,50 36,34" fill="none" stroke="#FF4D5E" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+<path d="M50,68 Q52,42 62,24" fill="none" stroke="#FFD93B" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+<path d="M54,70 Q66,44 88,32" fill="none" stroke="#4FE07A" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+<path d="M58,74 Q82,54 106,56" fill="none" stroke="#4FB8FF" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+<path d="M60,82 Q86,74 106,86" fill="none" stroke="#B36BFF" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
+<circle cx="38" cy="90" r="25" fill="#121429"/>
+<circle cx="38" cy="90" r="22" fill="#2A3A7A"/>
+<circle cx="38" cy="90" r="22" fill="url(#maga_5_bub)"/>
+<circle cx="38" cy="90" r="20" fill="none" stroke="#CFFBFF" stroke-width="2"/>
+<path d="M24,82 A16,16 0 0 1 36,73" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M0,6 C-10,-2 -6,-9 0,-4 C6,-9 10,-2 0,6 Z" transform="translate(39,93) scale(1.5)" fill="#FF73BE" stroke="#121429" stroke-width="2.2" stroke-linejoin="round"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(36,32) rotate(-20) scale(1.05)" fill="#FFE14D" stroke="#121429" stroke-width="3.6" stroke-linejoin="round"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(63,23) rotate(-5) scale(1.2)" fill="#FFE14D" stroke="#121429" stroke-width="3.3" stroke-linejoin="round"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(90,31) rotate(12) scale(1.35)" fill="#FFE14D" stroke="#121429" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(107,57) rotate(25) scale(1.2)" fill="#FFE14D" stroke="#121429" stroke-width="3.3" stroke-linejoin="round"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(106,88) rotate(40) scale(1.05)" fill="#FFE14D" stroke="#121429" stroke-width="3.6" stroke-linejoin="round"/>
+<circle cx="36" cy="32" r="3" fill="#FFFFFF"/>
+<circle cx="63" cy="23" r="3.5" fill="#FFFFFF"/>
+<circle cx="90" cy="31" r="4" fill="#FFFFFF"/>
+<circle cx="107" cy="57" r="3.5" fill="#FFFFFF"/>
+<circle cx="106" cy="88" r="3" fill="#FFFFFF"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(76,58) scale(0.6)" fill="#FFFFFF"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(84,108) scale(0.6)" fill="#FFFFFF" opacity="0.8"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(18,50) scale(0.6)" fill="#7DF0FF"/>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.25"/>
+</svg>

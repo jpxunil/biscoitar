@@ -104,6 +104,19 @@ fg = Color(0.97, 0.94, 0.84, 1)
 font_px = 40
 shape_seed = 13
 
+[node name="BtnSkills" type="Button" parent="."]
+layout_mode = 0
+offset_left = 820.0
+offset_top = 474.0
+offset_right = 1200.0
+offset_bottom = 558.0
+script = ExtResource("2")
+text = "SKILLS"
+fill = Color(0.97, 0.94, 0.84, 1)
+fg = Color(0.05, 0.045, 0.1, 1)
+font_px = 38
+shape_seed = 9
+
 [node name="BtnTutorial" type="Button" parent="."]
 layout_mode = 0
 offset_left = 440.0

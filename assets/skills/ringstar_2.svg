@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="ringstar_2_bg" cx="0.5" cy="0.45" r="0.8">
+<stop offset="0" stop-color="#FF94CF"/>
+<stop offset="0.5" stop-color="#7A3AB0"/>
+<stop offset="1" stop-color="#1A1E5A"/>
+</radialGradient>
+<radialGradient id="ringstar_2_gold" cx="0.4" cy="0.3" r="0.8">
+<stop offset="0" stop-color="#FFF8C0"/>
+<stop offset="0.5" stop-color="#FFD23B"/>
+<stop offset="1" stop-color="#E0902A"/>
+</radialGradient>
+<radialGradient id="ringstar_2_glove" cx="0.45" cy="0.35" r="0.75">
+<stop offset="0" stop-color="#FF9AD4"/>
+<stop offset="0.6" stop-color="#FF73BE"/>
+<stop offset="1" stop-color="#D9489A"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#ringstar_2_bg)"/>
+<rect x="9" y="44" width="110" height="30" fill="#4FB8FF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4"/>
+<rect x="9" y="48" width="110" height="4" fill="#A8E2FF"/>
+<rect x="9" y="66" width="110" height="5" fill="#2F7AD0"/>
+<circle cx="64" cy="59" r="45" fill="url(#ringstar_2_gold)" stroke="#121429" stroke-width="5"/>
+<circle cx="64" cy="59" r="38.5" fill="none" stroke="#C9741A" stroke-width="2.5"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(64,20) scale(0.6)" fill="#FFFFFF"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(28,44) rotate(-30) scale(0.55)" fill="#FFFFFF"/>
+<polygon points="0,-10 2.94,-4.05 9.51,-3.09 4.76,1.55 5.88,8.09 0,5 -5.88,8.09 -4.76,1.55 -9.51,-3.09 -2.94,-4.05" transform="translate(100,44) rotate(30) scale(0.55)" fill="#FFFFFF"/>
+<polygon points="48,94 82,94 86,116 44,116" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+<polygon points="45.5,107 84.5,107 85.5,112 44.5,112" fill="#4FB8FF"/>
+<path d="M38,60 C36,40 48,28 66,28 C84,28 96,40 95,60 C95,82 84,100 66,101 C48,101 39,84 38,60 Z" fill="url(#ringstar_2_glove)" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="5"/>
+<path d="M46,56 C56,48 80,48 90,56" fill="none" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3.5"/>
+<line x1="58" y1="33" x2="59" y2="49" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3"/>
+<line x1="75" y1="33" x2="74" y2="49" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3"/>
+<path d="M46,40 C50,34 56,32 60,32" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/>
+<path d="M50,92 C60,98 76,97 86,84 C80,90 64,94 50,88 Z" fill="#B8327E" opacity="0.7"/>
+<path d="M32,66 C30,54 42,50 49,60 C54,70 53,84 45,87 C36,88 33,76 32,66 Z" fill="#FF94CF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+<path d="M37,62 C39,58 43,58 46,62" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(101,26) scale(1.1)" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(22,96) scale(0.8)" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.4"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(106,100) scale(0.6)" fill="#FFE14D"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(20,22) scale(0.55)" fill="#FFE14D"/>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.25"/>
+</svg>

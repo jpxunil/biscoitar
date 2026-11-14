@@ -62,6 +62,16 @@ func ready(hero: Unit) -> void:
 		hero.skill_cd[n] = 0.0
 
 
+## Usa uma habilidade do Sleepwalker e conclui a conjuração na hora (o tempo de cast tem teste próprio).
+func sw(main: Node, u: Unit, slot: int) -> bool:
+	if not main.use_skill(u, slot):
+		return false
+	if u.channel_t > 0.0:
+		u.channel_t = 0.0
+		main._resolve_skill(u, slot, false)
+	return true
+
+
 func _initialize() -> void:
 	await process_frame
 	Binds.boot()
@@ -150,6 +160,7 @@ func _initialize() -> void:
 	main = await fight(4)
 	u = main.units[main.ctrl]
 	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
 	check(u.key == "nurse" and u.unit_name == "Malpractice", "a Gothic Nurse agora se chama Malpractice")
 	check(Knowledge.HEROES[4]["name"] == "Malpractice", "o nome novo aparece nos menus")
 	check(is_equal_approx(u.max_hp, 80.0), "menos vida: %d" % u.max_hp)
@@ -162,13 +173,13 @@ func _initialize() -> void:
 	main.use_skill(u, 2)
 	check(is_equal_approx(u.hp, 40.0 + main.CONSUMED_STEAL - 8.0), "Blood Consumed custa 8 e rouba %d: saldo positivo" % main.CONSUMED_STEAL)
 	u.hp = 20.0
-	check(is_equal_approx(main.low_hp_mult(u), 1.6), "com 25%% de vida: +60%% de dano")
+	check(is_equal_approx(main.low_hp_mult(u), 1.0 + main.LOW_HP_BONUS), "com 25%% de vida: +75%% de dano")
 	u.hp = 50.0
 	check(main.low_hp_mult(u) > 1.2 and main.low_hp_mult(u) < 1.4, "o bônus cresce conforme a vida cai (%.2f na metade)" % main.low_hp_mult(u))
 	u.hp = 20.0
 	before = u.dmg_total
 	main._damage_boss(u, 100.0, false, false)
-	check(is_equal_approx(u.dmg_total - before, 160.0), "o bônus vale no dano de verdade")
+	check(is_equal_approx(u.dmg_total - before, 100.0 * (1.0 + main.LOW_HP_BONUS)), "o bônus vale no dano de verdade")
 	check(is_equal_approx(main.low_hp_mult(main.units[2]), 1.0), "só ela tem esse bônus")
 
 	# parry perfeito devolve a vida
@@ -193,6 +204,7 @@ func _initialize() -> void:
 	main = await fight(2)
 	u = main.units[main.ctrl]
 	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
 	kit = main.SKILLS["assassina"]
 	names = []
 	cds = []
@@ -267,6 +279,7 @@ func _initialize() -> void:
 	main = await fight(1)
 	u = main.units[main.ctrl]
 	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
 	check(u.key == "healer" and u.unit_name == "Soulflame" and Knowledge.HEROES[1]["name"] == "Soulflame", "a Healer agora se chama Soulflame")
 	kit = main.SKILLS["healer"]
 	names = []
@@ -335,6 +348,7 @@ func _initialize() -> void:
 	main = await fight(3)
 	u = main.units[main.ctrl]
 	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
 	kit = main.SKILLS["maga"]
 	names = []
 	cds = []
@@ -468,6 +482,7 @@ func _initialize() -> void:
 	main = await fight(5)
 	u = main.units[main.ctrl]
 	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
 	check(u.key == "burner" and u.unit_name == "Soulburner" and not u.melee, "Soulburner entra na luta (classe nova, à distância)")
 	kit = main.SKILLS["burner"]
 	names = []
@@ -522,6 +537,7 @@ func _initialize() -> void:
 	main = await fight(6)
 	u = main.units[main.ctrl]
 	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
 	check(u.key == "ringstar" and u.unit_name == "Ringstar" and u.melee, "Ringstar entra na luta (classe nova, corpo a corpo)")
 	kit = main.SKILLS["ringstar"]
 	names = []
@@ -537,7 +553,7 @@ func _initialize() -> void:
 	check(is_equal_approx(u.dmg_total - before, 22.0) and main.glow_slot(u) == 1, "Jab Estelar fortalece o Direto (o botão 2 brilha)")
 	check(is_equal_approx(u.skill_cd[0], 2.0) and is_equal_approx(u.skill_cd[1], 2.0) and is_equal_approx(u.skill_cd[2], 2.0), "os três golpes dividem o GCD de 2 s")
 	await frames_of(3)
-	check(main.hud.skill_ui[1]["slab"].modulate != Color(1, 1, 1) and main.hud.skill_ui[0]["slab"].modulate == Color(1, 1, 1), "na barra, só o botão fortalecido brilha")
+	check(main.hud.skill_ui[1]["ui"].glow and not main.hud.skill_ui[0]["ui"].glow, "na barra, só o botão fortalecido brilha")
 	ready(u)
 	before = u.dmg_total
 	main.use_skill(u, 1)
@@ -589,12 +605,13 @@ func _initialize() -> void:
 	u.count_t = 0.0
 	before = u.dmg_total
 	main.use_skill(u, 5)
-	check(is_equal_approx(u.dmg_total - before, main.KNOCKOUT_DMG), "Nocaute Final: %d" % main.KNOCKOUT_DMG)
+	check(u.air_t > 0.0, "Nocaute Final: salta (o resto está no bloco NOCAUTE FINAL)")
 
 	# ================================================================ APOTECÁRIO
 	main = await fight(7)
 	u = main.units[main.ctrl]
 	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
 	check(u.key == "apothecary" and u.unit_name == "Apotecário", "Apotecário entra na luta (classe nova, healer)")
 	kit = main.SKILLS["apothecary"]
 	names = []
@@ -704,41 +721,66 @@ func _initialize() -> void:
 	main = await fight(8)
 	u = main.units[main.ctrl]
 	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
 	check(u.key == "sleepwalker" and not u.melee and not u.asleep, "Sleepwalker entra na luta, acordado (classe nova, à distância)")
 	names = []
 	for sk in main.kit(u):
 		names.append(sk["name"])
 	check(names == ["Bocejo", "Puxar o Lençol", "Visitantes debaixo da Cama", "Senhor Travesseiro", "A Cama Caiu!", "Sono Profundo"], "Modo Acordado: os seis botões: %s" % [names])
 	var sc: float = main.SW_SCALE
+	# conjuração de verdade: 1,25 s parado; andar cancela sem gastar nada
 	before = u.dmg_total
+	check(main.use_skill(u, 1) and is_equal_approx(u.channel_t, 1.25) and is_equal_approx(u.dmg_total, before), "toda habilidade dele conjura 1,25 s antes de sair")
+	check(not main.use_skill(u, 0), "conjurando, não dá pra usar outra")
+	Input.action_press("move_left")
+	await wait(0.2)
+	Input.action_release("move_left")
+	check(is_equal_approx(u.channel_t, 0.0) and is_equal_approx(u.skill_cd[1], 0.0) and is_equal_approx(u.dmg_total, before) and main.dream_stacks == 0, "andar cancela a conjuração, sem dano e sem gastar a recarga")
+	u.position = main._atk_pos(u)
+	await frames_of(3)
 	main.use_skill(u, 0)
-	check(is_equal_approx(u.dmg_total - before, 50.0 * sc) and is_equal_approx(u.torpor, 4.0) and is_equal_approx(u.skill_cd[0], 2.0), "Bocejo: dano, +4 Torpor, recarga de 2 s")
+	await wait(1.0)
+	check(u.channel_t > 0.0 and is_equal_approx(u.dmg_total, before), "com 1 s de conjuração o Bocejo ainda não saiu")
+	await wait(0.4)
+	check(is_equal_approx(u.dmg_total - before, 50.0 * sc) and is_equal_approx(u.channel_t, 0.0), "e sai quando a conjuração termina")
+	check(u.skill_cd[0] <= 0.75 and u.skill_cd[0] > 0.3, "a recarga do Bocejo (2 s) conta desde o começo da conjuração")
+	for slot in 5:
+		check(is_equal_approx(main.sw_cast(u, slot), main.SW_CAST), "slot %d acordado: conjuração de 1,25 s" % (slot + 1))
+	check(is_equal_approx(main.sw_cast(u, 5), main.SW_CAST), "Sono Profundo também conjura")
+	check(not main.SKILLS["maga"][0].has("cast") and not main.SKILLS["ringstar"][0].has("cast"), "as outras classes continuam sem conjuração nova")
+	# daqui pra baixo, sw() conclui a conjuração na hora (o tempo dela já foi testado acima)
+	ready(u)
+	u.torpor = 0.0
+	before = u.dmg_total
+	sw(main, u, 0)
+	check(is_equal_approx(u.dmg_total - before, 50.0 * sc) and is_equal_approx(u.torpor, 3.0), "Bocejo: dano e +3 de Torpor")
 	# sequência perfeita
 	u.torpor = 0.0
-	main.use_skill(u, 1)
+	sw(main, u, 1)
 	check(main.dream_stacks == 2 and u.window_slot == 2 and is_equal_approx(u.window_t, 1.0), "Puxar o Lençol: 2 stacks e abre 1 s pros Visitantes")
 	check(main.glow_slot(u) == 2, "o botão da janela brilha")
 	await wait(0.4)
-	main.use_skill(u, 2)
+	sw(main, u, 2)
 	check(main.dream_stacks == 5 and u.crumbs and u.window_slot == 3, "Visitantes na janela: 3 mordidas (5 stacks) e Migalhas")
 	await wait(0.4)
-	main.use_skill(u, 3)
+	sw(main, u, 3)
 	check(main.dream_stacks == 7 and u.pillow_full and u.window_slot == 4, "Senhor Travesseiro na janela: come as Migalhas (7 stacks) e fica Cheio")
 	await wait(0.4)
 	before = u.dmg_total
-	main.use_skill(u, 4)
+	sw(main, u, 4)
 	check(main.dream_stacks == 8, "A Cama Caiu! fecha os 8 stacks de Vulnerabilidade Onírica")
 	check(is_equal_approx(u.dmg_total - before, 200.0 * main.SW_BED_BONUS * sc * 1.16), "com Travesseiro Cheio e 8 stacks: %.0f de dano" % (u.dmg_total - before))
 	check(main.echoes.size() == 4, "e ativa os Ecos do Pesadelo (4 Frestas)")
-	check(u.torpor > 73.0 and u.torpor < 75.5, "Torpor do ciclo perfeito: 60 das habilidades + 15 das interações, menos a perda (%.1f)" % u.torpor)
-	check(is_equal_approx(u.skill_cd[4], 15.0), "cada habilidade da sequência tem 15 s de recarga")
+	check(u.torpor > 48.5 and u.torpor < 51.5, "Torpor do ciclo perfeito: 33 das habilidades + 18 das interações, menos a perda (%.1f)" % u.torpor)
+	check(u.torpor < 55.0, "um ciclo perfeito não paga A Casa que Engole inteira: precisa de dois")
+	check(is_equal_approx(u.skill_cd[4], 15.0 - main.SW_CAST), "cada habilidade da sequência tem 15 s de recarga, contados do começo da conjuração")
 	# Fresta: abre 1 s depois, por 0,5 s
 	await wait(1.1)
 	await frames_of(2)
 	check(main.echo_mark.visible, "a primeira Fresta abre 1 s depois da Cama")
 	ready(u)
 	before = u.dmg_total
-	main.use_skill(u, 0)
+	sw(main, u, 0)
 	check(is_equal_approx(u.dmg_total - before, (50.0 + main.ECHO_BASE) * sc * 1.16), "Bocejo na Fresta aberta: dano extra")
 	await wait(0.6)
 	await frames_of(2)
@@ -747,15 +789,15 @@ func _initialize() -> void:
 	main.echoes.clear()
 	main.dream_stacks = 0
 	ready(u)
-	main.use_skill(u, 1)
+	sw(main, u, 1)
 	await wait(1.25)
 	check(u.window_slot == -1, "a janela de 1 s passa")
 	var t0: float = u.torpor
-	main.use_skill(u, 2)
+	sw(main, u, 2)
 	check(main.dream_stacks == 3 and not u.crumbs, "Visitantes fora da janela: só 1 stack e sem Migalhas")
-	check(u.torpor - t0 < 12.5, "e sem o Torpor extra da interação")
-	main.use_skill(u, 3)
-	main.use_skill(u, 4)
+	check(u.torpor - t0 < 7.5, "e sem o Torpor extra da interação")
+	sw(main, u, 3)
+	sw(main, u, 4)
 	check(main.dream_stacks < 8 and main.echoes.is_empty(), "com uma janela perdida, não chega nos 8 stacks nem ativa os Ecos (%d)" % main.dream_stacks)
 	t0 = u.torpor
 	await wait(1.0)
@@ -764,76 +806,251 @@ func _initialize() -> void:
 	# Modo Dormindo
 	u.torpor = 100.0
 	main.dream_stacks = 0
-	main.use_skill(u, 5)
+	sw(main, u, 5)
 	check(u.asleep and is_equal_approx(u.skill_cd[5], 3.0), "Sono Profundo transforma (3 s de recarga)")
 	names = []
 	for sk in main.kit(u):
 		names.append(sk["name"])
 	check(names == ["A Mordida dos Mil", "Senhor Travesseiro: Devorador", "O Abraço Impossível", "A Porta Errada", "A Casa que Engole", "Acordar"], "Modo Dormindo: os seis botões: %s" % [names])
 	await frames_of(3)
-	check(main.hud.skill_ui[0]["name"].text == "A MORDIDA DOS MIL", "a barra de habilidades troca junto")
-	check(is_equal_approx(u.awake_cd[4], u.awake_cd[4]) and u.awake_cd[1] > 10.0, "as recargas do Modo Acordado ficam guardadas")
+	check(main.hud.skill_ui[0]["ui"].icon == SkillInfo.icon("sleepwalker", 0, true) and main.hud.skill_ui[0]["ui"].icon != SkillInfo.icon("sleepwalker", 0, false), "a barra de habilidades troca junto (ícones do Modo Dormindo)")
+	check(main.hud.skill_ui[5]["ui"].icon == SkillInfo.icon("sleepwalker", 5, true) and main.hud.skill_ui[5]["ui"].key_text == Binds.label("skill_6"), "o slot 6 troca de habilidade e continua na mesma tecla")
+	check(u.awake_cd[1] > 10.0, "as recargas do Modo Acordado ficam guardadas")
 	p0 = u.position
+	main.use_skill(u, 0)
 	Input.action_press("move_left")
 	await wait(0.3)
 	Input.action_release("move_left")
 	main._try_dash()
 	check(u.position.is_equal_approx(p0) and u.dash_cd <= 0.0, "dormindo, ele não anda nem desvia")
-	main.use_skill(u, 2)
-	check(is_equal_approx(u.torpor, 100.0), "fora de ordem, a habilidade não sai")
+	check(u.channel_t > 0.0, "e apertar direção dormindo não cancela a conjuração")
+	u.channel_t = 0.0
+	check(is_equal_approx(main.sw_cast(u, 0), main.SW_CAST) and is_equal_approx(main.sw_cast(u, 5), 0.0), "dormindo: as cinco da sequência conjuram; só Acordar é na hora")
+	check(not sw(main, u, 2) and is_equal_approx(u.torpor, 100.0), "fora de ordem, a habilidade não sai")
 	check(main.glow_slot(u) == 0, "a próxima da ordem brilha")
 	before = u.dmg_total
-	main.use_skill(u, 0)
+	sw(main, u, 0)
 	check(is_equal_approx(u.torpor, 95.0) and not main.get_dot("pesadelo").is_empty(), "A Mordida dos Mil: 5 de Torpor e aplica o Pesadelo Persistente")
 	check(is_equal_approx(u.near_t, 10.0), "primeira aplicação: Perto do Sonho por 10 s")
+	check(is_equal_approx(main.sw_cast(u, 1), main.SW_CAST_NEAR), "com Perto do Sonho, a conjuração cai pra 0,75 s")
 	for n in range(1, 5):
 		ready(u)
 		check(main.glow_slot(u) == n, "passo %d da sequência é o que brilha" % (n + 1))
-		main.use_skill(u, n)
+		sw(main, u, n)
 	check(is_equal_approx(u.dmg_total - before, 1300.0 * sc), "a sequência completa dá o dano total da ficha (1300 na escala do jogo: %.0f)" % (u.dmg_total - before))
 	check(not u.asleep and is_equal_approx(u.torpor, 0.0), "A Casa que Engole gasta o resto do Torpor e acorda sozinho")
+	check(is_equal_approx(u.silence_t, 0.0), "fechar com A Casa que Engole não tem punição")
 	check(is_equal_approx(main.units[0].shield_hp, main.units[0].max_hp * 0.08), "e dá escudo de 8%% da vida máxima nos aliados")
 	check(u.skill_cd[1] > 5.0, "ao acordar, as recargas do Modo Acordado voltam de onde estavam")
-	# com Perto do Sonho: tudo 1 s mais rápido
+	# com Perto do Sonho: recargas 1 s menores e conjuração de 0,75 s
 	ready(u)
-	main.use_skill(u, 0)
-	check(is_equal_approx(u.skill_cd[0], 1.0), "Perto do Sonho: Bocejo com 1 s")
-	main.use_skill(u, 1)
-	check(is_equal_approx(u.skill_cd[1], 14.0), "Perto do Sonho: Puxar o Lençol com 14 s")
-	# renovação perfeita e imperfeita
+	check(main.use_skill(u, 1) and is_equal_approx(u.channel_t, main.SW_CAST_NEAR), "Perto do Sonho: Puxar o Lençol conjura em 0,75 s")
+	u.channel_t = 0.0
+	main._resolve_skill(u, 1, false)
+	check(is_equal_approx(u.skill_cd[1], 14.0 - main.SW_CAST_NEAR), "Perto do Sonho: Puxar o Lençol com 14 s de recarga")
+
+	# punições ao acordar
 	ready(u)
+	u.silence_t = 0.0
 	u.bite_cd = 0.0
-	u.torpor = 20.0
+	u.torpor = 100.0
+	sw(main, u, 5)
+	ready(u)
+	sw(main, u, 5)
+	check(not u.asleep and is_equal_approx(u.silence_t, main.SW_LOCK_NONE), "acordar sem ter usado nada: 2 s sem agir")
+	ready(u)
+	check(not main.use_skill(u, 0) and not main.use_skill(u, 1) and not main.use_skill(u, 5), "punido, nenhuma habilidade sai")
+	p0 = u.position
+	Input.action_press("move_left")
+	await wait(0.3)
+	Input.action_release("move_left")
+	check(not u.position.is_equal_approx(p0), "mas ele anda normalmente")
+	u.position = main._atk_pos(u)
+	await wait(1.9)
+	check(is_equal_approx(u.silence_t, 0.0) and main.use_skill(u, 0), "passados os 2 s, volta a agir")
+	u.channel_t = 0.0
+	# só a Mordida: 1 s
+	ready(u)
+	u.torpor = 100.0
 	main.get_dot("pesadelo")["t"] = 10.0
-	main.use_skill(u, 5)
-	main.use_skill(u, 0)
+	sw(main, u, 5)
+	ready(u)
+	sw(main, u, 0)
 	check(is_equal_approx(u.near_t, 10.0), "renovar cedo (faltando 10 s): só 10 s de Perto do Sonho")
 	check(is_equal_approx(u.skill_cd[0], 17.0), "a Mordida tem 18 s de recarga (17 com o buff)")
 	ready(u)
-	main.use_skill(u, 5)
+	sw(main, u, 5)
+	check(not u.asleep and is_equal_approx(u.silence_t, main.SW_LOCK_BITE), "acordar depois de usar só A Mordida dos Mil: 1 s sem agir")
+	# sequência largada no meio: 3 s
+	u.silence_t = 0.0
 	ready(u)
 	u.bite_cd = 0.0
+	u.torpor = 100.0
 	main.get_dot("pesadelo")["t"] = 1.5
-	main.use_skill(u, 5)
-	main.use_skill(u, 0)
-	check(is_equal_approx(u.near_t, 20.0), "renovar nos últimos 2 s: Perto do Sonho por 20 s")
-	# sem Torpor: Mordida de graça e fraca, e acorda sozinho
+	sw(main, u, 5)
 	ready(u)
+	sw(main, u, 0)
+	check(is_equal_approx(u.near_t, 20.0), "renovar nos últimos 2 s: Perto do Sonho por 20 s")
+	ready(u)
+	sw(main, u, 1)
+	ready(u)
+	sw(main, u, 2)
+	ready(u)
+	main.use_skill(u, 3)
+	check(u.channel_t > 0.0, "(conjurando a quarta da sequência)")
 	main.use_skill(u, 5)
+	check(not u.asleep and is_equal_approx(u.silence_t, main.SW_LOCK_BROKEN) and is_equal_approx(u.torpor, 0.0), "largar a sequência sem A Casa que Engole: 3 s sem agir e Torpor zerado")
+	check(is_equal_approx(u.channel_t, 0.0), "e a conjuração em curso é cancelada: nada sai durante a punição")
+	main.remove_dot("pesadelo")  # o DoT que já estava na boss continuaria batendo; aqui interessa só o que ele faz
+	ready(u)
+	before = u.dmg_total
+	main.use_skill(u, 0)
+	main.use_skill(u, 1)
+	await wait(1.5)
+	check(is_equal_approx(u.dmg_total, before) and u.silence_t > 1.0, "nenhum dano dele durante o bloqueio")
+	# sem Torpor: Mordida de graça e fraca, e acorda sozinho
+	u.silence_t = 0.0
 	ready(u)
 	u.bite_cd = 0.0
 	u.torpor = 3.0
 	main.dream_stacks = 0
-	main.use_skill(u, 5)
+	sw(main, u, 5)
+	ready(u)
 	before = u.dmg_total
-	main.use_skill(u, 0)
+	sw(main, u, 0)
 	check(is_equal_approx(u.dmg_total - before, 100.0 * 0.2 * sc) and is_equal_approx(u.torpor, 3.0), "com menos de 5 de Torpor, a Mordida sai de graça e bem fraca")
 	check(u.asleep and u.wake_t > 0.0, "sem Torpor pra próxima, avisa que vai acordar")
 	await wait(1.15)
 	check(not u.asleep and is_equal_approx(u.torpor, 0.0), "e acorda 1 s depois, perdendo o Torpor que sobrou")
+	check(u.silence_t > 0.0 and u.silence_t <= main.SW_LOCK_BITE, "acordar sozinho também cobra a punição (só a Mordida: 1 s)")
 	main.remove_dot("pesadelo")
 	await frames_of(3)
 	check(is_equal_approx(u.near_t, 0.0), "se o Pesadelo Persistente cai, o Perto do Sonho vai junto")
+
+	# ================================================================ NOCAUTE FINAL (salto)
+	main = await fight(6)
+	u = main.units[main.ctrl]
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
+	u.position = Vector3(0, 0, 4.0)
+	await frames_of(2)
+	before = u.dmg_total
+	var hp_before: float = u.hp
+	main.use_skill(u, 5)
+	check(is_equal_approx(u.air_t, main.KNOCKOUT_AIR) and is_equal_approx(u.dmg_total, before), "Nocaute Final: salta por 0,8 s e ainda não deu dano")
+	check(not main.use_skill(u, 0), "no ar, ela não usa outra habilidade")
+	# ataque baixo (rente ao chão) e ataque comum, os dois estourando com ela no ar
+	main._add_hazard({"shape": "circle", "pos": Vector3(0, 0, 0), "r": 30.0, "total": 0.35, "dmg": 10.0, "card": "dodge", "why": "teste baixo", "low": true})
+	await wait(0.5)
+	check(u.air_t > 0.0 and u.visual.position.y > 3.0, "no meio do salto ela está no alto (%.1f)" % u.visual.position.y)
+	check(is_equal_approx(u.hp, hp_before), "ataque baixo passa por baixo dela")
+	check(main.units[(main.ctrl + 1) % 4].hp < main.units[(main.ctrl + 1) % 4].max_hp, "mas acerta quem está no chão")
+	main._add_hazard({"shape": "circle", "pos": Vector3(0, 0, 0), "r": 30.0, "total": 0.1, "dmg": 10.0, "card": "dodge", "why": "teste alto"})
+	await wait(0.2)
+	check(u.hp < hp_before, "ataque comum acerta mesmo no ar: o salto não é invulnerabilidade")
+	await wait(0.3)
+	check(is_equal_approx(u.air_t, 0.0) and is_equal_approx(u.visual.position.y, 0.0), "ela aterrissa")
+	check(is_equal_approx(u.dmg_total - before, main.KNOCKOUT_DMG), "o dano (%d) sai na aterrissagem" % main.KNOCKOUT_DMG)
+	check(u.position.distance_to(main.BOSS_POINT) <= main.KNOCKOUT_R, "ela cai perto da boss, dentro do raio da onda de choque")
+	hp_before = u.hp
+	main._add_hazard({"shape": "circle", "pos": Vector3(0, 0, 0), "r": 30.0, "total": 0.1, "dmg": 10.0, "card": "dodge", "why": "teste baixo", "low": true})
+	await wait(0.25)
+	check(u.hp < hp_before, "no chão, o ataque baixo acerta normalmente")
+	# longe demais: a onda não alcança
+	main = await fight(6)
+	u = main.units[main.ctrl]
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
+	before = u.dmg_total
+	main._knockout_land(u)
+	u.position = Vector3(0, 0, 12.0)
+	var far_before: float = u.dmg_total
+	main._knockout_land(u)
+	check(is_equal_approx(u.dmg_total, far_before), "se a boss está fora da onda de choque, o Nocaute não dá dano")
+
+	# ================================================================ MALPRACTICE (gauge de sangue)
+	main = await fight(4)
+	u = main.units[main.ctrl]
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
+	u.position = main._atk_pos(u)
+	await frames_of(2)
+	u.hp = 40.0
+	u.stacks = main.PARTY_NEED - 1
+	main.use_skill(u, 0)
+	check(u.hp < 37.0, "gauge incompleto: a estocada só custa vida (%.1f)" % u.hp)
+	ready(u)
+	u.hp = 40.0
+	u.stacks = main.PARTY_NEED
+	main.use_skill(u, 0)
+	check(u.hp > 39.0 and u.hp < 40.0, "gauge cheio: cada golpe devolve 4%% da vida máxima (40 -> %.1f)" % u.hp)
+	await frames_of(3)
+	check(main.hud.bullet_row.visible, "o gauge de Sangue aparece em cima da barra")
+	check(main.hud.skill_ui[4]["ui"].usable, "com o gauge cheio, o Blood Party acende")
+	u.stacks = 3
+	await frames_of(3)
+	check(not main.hud.skill_ui[4]["ui"].usable, "e apaga quando falta Sangue")
+
+	# ================================================================ ÍCONES, FICHAS E DESTAQUE
+	var miss := ""
+	var seen := {}
+	for h in Knowledge.HEROES:
+		var key: String = h["key"]
+		for mode in ([false, true] if SkillInfo.has_alt(key) else [false]):
+			var list: Array = SkillInfo.kit(key, mode)
+			for n in list.size():
+				var p := SkillInfo.icon_path(key, n, mode)
+				if SkillInfo.icon(key, n, mode) == null:
+					miss += p.get_file() + " "
+				if seen.has(p):
+					miss += "repetido:" + p.get_file() + " "
+				seen[p] = true
+				var info := SkillInfo.info(key, n, mode)
+				if String(info["desc"]).length() < 15 or String(info["name"]) != String(list[n]["name"]) or not SkillInfo.TYPE_COL.has(info["type"]):
+					miss += "ficha:%s " % list[n]["name"]
+	check(miss == "" and seen.size() == 59, "as 59 habilidades (incluindo as do Modo Dormindo) têm ícone próprio e ficha completa %s" % miss)
+	check(SkillInfo.info("sleepwalker", 0, false)["cast"] == main.SW_CAST and SkillInfo.info("sleepwalker", 4, true)["cost"] == "50 de Torpor", "a ficha do Sleepwalker traz conjuração e custo de Torpor")
+	check(String(SkillInfo.info("ringstar", 5)["desc"]).contains(str(int(main.KNOCKOUT_DMG))), "a descrição usa os números do jogo (Nocaute Final: %d)" % main.KNOCKOUT_DMG)
+	var bigs := 0
+	for h in Knowledge.HEROES:
+		for sk in main.SKILLS[h["key"]]:
+			if sk.get("big", false):
+				bigs += 1
+	check(bigs == 8 and main.SKILLS_ASLEEP[4].get("big", false), "cada herói tem uma habilidade de destaque (a do Sleepwalker é A Casa que Engole)")
+	# destaque só pro personagem controlado
+	main = await fight(6)
+	u = main.units[main.ctrl]
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
+	var other: Unit = main.units[(main.ctrl + 1) % 4]
+	main.hud.skill_cut(u, "TESTE")
+	var first: Control = main.hud._cut
+	check(first != null and is_instance_valid(first), "habilidade de destaque abre a apresentação")
+	main.hud.skill_cut(u, "TESTE 2")
+	await frames_of(2)
+	check(not is_instance_valid(first) and is_instance_valid(main.hud._cut), "usar outra troca a apresentação: nunca duas ao mesmo tempo")
+	main.hud._cut.queue_free()
+	await frames_of(2)
+	main.use_skill(u, 5)
+	check(is_instance_valid(main.hud._cut), "Nocaute Final do jogador dispara o destaque")
+	main.hud._cut.queue_free()
+	await frames_of(2)
+	for o in main.units:
+		if o != u:
+			for n in o.skill_cd.size():
+				o.skill_cd[n] = 0.0
+			main.use_skill(o, o.skill_cd.size() - 1, true)
+	await frames_of(2)
+	check(main.hud._cut == null or not is_instance_valid(main.hud._cut), "habilidades da IA não disparam o destaque")
+	check(other != null, "(party com aliados na IA)")
+	# tooltip
+	var ui0: SkillSlot = main.hud.skill_ui[2]["ui"]
+	ui0.mouse_entered.emit()
+	await frames_of(3)
+	check(main.hud.skill_tip.visible and main.hud.skill_tip._name.text == "GANCHO METEORO" and main.hud.skill_tip._desc.text == SkillInfo.info("ringstar", 2)["desc"], "passar o mouse num slot mostra a ficha da habilidade")
+	check(ui0.key_text == Binds.label("skill_3"), "o slot mostra a tecla configurada, não o número do slot")
+	ui0.mouse_exited.emit()
+	check(not main.hud.skill_tip.visible, "e a ficha some ao sair")
 
 	print("Results: %d passed, %d failed" % [passed, failed])
 	quit(1 if failed > 0 else 0)

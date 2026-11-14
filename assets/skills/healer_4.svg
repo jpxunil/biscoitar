@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs><radialGradient id="healer_4_bg" cx="0.5" cy="0.46" r="0.74"><stop offset="0" stop-color="#3FD9B4"/><stop offset="0.55" stop-color="#14705F"/><stop offset="1" stop-color="#082A33"/></radialGradient></defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#healer_4_bg)" stroke="#121429" stroke-width="6"/>
+<path d="M64 121 C40 108 20 86 12 60 L21 64 C12 46 10 34 16 18 L25 30 C27 18 34 11 44 8 L47 17 C55 8 73 8 81 17 L84 8 C94 11 101 18 103 30 L112 18 C118 34 116 46 107 64 L116 60 C108 86 88 108 64 121 Z" fill="#3FF2E0" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M64 114 C44 102 28 84 20 64 L28 67 C20 50 18 40 20 30 L30 40 C30 28 36 20 44 16 L48 25 C56 16 72 16 80 25 L84 16 C92 20 98 28 98 40 L108 30 C110 40 108 50 100 67 L108 64 C100 84 84 102 64 114 Z" fill="#B8FFF5"/>
+<path d="M64 20 C54 20 46 26 34 28 C27 30 24 36 26 46 C28 70 42 92 64 106 C86 92 100 70 102 46 C104 36 101 30 94 28 C82 26 74 20 64 20 Z" fill="#DCE3EA" stroke="#121429" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M64 20 C74 20 82 26 94 28 C101 30 104 36 102 46 C100 70 86 92 64 106 Z" fill="#9AA6B5"/>
+<path d="M36 34 C36 58 46 80 62 96" fill="none" stroke="#ffffff" stroke-width="3.500" stroke-linecap="round"/>
+<path d="M50 26 L64 50 L78 26 Q64 18 50 26 Z" fill="#0E4A4A" stroke="#121429" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M64 50 L64 104" fill="none" stroke="#121429" stroke-width="3" stroke-linecap="round"/>
+<path d="M44 30 C42 56 50 78 62 92" fill="none" stroke="#121429" stroke-width="2.500" stroke-linecap="round" opacity="0.6"/>
+<path d="M84 30 C86 56 78 78 66 92" fill="none" stroke="#121429" stroke-width="2.500" stroke-linecap="round" opacity="0.6"/>
+<path d="M28 44 C36 50 44 50 50 44" fill="none" stroke="#121429" stroke-width="2.500" stroke-linecap="round" opacity="0.5"/>
+<path d="M100 44 C92 50 84 50 78 44" fill="none" stroke="#121429" stroke-width="2.500" stroke-linecap="round" opacity="0.5"/>
+<polygon points="64,42 72,52 64,62 56,52" fill="#FFF8C4" stroke="#121429" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="64,42 72,52 64,62" fill="#FFD24D"/>
+<circle cx="46" cy="68" r="2.500" fill="#6E7A8A"/>
+<circle cx="80" cy="62" r="2" fill="#5E6A7A"/>
+<circle cx="74" cy="80" r="2.500" fill="#6E7A8A"/>
+<circle cx="54" cy="84" r="1.800" fill="#6E7A8A"/>
+<g transform="translate(16 100) scale(0.7)"><polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="#FFF8C4" /></g>
+<g transform="translate(112 100) scale(0.7)"><polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="#FFF8C4" /></g>
+<g transform="translate(114 78) scale(0.4)"><polygon points="0,-8 2,-2 8,0 2,2 0,8 -2,2 -8,0 -2,-2" fill="#ffffff" /></g>
+<rect x="7.5" y="7.5" width="113" height="113" rx="12" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.22"/>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+</svg>

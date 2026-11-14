@@ -171,6 +171,8 @@ const PROVOKE := {"name": "Bora Biscoitar", "cd": 20.0}
 ## As teclas de cada slot são do jogador (scripts/binds.gd); o padrão é J, K, L, U, O, P.
 ## Provocar (Provocação do Paladino, Emergency Response da Malpractice) é o "Bora Biscoitar":
 ## quem usa puxa o boss pra si.
+## "big": true marca a habilidade importante do herói. Quando o JOGADOR usa uma delas, o HUD faz o
+## destaque de tela (hud.skill_cut): brilho nas bordas e a arte do personagem à direita.
 const SKILLS := {
 	# Paladino: o mais simples do jogo. Sem recurso nem combo: bate, provoca e aperta a defesa.
 	"tank": [{"name": "Golpe de Juramento", "cd": 1.5, "dmg": 30.0},
@@ -178,20 +180,20 @@ const SKILLS := {
 		{"name": "Provocação", "cd": 15.0},
 		{"name": "Solo Consagrado", "cd": 18.0},
 		{"name": "Égide", "cd": 25.0},
-		{"name": "Muralha da Fé", "cd": 60.0}],
+		{"name": "Muralha da Fé", "big": true, "cd": 60.0}],
 	# Malpractice (tank de sangue, "de papel"): cada golpe custa vida dela (SELF_COST). O slot 1 estoca
 	# e rouba um fio de vida, o 2 é o parry, o 3 rouba vida fixa e junta acúmulos, o 4 avança e provoca,
 	# o 5 é o ultimate (não tem recarga: gasta PARTY_NEED acúmulos). Quanto menos vida, mais dano.
 	"nurse": [{"name": "Syringe Poke", "cd": 1.0, "dmg": 8.0},
 		{"name": "Blood Taste", "cd": 20.0}, {"name": "Blood Consumed", "cd": 5.0, "dmg": 40.0},
-		{"name": "Emergency Response", "cd": 8.0}, {"name": "Blood Party", "cd": 0.0, "stacks": 20}],
+		{"name": "Emergency Response", "cd": 8.0}, {"name": "Blood Party", "big": true, "cd": 0.0, "stacks": 20}],
 	# Soulflame: healer direta, sem recurso. "ai_cd" é a recarga quando quem usa é a IA.
 	"healer": [{"name": "Fagulha Espiritual", "cd": 1.0, "dmg": 12.0},
 		{"name": "Toque de Brasa", "cd": 1.0, "cast": 1.5, "ai_cd": 3.5},
 		{"name": "Lareira Celestial", "cd": 18.0},
 		{"name": "Manto de Cinzas", "cd": 20.0},
 		{"name": "Asa da Fênix", "cd": 30.0},
-		{"name": "Renascimento", "cd": 60.0}],
+		{"name": "Renascimento", "big": true, "cd": 60.0}],
 	# Assassina: velocidade pura. O Talho (slot 1) bate MUITO mais forte do lado certo da boss:
 	# três de um lado, três do outro (unit.side_need / side_left), pra sempre.
 	"assassina": [{"name": "Talho Relâmpago", "cd": 0.6, "dmg": 10.0},
@@ -199,7 +201,7 @@ const SKILLS := {
 		{"name": "Garras Cruzadas", "cd": 6.0, "dmg": 18.0},
 		{"name": "Dança Carmesim", "cd": 12.0, "dmg": 65.0},
 		{"name": "Golpe de Misericórdia", "cd": 15.0, "dmg": 120.0},
-		{"name": "Frenesi da Fera", "cd": 60.0}],
+		{"name": "Frenesi da Fera", "big": true, "cd": 60.0}],
 	# Maga: atiradora. Nada de cast: ela dispara, junta balas Rainbow (passiva) e decide onde gastar.
 	# "pow" = dano de habilidade que não exige o alcance normal de ataque.
 	"maga": [{"name": "Disparo Rúnico", "cd": 1.0, "dmg": 26.0},
@@ -207,14 +209,14 @@ const SKILLS := {
 		{"name": "Ricochete Prismático", "cd": 8.0},
 		{"name": "Tiro Perfurante", "cd": 12.0, "dmg": 95.0},
 		{"name": "Salva Astral", "cd": 20.0},
-		{"name": "Canhão Estelar", "cd": 60.0}],
+		{"name": "Canhão Estelar", "big": true, "cd": 60.0}],
 	# Soulburner: marcar (Marca do Zênite) e estourar a marca (Lança Serafim) o mais tarde possível.
 	"burner": [{"name": "Brasas do Firmamento", "cd": 1.0, "dmg": 24.0},
 		{"name": "Marca do Zênite", "cd": 12.0},
 		{"name": "Lança Serafim", "cd": 8.0},
 		{"name": "Rasante Incandescente", "cd": 10.0},
 		{"name": "Chuva de Brasas", "cd": 20.0},
-		{"name": "Juízo Solar", "cd": 60.0}],
+		{"name": "Juízo Solar", "big": true, "cd": 60.0}],
 	# Ringstar: Jab -> Direto -> Gancho, cada um fortalece o seguinte (unit.chain). Os três dividem
 	# a recarga (GCD); os slots 4 e 5 são oGCD e não quebram a sequência.
 	"ringstar": [{"name": "Jab Estelar", "cd": 2.0, "dmg": 22.0},
@@ -222,14 +224,14 @@ const SKILLS := {
 		{"name": "Gancho Meteoro", "cd": 2.0, "dmg": 70.0},
 		{"name": "Contagem Regressiva", "cd": 14.0},
 		{"name": "SUPERSTAR!", "cd": 20.0},
-		{"name": "Nocaute Final", "cd": 60.0}],
+		{"name": "Nocaute Final", "big": true, "cd": 60.0}],
 	# Apotecário: healer com rotação ofensiva. Recurso: Vestígios (unit.vestiges, até 3), ganhos
 	# renovando a Decomposição (DoT da Necropsia) com 1 s ou menos sobrando.
 	"apothecary": [{"name": "Incisão", "cd": 1.0, "dmg": 16.0},
 		{"name": "Necropsia", "cd": 7.0, "dmg": 60.0},
 		{"name": "Sutura", "cd": 1.0, "cast": 1.5, "ai_cd": 3.5},
 		{"name": "Solução Hemostática", "cd": 20.0},
-		{"name": "Tanatopraxia", "cd": 45.0},
+		{"name": "Tanatopraxia", "big": true, "cd": 45.0},
 		{"name": "Estabilização", "cd": 60.0}],
 	# Sleepwalker, Modo Acordado (o Modo Dormindo é SKILLS_ASLEEP; quem escolhe a lista é kit()).
 	"sleepwalker": [{"name": "Bocejo", "cd": 2.0},
@@ -245,7 +247,7 @@ const SKILLS_ASLEEP := [
 	{"name": "Senhor Travesseiro: Devorador", "cd": 0.6, "cost": 10.0, "base": 150.0},
 	{"name": "O Abraço Impossível", "cd": 0.6, "cost": 15.0, "base": 200.0},
 	{"name": "A Porta Errada", "cd": 0.6, "cost": 20.0, "base": 250.0},
-	{"name": "A Casa que Engole", "cd": 0.6, "cost": 50.0, "base": 600.0},
+	{"name": "A Casa que Engole", "big": true, "cd": 0.6, "cost": 50.0, "base": 600.0},
 	{"name": "Acordar", "cd": 3.0},
 ]
 ## Cast curto trava o personagem no lugar; cast longo pode ser interrompido andando.
@@ -337,6 +339,9 @@ const COUNT_GCD := 1.0         # ... o GCD dos três golpes cai de 2 s pra 1 s .
 const COUNT_DMG := 1.1         # ... e +10% de dano
 const SUPERSTAR_DMG := 110.0
 const KNOCKOUT_DMG := 380.0
+const KNOCKOUT_AIR := 0.8      # Nocaute Final: tempo do salto, no ar (passa por cima de ataque baixo) ...
+const KNOCKOUT_HEIGHT := 7.5   # ... altura do salto ...
+const KNOCKOUT_R := 7.0        # ... e raio da onda de choque: o dano é em quem estiver dentro dela
 const STAR := Color(1.0, 0.45, 0.75)
 ## Kit do Apotecário.
 const DECOMP_TIME := 8.0       # Decomposição (DoT da Necropsia)
@@ -366,16 +371,28 @@ const HEAL_SLOTS := {
 	"apothecary": {"shield": 3, "revive": -1, "area": 4, "big": 5, "heal": 2},
 }
 ## Kit do Sleepwalker. Os danos da ficha (50, 60, 120...) são relativos; SW_SCALE traz pra escala do jogo.
-const SW_SCALE := 0.45
+## Ele é lento de propósito: TODA habilidade tem conjuração (SW_CAST; SW_CAST_NEAR com o buff Perto
+## do Sonho, que vem de manter o DoT). Por isso o dano por golpe é alto (SW_SCALE).
+const SW_SCALE := 0.62
+const SW_CAST := 1.25          # conjuração de todas as habilidades dele, parado ...
+const SW_CAST_NEAR := 0.75     # ... e com Perto do Sonho ativo
+## Torpor é difícil de juntar acordado: a sequência sozinha rende pouco, e quase metade vem de
+## acertar as janelas. Ciclo perfeito (4 da sequência + Bocejos) dá uns 50 líquidos; a sequência
+## inteira do sonho custa 100. Ou seja: dois ciclos bem feitos por visita completa ao sonho.
 const SW_AWAKE := [  # dano-base, Torpor gerado, stacks de Vulnerabilidade com a interação certa / sem ela
-	{"base": 50.0, "torpor": 4.0, "stacks": 0, "weak": 0},
-	{"base": 60.0, "torpor": 8.0, "stacks": 2, "weak": 2},
-	{"base": 120.0, "torpor": 12.0, "stacks": 3, "weak": 1},
-	{"base": 140.0, "torpor": 16.0, "stacks": 2, "weak": 1},
-	{"base": 200.0, "torpor": 24.0, "stacks": 1, "weak": 0},
+	{"base": 50.0, "torpor": 3.0, "stacks": 0, "weak": 0},
+	{"base": 60.0, "torpor": 5.0, "stacks": 2, "weak": 2},
+	{"base": 120.0, "torpor": 7.0, "stacks": 3, "weak": 1},
+	{"base": 140.0, "torpor": 9.0, "stacks": 2, "weak": 1},
+	{"base": 200.0, "torpor": 12.0, "stacks": 1, "weak": 0},
 ]
-const SW_WINDOW := 1.0         # janela entre uma habilidade da sequência e a seguinte
-const SW_PERFECT_TORPOR := 5.0 # Torpor extra por interação acertada
+const SW_WINDOW := 1.0         # depois que uma da sequência sai, tempo pra COMEÇAR a conjurar a seguinte
+const SW_PERFECT_TORPOR := 6.0 # Torpor extra por interação acertada
+const SW_STEP_GAP := 0.3       # dormindo: respiro entre uma habilidade da sequência e a próxima
+## Punição ao acordar, em segundos sem atacar nem usar habilidade (andar pode):
+const SW_LOCK_NONE := 2.0      # acordou sem ter usado nada no sonho
+const SW_LOCK_BITE := 1.0      # usou só A Mordida dos Mil (visita curta pra renovar o DoT)
+const SW_LOCK_BROKEN := 3.0    # começou a sequência e não fechou com A Casa que Engole
 const SW_BED_BONUS := 1.5      # A Cama Caiu! com Travesseiro Cheio
 const SW_DECAY := 1.0          # Torpor perdido por segundo, acordado
 const DREAM_MAX := 8           # Vulnerabilidade Onírica: até 8 stacks ...
@@ -411,7 +428,8 @@ const PROVOKE_SLOT := {"tank": 2, "nurse": 3}
 ## Quem erra o parry ou segura mal as recargas morre do próprio dano; quem joga bem vive no fio
 ## e bate mais forte por isso (LOW_HP_BONUS).
 const SELF_COST := {"Syringe Poke": 4.0, "Blood Consumed": 8.0, "Emergency Response": 6.0}
-const LOW_HP_BONUS := 0.6      # +60% de dano com a vida em LOW_HP_FLOOR ou menos; some com a vida cheia
+const LOW_HP_BONUS := 0.75     # +75% de dano com a vida em LOW_HP_FLOOR ou menos; some com a vida cheia
+const GAUGE_STEAL := 0.04      # gauge de sangue cheio (PARTY_NEED acúmulos): cada golpe devolve 4% da vida máxima
 const LOW_HP_FLOOR := 0.25
 const BLOOD := Color(0.86, 0.08, 0.2)
 const POKE_STEAL := 0.0001     # Syringe Poke: rouba 0,01% da vida ATUAL da boss por estocada
@@ -607,6 +625,11 @@ var hud
 var fx_root: Node3D
 var floor_mat: ShaderMaterial
 
+var cam: Camera3D
+var cam_home := Vector3.ZERO
+var shake_t := 0.0   # tremor de câmera (impactos grandes)
+var shake_amp := 0.0
+
 var autoplay := false
 var auto_left := 0.0
 var shot_left := -1.0
@@ -704,9 +727,13 @@ func _build_world() -> void:
 	env.ambient_light_color = Color(0.4, 0.42, 0.7)
 	env.ambient_light_energy = 0.7
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# brilho: tudo que emite luz (golpes, explosões, auras) estoura em volta, na cor do próprio efeito
 	env.glow_enabled = true
-	env.glow_intensity = 0.6
-	env.glow_bloom = 0.15
+	env.glow_intensity = 1.25
+	env.glow_strength = 1.15
+	env.glow_bloom = 0.3
+	env.glow_hdr_threshold = 0.85
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.12, 0.05, 0.2)
 	env.fog_density = 0.004
@@ -727,10 +754,11 @@ func _build_world() -> void:
 	rim.omni_range = 26.0
 	add_child(rim)
 
-	var cam := Camera3D.new()
+	cam = Camera3D.new()
 	cam.fov = 52.0
 	add_child(cam)
 	cam.look_at_from_position(Vector3(0, 12, 23), Vector3(0, 5.0, -3))
+	cam_home = cam.position
 
 	floor_mat = ShaderMaterial.new()
 	floor_mat.shader = preload("res://shaders/floor.gdshader")
@@ -1095,6 +1123,12 @@ func _process(delta: float) -> void:
 		lb = 1.0
 		use_lb()
 	swap_cd = maxf(0.0, swap_cd - delta)
+	if shake_t > 0.0:
+		shake_t -= delta
+		var sk := shake_amp * clampf(shake_t / 0.35, 0.0, 1.0)
+		cam.position = cam_home + Vector3(randf_range(-sk, sk), randf_range(-sk, sk), 0.0)
+		if shake_t <= 0.0:
+			cam.position = cam_home
 	_tick_boss(delta)
 	_tick_hazards(delta)
 	_tick_stacks(delta)
@@ -1144,6 +1178,12 @@ func _process(delta: float) -> void:
 		_tick_blood(u, delta)
 		if ended:
 			return
+		if u.air_t > 0.0:
+			u.air_t -= delta
+			if u.air_t <= 0.0:
+				_knockout_land(u)
+				if ended:
+					return
 		u.weak_t = maxf(0.0, u.weak_t - delta)
 		u.immortal_t = maxf(0.0, u.immortal_t - delta)
 		for n in u.skill_cd.size():
@@ -1158,9 +1198,11 @@ func _process(delta: float) -> void:
 		u.dash_cd = maxf(0.0, u.dash_cd - delta)
 		var before := u.position
 		if u.controlled and not autoplay:
-			_tick_player(u, delta)
+			if u.air_t <= 0.0:
+				_tick_player(u, delta)
 		else:
-			_tick_ai(u, delta)
+			if u.air_t <= 0.0:
+				_tick_ai(u, delta)
 			# a IA nunca pisa no vazio por conta própria
 			if void_on and _in_square(before) and not _in_square(u.position):
 				u.position = before
@@ -1251,6 +1293,8 @@ func _tick_rotation(u: Unit) -> void:
 
 func _tick_player(u: Unit, delta: float) -> void:
 	var moving := _input_dir() != Vector3.ZERO or u.dash_t > 0.0
+	if u.asleep:
+		moving = false  # dormindo ele não sai do lugar: apertar direção não cancela a conjuração
 	if _tick_cast(u, delta, moving):
 		return
 
@@ -1652,11 +1696,20 @@ func _heal_target() -> Unit:
 ## Tenta usar a habilidade. Com cast, só começa a conjurar; o efeito sai em _resolve_skill.
 func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 	var list: Array = kit(u)
-	if not u.alive or slot >= list.size() or list[slot] == null or u.skill_cd[slot] > 0.0 or u.channel_t > 0.0 or intro_left > 0.0:
+	# Acordar (Sleepwalker dormindo, slot 6) é o único botão que interrompe uma conjuração em curso
+	var wake_now: bool = u.key == "sleepwalker" and u.asleep and slot == 5
+	if not u.alive or slot >= list.size() or list[slot] == null or u.skill_cd[slot] > 0.0 or (u.channel_t > 0.0 and not wake_now) or intro_left > 0.0:
 		return false
 	var sk: Dictionary = list[slot]
+	if u.silence_t > 0.0 or u.air_t > 0.0:
+		return false  # punido por acordar mal, ou no meio do salto
+	var cast_time: float = sk.get("cast", 0.0)
+	if u.key == "sleepwalker":
+		if not _sw_can(u, slot):
+			return false
+		cast_time = sw_cast(u, slot)
 	# segurar o ataque básico andando não fica começando e cancelando cast a cada frame
-	if slot == 0 and sk.has("cast") and not by_ai and _input_dir() != Vector3.ZERO:
+	if slot == 0 and cast_time > 0.0 and not by_ai and not u.asleep and _input_dir() != Vector3.ZERO:
 		return false
 	u.cast_target = null
 	if sk.has("dmg") and not _in_range(u):
@@ -1698,8 +1751,11 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 				st = forced
 			u.cast_target = st
 
-	if sk.has("cast"):
-		var cast: float = sk["cast"]
+	if cast_time > 0.0:
+		var cast: float = cast_time
+		if u.key == "sleepwalker":
+			# a janela da sequência vale pra quem COMEÇA a conjurar dentro dela
+			u.cast_perfect = u.window_slot == slot and u.window_t > 0.0
 		# Golpe Lapidado: a Maga conjura o golpe forte mais rápido
 		if u.key == "maga" and slot == BIG_SLOT["maga"] and Knowledge.has(u.hero, "burst"):
 			cast -= 0.7
@@ -1710,11 +1766,12 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 		if u.cast_target != null:
 			# liga quem conjura a quem vai receber enquanto o cast corre
 			u.face(u.cast_target.position - u.position)
-			_beam(u.position, u.cast_target.position, Color(0.4, 1.0, 0.6, 0.7), sk["cast"] + 0.15)
-		elif sk.has("dmg"):
+			_beam(u.position, u.cast_target.position, Color(0.4, 1.0, 0.6, 0.7), cast + 0.15)
+		elif sk.has("dmg") or u.key == "sleepwalker":
 			u.face(BOSS_POINT - u.position)
 		# cast curto já gasta a recarga ao começar; cast longo só gasta se sair
-		if sk["cast"] < LOCKED_CAST:
+		# (as conjurações do Sleepwalker sempre podem ser interrompidas andando, sem gastar nada)
+		if sk.has("cast") and sk["cast"] < LOCKED_CAST:
 			u.skill_cd[slot] = sk["cd"] * (1.15 if by_ai else 1.0)
 		return true
 	_resolve_skill(u, slot, by_ai)
@@ -1723,6 +1780,8 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 
 func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 	var sk: Dictionary = kit(u)[slot]
+	if sk.get("big", false) and u.controlled and not by_ai:
+		hud.skill_cut(u, sk["name"])  # habilidade importante, na mão do jogador: destaque de tela
 	if u.key == "sleepwalker":
 		_sleep_skill(u, slot)
 		return
@@ -1837,10 +1896,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_burst(Vector3(0, 4, -11.5), STAR, 5.0)
 			_damage_boss(u, SUPERSTAR_DMG, true, true)
 		"Nocaute Final":
-			_burst(Vector3(0, 4.5, -11.5), STAR.lightened(0.3), 9.0)
-			hud.flash(Color(STAR.r, STAR.g, STAR.b, 0.4))
-			hud.toast("NOCAUTE FINAL", 1.6)
-			_damage_boss(u, KNOCKOUT_DMG, true, true)
+			_knockout_jump(u)
 		"Passo Rasante":
 			_dash_cut(u, sk["dmg"])
 		"Garras Cruzadas":
@@ -2303,6 +2359,103 @@ func _countdown(u: Unit) -> void:
 	hud.toast("CONTAGEM REGRESSIVA", 1.2)
 
 
+## Nocaute Final: salta alto na direção da boss, fica suspensa e despenca. O dano é na aterrissagem
+## (_knockout_land), em área. Enquanto air_t > 0 ela está no ar: não age e passa por cima de
+## ataque baixo (hazard com "low": true).
+func _knockout_jump(u: Unit) -> void:
+	var to_boss := BOSS_POINT - u.position
+	to_boss.y = 0.0
+	var go := maxf(0.0, to_boss.length() - (MELEE_RANGE - 1.0))
+	u.face(to_boss)
+	u.air_t = KNOCKOUT_AIR
+	u.channel_t = 0.0
+	if u.controlled:
+		hud.toast("NOCAUTE FINAL", 1.4)
+	_burst(u.position, STAR, 3.0)
+	# o corpo vai até o ponto de queda enquanto o boneco sobe, paira e desce
+	var land := u.position + to_boss.normalized() * go if go > 0.1 else u.position
+	u.create_tween().tween_property(u, "position", land, KNOCKOUT_AIR * 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	var tw := u.visual.create_tween()
+	tw.tween_property(u.visual, "position:y", KNOCKOUT_HEIGHT, KNOCKOUT_AIR * 0.36).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(u.visual, "scale", Vector3(0.8, 1.35, 0.8), KNOCKOUT_AIR * 0.36)
+	# suspensa: a luva cresce e brilha em cima dela
+	tw.tween_property(u.visual, "position:y", KNOCKOUT_HEIGHT + 0.5, KNOCKOUT_AIR * 0.44)
+	tw.parallel().tween_property(u.visual, "scale", Vector3(1.25, 1.25, 1.25), KNOCKOUT_AIR * 0.44)
+	tw.tween_property(u.visual, "position:y", 0.0, KNOCKOUT_AIR * 0.2).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	var glove_m := Fx.mat(Color(STAR.r, STAR.g, STAR.b, 0.85), 8.0, true)
+	var glove := Fx.inst(u, Fx.sphere(0.5), glove_m, Vector3(0, 2.6, 0))
+	var tg := glove.create_tween()
+	tg.tween_property(glove, "position:y", KNOCKOUT_HEIGHT + 3.0, KNOCKOUT_AIR * 0.36).set_ease(Tween.EASE_OUT)
+	tg.parallel().tween_property(glove, "scale", Vector3.ONE * 4.2, KNOCKOUT_AIR * 0.8)
+	tg.tween_property(glove, "position:y", 1.0, KNOCKOUT_AIR * 0.2).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	tg.tween_callback(glove.queue_free)
+	# marca no chão de onde a onda de choque vai pegar
+	var mark_m := Fx.mat(Color(STAR.r, STAR.g, STAR.b, 0.22), 2.5, true)
+	var mark := Fx.inst(fx_root, Fx.torus(KNOCKOUT_R - 0.22, KNOCKOUT_R), mark_m, land + Vector3(0, 0.06, 0))
+	mark.create_tween().tween_callback(mark.queue_free).set_delay(KNOCKOUT_AIR)
+
+
+## A aterrissagem: explosão de luz, onda de choque no chão (do tamanho exato do dano), coluna de
+## luz, estrelas voando e tremor. Dano em área em volta de onde ela caiu.
+func _knockout_land(u: Unit) -> void:
+	u.air_t = 0.0
+	u.visual.position.y = 0.0
+	u.visual.scale = Vector3.ONE
+	u.punch()
+	var at := u.position
+	var hot := STAR.lightened(0.45)
+	# clarão no ponto de impacto
+	var flash_m := Fx.mat(Color(1.0, 0.95, 1.0, 0.9), 5.0, true)
+	var fl := Fx.inst(fx_root, Fx.sphere(1.0), flash_m, at + Vector3(0, 0.6, 0))
+	fl.scale = Vector3.ONE * 0.6
+	var tf := fl.create_tween().set_parallel(true)
+	tf.tween_property(fl, "scale", Vector3(KNOCKOUT_R * 0.75, KNOCKOUT_R * 0.5, KNOCKOUT_R * 0.75), 0.3).set_ease(Tween.EASE_OUT)
+	tf.tween_property(flash_m, "albedo_color:a", 0.0, 0.34)
+	tf.chain().tween_callback(fl.queue_free)
+	# chão aceso por um instante, na área exata do dano
+	var disc_m := Fx.mat(Color(hot.r, hot.g, hot.b, 0.45), 1.6, true)
+	var disc := Fx.inst(fx_root, Fx.disc(KNOCKOUT_R, 0.03), disc_m, at + Vector3(0, 0.05, 0))
+	var td := disc.create_tween()
+	td.tween_property(disc_m, "albedo_color:a", 0.0, 0.55)
+	td.tween_callback(disc.queue_free)
+	# onda de choque: três anéis saindo até a borda da área
+	for n in 3:
+		var ring_m := Fx.mat(Color(hot.r, hot.g, hot.b, 0.95), 6.0 - n * 1.5, true)
+		var ring := Fx.inst(fx_root, Fx.torus(0.78, 1.0), ring_m, at + Vector3(0, 0.12 + n * 0.04, 0))
+		ring.scale = Vector3(0.3, 1.0 + (2 - n) * 1.2, 0.3)
+		var tr := ring.create_tween().set_parallel(true)
+		tr.tween_property(ring, "scale", Vector3(KNOCKOUT_R, 0.5, KNOCKOUT_R), 0.42 + n * 0.1).set_delay(n * 0.07).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+		tr.tween_property(ring_m, "albedo_color:a", 0.0, 0.42 + n * 0.1).set_delay(n * 0.07 + 0.12)
+		tr.chain().tween_callback(ring.queue_free)
+	# coluna de luz
+	var col_m := Fx.mat(Color(1.0, 0.9, 1.0, 0.8), 4.0, true)
+	var pillar := Fx.inst(fx_root, Fx.cyl(1.6, 1.6, 26.0), col_m, at + Vector3(0, 13.0, 0))
+	var tp := pillar.create_tween().set_parallel(true)
+	tp.tween_property(pillar, "scale", Vector3(0.05, 1.0, 0.05), 0.5).set_ease(Tween.EASE_IN)
+	tp.tween_property(col_m, "albedo_color:a", 0.0, 0.5)
+	tp.chain().tween_callback(pillar.queue_free)
+	# estrelas voando pra fora, em arco
+	for n in 16:
+		var a := n * TAU / 16.0 + randf_range(-0.15, 0.15)
+		var dir := Vector3(cos(a), 0, sin(a))
+		var star_m := Fx.mat([STAR, Color(1.0, 0.9, 0.35), Color(0.45, 0.8, 1.0)][n % 3], 8.0, true)
+		var star := Fx.inst(fx_root, Fx.sphere(0.22 + randf() * 0.14), star_m, at + Vector3(0, 0.5, 0))
+		var far := at + dir * randf_range(KNOCKOUT_R * 0.7, KNOCKOUT_R * 1.15)
+		var ts := star.create_tween().set_parallel(true)
+		ts.tween_property(star, "position:x", far.x, 0.6).set_ease(Tween.EASE_OUT)
+		ts.tween_property(star, "position:z", far.z, 0.6).set_ease(Tween.EASE_OUT)
+		ts.tween_property(star, "position:y", randf_range(2.5, 5.5), 0.3).set_ease(Tween.EASE_OUT)
+		ts.tween_property(star, "scale", Vector3.ONE * 0.1, 0.6)
+		ts.chain().tween_callback(star.queue_free)
+	hud.flash(STAR.lightened(0.3), 0.22)
+	shake_t = 0.45
+	shake_amp = 0.55
+	# dano: a boss leva se o ponto de ataque dela está dentro da onda
+	if at.distance_to(BOSS_POINT) <= KNOCKOUT_R:
+		_damage_boss(u, KNOCKOUT_DMG, true, true)
+		_burst(Vector3(0, 4.5, -11.5), hot, 8.0)
+
+
 # ---------------------------------------------------------------- Apotecário
 
 ## Lista de habilidades que vale pro herói agora (o Sleepwalker tem uma lista por modo).
@@ -2385,6 +2538,30 @@ func _sw_cd(u: Unit, base: float) -> float:
 	return maxf(0.3, base - (1.0 if u.near_t > 0.0 else 0.0))
 
 
+## Conjuração da habilidade do slot, agora. Só Acordar é na hora (é o botão de emergência, e já
+## cobra a punição de acordar mal).
+func sw_cast(u: Unit, slot: int) -> float:
+	if slot == 5 and u.asleep:
+		return 0.0
+	return SW_CAST_NEAR if u.near_t > 0.0 else SW_CAST
+
+
+## Dá pra começar a conjurar a habilidade do slot? (tudo que faria ela falhar é checado ANTES do
+## cast, pra ele nunca terminar à toa)
+func _sw_can(u: Unit, slot: int) -> bool:
+	if slot == 5:
+		return true
+	if u.asleep:
+		if slot != u.dream_step or u.wake_t > 0.0:
+			u.set_action("Fora de ordem", 2)
+			return false
+		return slot == 0 or u.torpor >= float(SKILLS_ASLEEP[slot]["cost"])
+	if not _in_range(u):
+		u.set_action("Longe demais", 2)
+		return false
+	return true
+
+
 func _dream_add(n: int) -> void:
 	if n <= 0:
 		return
@@ -2407,7 +2584,8 @@ func _sleep_skill(u: Unit, slot: int) -> void:
 		_sw_dream(u, slot)
 		return
 	var def: Dictionary = SW_AWAKE[slot]
-	u.skill_cd[slot] = _sw_cd(u, SKILLS["sleepwalker"][slot]["cd"])
+	# a recarga conta desde o começo da conjuração, como um GCD: o cast cabe dentro dela
+	u.skill_cd[slot] = maxf(0.25, _sw_cd(u, SKILLS["sleepwalker"][slot]["cd"]) - u.channel_total)
 	if not _in_range(u):
 		u.set_action("Longe demais", 2)
 		u.skill_cd[slot] = 0.0
@@ -2428,7 +2606,7 @@ func _sleep_skill(u: Unit, slot: int) -> void:
 		_sw_hit(u, amount, amount > 60.0)
 		return
 	# sequência Lençol (1) -> Visitantes (2) -> Travesseiro (3) -> Cama (4): cada uma abre 1 s pra próxima
-	var perfect: bool = slot == 1 or (u.window_slot == slot and u.window_t > 0.0)
+	var perfect: bool = slot == 1 or u.cast_perfect
 	var stacks: int = def["stacks"] if perfect else def["weak"]
 	if slot > 1 and perfect:
 		gain += SW_PERFECT_TORPOR
@@ -2469,6 +2647,7 @@ func _sw_toggle(u: Unit) -> void:
 		return
 	u.asleep = true
 	u.dream_step = 0
+	u.cast_perfect = false
 	u.window_slot = -1
 	u.window_t = 0.0
 	# as recargas do Modo Acordado ficam guardadas (e continuam correndo em _tick_sleep);
@@ -2483,7 +2662,17 @@ func _sw_toggle(u: Unit) -> void:
 
 
 ## Acorda. `lose`: perde o Torpor que sobrou (acordou no meio, ou faltou Torpor).
-func _sw_wake(u: Unit, lose: bool) -> void:
+## `clean`: fechou a sequência com A Casa que Engole, então não tem punição. Qualquer outro jeito
+## de acordar deixa ele um tempo sem agir (silence_t), conforme até onde foi no sonho.
+func _sw_wake(u: Unit, lose: bool, clean := false) -> void:
+	var lock := 0.0
+	if not clean:
+		lock = SW_LOCK_NONE if u.dream_step == 0 else (SW_LOCK_BITE if u.dream_step == 1 else SW_LOCK_BROKEN)
+	u.silence_t = lock
+	u.channel_t = 0.0
+	if u.controlled and lock > 0.0:
+		var why := "ACORDOU À TOA" if u.dream_step == 0 else ("VISITA CURTA" if u.dream_step == 1 else "ROTAÇÃO QUEBRADA")
+		hud.toast("%s: %d s sem agir" % [why, int(lock)], 1.4)
 	u.bite_cd = u.skill_cd[0]
 	u.asleep = false
 	u.dream_step = 0
@@ -2527,11 +2716,11 @@ func _sw_dream(u: Unit, slot: int) -> void:
 			if o.alive:
 				o.shield_hp = maxf(o.shield_hp, o.max_hp * HOUSE_SHIELD)
 				o.shield_t = maxf(o.shield_t, HOUSE_SHIELD_TIME)
-		_sw_wake(u, false)
+		_sw_wake(u, false, true)
 		return
 	u.dream_step = slot + 1
 	for n in range(1, 5):
-		u.skill_cd[n] = 0.6
+		u.skill_cd[n] = SW_STEP_GAP
 	if u.torpor < float(SKILLS_ASLEEP[u.dream_step]["cost"]):
 		# não dá pra pagar a próxima: acorda sozinho daqui a 1 s e perde o que sobrou
 		u.wake_t = 1.0
@@ -2598,6 +2787,9 @@ func _tone(freq: float, dur: float, snap: bool) -> AudioStreamWAV:
 
 ## Sleepwalker, a cada frame: Torpor, janelas, buffs e o despertar por falta de Torpor.
 func _tick_sleep(u: Unit, delta: float) -> void:
+	if u.silence_t > 0.0:
+		u.silence_t = maxf(0.0, u.silence_t - delta)
+		u.set_action("Sonolento  %.1f" % u.silence_t, 2)
 	if not u.asleep:
 		u.torpor = maxf(0.0, u.torpor - SW_DECAY * delta)
 	else:
@@ -3094,6 +3286,10 @@ func _tick_hazards(delta: float) -> void:
 		var player := units[ctrl]
 		var player_hit := false
 		for u in units:
+			# "low": ataque rente ao chão. Quem está no ar (unit.air_t, salto do Nocaute Final) passa
+			# por cima; qualquer outro ataque acerta normalmente: o salto não é invulnerabilidade.
+			if h.get("low", false) and u.air_t > 0.0:
+				continue
 			if h["dmg"] > 0.0 and u.alive and u.invuln <= 0.0 and _hit_test(h, u.position, 0.0):
 				if u == player:
 					player_hit = true
@@ -3740,6 +3936,9 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 		dmg *= 1.2
 	if boss_hp / boss_max < 0.3 and Knowledge.has(u.hero, "executor"):
 		dmg *= 1.25
+	# Malpractice com o gauge de sangue cheio: cada golpe direto devolve um pedaço da vida máxima
+	if u.key == "nurse" and show and u.stacks >= PARTY_NEED:
+		_lifesteal(u, u.base_hp * GAUGE_STEAL)
 	boss_hp -= dmg
 	lb = minf(1.0, lb + dmg / (boss_max * LB_NEED) * (1.5 if Knowledge.has(u.hero, "spark") else 1.0))
 	u.dmg_total += dmg
@@ -3765,8 +3964,8 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 func _attack_fx(u: Unit, big: bool) -> void:
 	var from := u.position + Vector3(0, 1.1, 0)
 	var to := Vector3(randf_range(-1.2, 1.2), randf_range(2.0, 4.0), -11.0)
-	var m := Fx.mat(u.color.lightened(0.4), 3.0, true)
-	var mi := Fx.inst(fx_root, Fx.sphere(0.28 if big else 0.18), m, from)
+	var m := Fx.mat(u.color.lightened(0.4), 7.0 if big else 5.0, true)
+	var mi := Fx.inst(fx_root, Fx.sphere(0.34 if big else 0.2), m, from)
 	var tw := mi.create_tween()
 	tw.tween_property(mi, "position", to, 0.09)
 	tw.tween_callback(mi.queue_free)
@@ -4279,7 +4478,7 @@ func _sfx(stream: AudioStream, volume_db := 0.0) -> void:
 
 
 func _burst(p: Vector3, col: Color, radius: float) -> void:
-	var m := Fx.mat(Color(col.r, col.g, col.b, 0.6), 2.0, true)
+	var m := Fx.mat(Color(col.r, col.g, col.b, 0.6), 5.0, true)
 	var mi := Fx.inst(fx_root, Fx.sphere(1.0), m, p + Vector3(0, 0.3, 0))
 	mi.scale = Vector3.ONE * 0.2
 	var tw := mi.create_tween()
@@ -4287,3 +4486,11 @@ func _burst(p: Vector3, col: Color, radius: float) -> void:
 	tw.tween_property(mi, "scale", Vector3(radius, radius * 0.5, radius), 0.4).set_ease(Tween.EASE_OUT)
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.4)
 	tw.chain().tween_callback(mi.queue_free)
+	# miolo de luz: um clarão curto, quase branco, na cor do efeito
+	var core_m := Fx.mat(Color(col.r, col.g, col.b, 0.9).lightened(0.55), 9.0, true)
+	var core := Fx.inst(fx_root, Fx.sphere(1.0), core_m, p + Vector3(0, 0.3, 0))
+	core.scale = Vector3.ONE * radius * 0.28
+	var tc := core.create_tween().set_parallel(true)
+	tc.tween_property(core, "scale", Vector3.ONE * radius * 0.05, 0.22)
+	tc.tween_property(core_m, "albedo_color:a", 0.0, 0.22)
+	tc.chain().tween_callback(core.queue_free)

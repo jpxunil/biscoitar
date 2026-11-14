@@ -70,6 +70,10 @@ var mend_t := 0.0      # regeneração da Tanatopraxia
 var mend_rate := 0.0
 # Sleepwalker
 var asleep := false    # Modo Dormindo: imóvel, gasta Torpor
+var silence_t := 0.0   # punição de quem acordou mal: anda, mas não ataca nem usa habilidade
+var cast_perfect := false  # a conjuração em curso começou dentro da janela da sequência
+# Ringstar no ar (salto do Nocaute Final): passa por cima de ataque baixo (hazard com "low")
+var air_t := 0.0
 var torpor := 0.0      # 0..100
 var dream_step := 0    # qual habilidade da sequência Dormindo é a próxima (0..4)
 var window_slot := -1  # Acordado: slot que está na janela de 1 s (-1 = nenhuma)
@@ -337,6 +341,8 @@ func die() -> void:
 	enmity = 0.0  # morrer zera a enmity, como no FFXIV
 	guard_t = 0.0
 	asleep = false
+	silence_t = 0.0
+	air_t = 0.0
 	torpor = 0.0
 	dream_step = 0
 	window_slot = -1

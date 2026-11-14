@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="sleepwalker_s5_bg" cx="0.5" cy="0.4" r="0.8">
+<stop offset="0" stop-color="#C04BFF"/><stop offset="0.5" stop-color="#3a2478"/><stop offset="1" stop-color="#0d0824"/>
+</radialGradient>
+<linearGradient id="sleepwalker_s5_wall" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#6a4aa8"/><stop offset="1" stop-color="#3b2a7a"/>
+</linearGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#sleepwalker_s5_bg)" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1.5"/>
+<!-- chimney and smoke -->
+<polygon points="84,22 97,20 99,48 86,40" fill="#3b2a7a" stroke="#121429" stroke-width="4" stroke-linejoin="round"/>
+<circle cx="100" cy="14" r="5" fill="#e079ff" stroke="#121429" stroke-width="2.5"/>
+<circle cx="110" cy="22" r="3.5" fill="#e079ff" stroke="#121429" stroke-width="2.5"/>
+<!-- house body -->
+<polygon points="26,56 102,56 106,117 22,117" fill="url(#sleepwalker_s5_wall)" stroke="#121429" stroke-width="5" stroke-linejoin="round"/>
+<polygon points="92,58 102,58 105,115 96,115" fill="#2A1E5C"/>
+<!-- roof -->
+<polygon points="12,60 60,13 116,60" fill="#221850" stroke="#121429" stroke-width="5" stroke-linejoin="round"/>
+<line x1="26" y1="52" x2="59" y2="21" stroke="#8a4be0" stroke-width="3.5" stroke-linecap="round"/>
+<!-- window eyes -->
+<polygon points="30,60 54,66 54,76 30,76" fill="#7dffe0" stroke="#121429" stroke-width="3.5" stroke-linejoin="round"/>
+<polygon points="98,60 74,66 74,76 98,76" fill="#7dffe0" stroke="#121429" stroke-width="3.5" stroke-linejoin="round"/>
+<rect x="43" y="65" width="5" height="11" fill="#121429"/>
+<rect x="80" y="65" width="5" height="11" fill="#121429"/>
+<!-- door maw -->
+<path d="M30,117 L30,98 Q64,66 98,98 L98,117 Z" fill="#1a0420" stroke="#121429" stroke-width="4.5" stroke-linejoin="round"/>
+<path d="M48,117 Q50,100 64,100 Q78,100 80,117 Z" fill="#C04BFF" stroke="#121429" stroke-width="3" stroke-linejoin="round"/>
+<line x1="64" y1="106" x2="64" y2="116" stroke="#8a2bc4" stroke-width="2.5" stroke-linecap="round"/>
+<!-- victim being swallowed -->
+<line x1="58" y1="90" x2="54" y2="83" stroke="#121429" stroke-width="5.5" stroke-linecap="round"/>
+<line x1="70" y1="90" x2="74" y2="83" stroke="#121429" stroke-width="5.5" stroke-linecap="round"/>
+<line x1="58" y1="90" x2="54" y2="83" stroke="#f3ecd8" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="70" y1="90" x2="74" y2="83" stroke="#f3ecd8" stroke-width="2.5" stroke-linecap="round"/>
+<circle cx="64" cy="95" r="6" fill="#f3ecd8" stroke="#121429" stroke-width="2.5"/>
+<!-- teeth -->
+<g fill="#ffffff" stroke="#121429" stroke-width="2.5" stroke-linejoin="round">
+<polygon points="31,97 41,89 40,104"/><polygon points="42,88 53,83 50,98"/><polygon points="75,83 86,88 78,98"/><polygon points="87,89 97,97 88,104"/>
+<polygon points="33,117 43,117 38,105"/><polygon points="85,117 95,117 90,105"/>
+</g>
+<!-- accents -->
+<circle cx="20" cy="22" r="2.2" fill="#7dffe0"/><circle cx="34" cy="14" r="1.8" fill="#efb8ff"/>
+<path d="M18,36 Q18,41 23,41 Q18,41 18,46 Q18,41 13,41 Q18,41 18,36 Z" fill="#b9fff0"/>
+</svg>

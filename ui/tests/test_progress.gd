@@ -110,7 +110,34 @@ func _initialize() -> void:
 	var main := await open_main()
 	var menus = main.hud.menus
 	check(not menus.title.has_node("BtnGear"), "menu principal não tem mais o botão GEAR")
-	check(menus.title._btns.size() == 4, "menu principal: PLAY, LOJA, TUTORIAL e OPÇÕES")
+	check(menus.title._btns.size() == 5 and menus.title.has_node("BtnSkills"), "menu principal: PLAY, LOJA, SKILLS, TUTORIAL e OPÇÕES")
+	menus.title.get_node("BtnSkills").pressed.emit()
+	await frames(3)
+	var sks = menus.skills
+	check(sks.visible and sks._rows.size() == 6, "SKILLS abre a consulta de habilidades (6 slots)")
+	var first_hero: int = sks.hero
+	var seen_heroes := {}
+	for n in Knowledge.HEROES.size():
+		seen_heroes[sks.hero] = true
+		sks._switch(1)
+	check(seen_heroes.size() == Knowledge.HEROES.size() and sks.hero == first_hero, "as setas passam por todos os personagens")
+	sks.open(8)
+	check(sks._mode_btn.visible and sks._d_name.text == "BOCEJO", "Sleepwalker: tem o botão de modo")
+	sks._toggle_mode()
+	check(sks.asleep and sks._d_name.text == "A MORDIDA DOS MIL" and sks._d_icon.texture == SkillInfo.icon("sleepwalker", 0, true), "TAB mostra as habilidades (e os ícones) do Modo Dormindo")
+	sks.open(0)
+	check(not sks._mode_btn.visible, "os outros personagens não têm segundo modo")
+	Binds.assign("skill_2", 0, KEY_M)
+	sks.open(0)
+	var found_key := false
+	for c in sks._rows[1]["root"].get_children():
+		if c is Chip and c.text == "M":
+			found_key = true
+	check(found_key, "a tela mostra a tecla configurada do slot, não o número")
+	Binds.reset("skill_2")
+	sks.back_pressed.emit()
+	await frames(2)
+	check(menus.title.visible, "VOLTAR retorna ao menu principal")
 	menus.show_screen("bosses")
 	await frames(2)
 	check(menus.bosses.visible and menus.bosses.has_node("BtnGear"), "o gear do save abre pela tela de bosses (CARTAS)")

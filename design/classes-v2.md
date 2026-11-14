@@ -200,3 +200,23 @@ Boxeadora / estrela pop / magical girl com luvas mágicas gigantes. Sem gauge ne
 - [x] Sleepwalker (herói 8, chave "sleepwalker") — dois modos (kit()), Torpor, Vulnerabilidade Onírica, janelas de 1 s, Ecos do Pesadelo com som gerado, Pesadelo Persistente e Perto do Sonho. Danos da ficha × SW_SCALE (0,45)
 - [x] Ringstar (herói 6, chave "ringstar") — sequência Jab/Direto/Gancho com GCD dividido, botão fortalecido brilha, Contagem Regressiva, SUPERSTAR!, Nocaute Final. Retrato provisório
 - [x] Party livre e fluxo de entrada: PLAY -> saves (4 slots, user://save_N.json) -> cafeteria (scripts/lobby.gd) -> bosses -> cartas -> luta. Teste: ui/tests/test_party.gd (rodar SEM argumentos)
+
+## Atualização: ritmo do Sleepwalker, Nocaute Final, gauge da Malpractice, ícones (2026-11-13)
+
+Vale o que está aqui quando divergir das fichas acima.
+
+- **Sleepwalker**: toda habilidade conjura 1,25 s parado (0,75 s com Perto do Sonho); só Acordar é na hora, e é
+  o único botão que interrompe uma conjuração. A janela de 1 s da sequência vale pra quem COMEÇA a conjurar
+  dentro dela. Torpor acordado: 3 / 5 / 7 / 9 / 12, +6 por janela acertada (ciclo perfeito ≈ 50; a sequência
+  do sonho custa 100). Punição ao acordar, sem agir mas podendo andar: 2 s sem ter usado nada, 1 s tendo usado
+  só A Mordida dos Mil, 3 s largando a sequência no meio; fechar com A Casa que Engole não pune.
+  SW_SCALE subiu de 0,45 pra 0,62 pra compensar o ritmo mais lento.
+- **Ringstar, Nocaute Final**: salto de 0,8 s até perto da boss, dano em área (raio 7) na aterrissagem. No ar ela
+  passa por cima de hazard com `"low": true` (ataque rente ao chão; nenhum boss usa ainda) e continua levando
+  os outros ataques.
+- **Malpractice**: os acúmulos do Blood Party viraram o gauge de Sangue, em cima da barra. Gauge cheio: cada
+  golpe direto devolve 4% da vida máxima. Bônus de vida baixa: +75% (era +60%).
+- **Habilidade de destaque** (`"big": true` em SKILLS): uma por herói. Quando o jogador usa, o HUD mostra brilho
+  nas bordas e a arte do personagem à direita (hud.skill_cut). IA não dispara.
+- **Ícones e fichas**: `assets/skills/<chave>_<slot>.svg` (59 arquivos; Modo Dormindo em `<chave>_s<slot>.svg`),
+  textos em `scripts/skill_info.gd`, usados pela barra da luta, pelo tooltip e pela tela SKILLS do menu.

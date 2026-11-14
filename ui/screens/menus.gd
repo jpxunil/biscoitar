@@ -5,6 +5,7 @@ extends Control
 ##   bosses -> TREINO LIVRE (dummy) -> cartas -> luta sem progresso
 ##   vitória -> loja -> título
 ##   título -> tutoriais -> (cena do tutorial) -> tutoriais
+##   título -> SKILLS (consulta das habilidades de todos os personagens) -> título
 ##   título -> opções (a tela de opções é do hud.gd: é a mesma que o pause abre)
 ## Cada tela é uma cena própria em ui/screens/, que também abre sozinha com F6.
 
@@ -15,6 +16,7 @@ var cards: CardsScreen
 var shop: ShopScreen
 var tutorials: TutorialsScreen
 var saves: SavesScreen
+var skills: SkillsScreen
 var _gear := false
 
 
@@ -27,10 +29,13 @@ func setup(game) -> void:
 	shop = preload("res://ui/screens/shop_screen.tscn").instantiate()
 	tutorials = TutorialsScreen.new()
 	saves = SavesScreen.new()
-	for s in [title, bosses, cards, shop, tutorials, saves]:
+	skills = SkillsScreen.new()
+	for s in [title, bosses, cards, shop, tutorials, saves, skills]:
 		add_child(s)
 		s.visible = false
 	title.play_pressed.connect(show_screen.bind("saves"))
+	title.skills_pressed.connect(show_screen.bind("skills"))
+	skills.back_pressed.connect(show_screen.bind("title"))
 	saves.back_pressed.connect(show_screen.bind("title"))
 	saves.slot_chosen.connect(func(n: int):
 		# carrega (ou cria) o save e vai pra cafeteria montar a party; os bosses só abrem depois dela
@@ -87,9 +92,12 @@ func show_screen(id: String) -> void:
 	# os bosses e as cartas de luta só existem com um save e uma party de quatro
 	if id == "bosses" and Knowledge.persist and (Knowledge.slot <= 0 or not Knowledge.party_ready()):
 		id = "saves"
-	for s in [title, bosses, cards, shop, tutorials, saves]:
+	for s in [title, bosses, cards, shop, tutorials, saves, skills]:
 		s.visible = false
 	match id:
+		"skills":
+			skills.visible = true
+			skills.open(Knowledge.start_hero)
 		"bosses":
 			bosses.visible = true
 			bosses.open()

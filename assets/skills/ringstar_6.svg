@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="ringstar_6_bg" cx="0.5" cy="0.4" r="0.8">
+<stop offset="0" stop-color="#8AD4FF"/>
+<stop offset="0.5" stop-color="#3A5AD0"/>
+<stop offset="1" stop-color="#16184A"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#ringstar_6_bg)"/>
+<path d="M26,70 C22,50 30,34 24,12 L38,30 L44,10 L54,26 L64,8 L74,26 L84,10 L90,30 L104,12 C98,34 106,50 102,70 C96,94 32,94 26,70 Z" fill="#FFE14D" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+<path d="M34,68 C31,52 37,40 35,28 L44,38 L50,24 L57,36 L64,22 L71,36 L78,24 L84,38 L93,28 C91,40 97,52 94,68 C90,86 38,86 34,68 Z" fill="#FFF6B0"/>
+<polygon points="16,12 20,12 18,50" fill="#FFFFFF" opacity="0.85"/>
+<polygon points="108,12 112,12 110,50" fill="#FFFFFF" opacity="0.85"/>
+<polygon points="27,10 30,10 28.5,34" fill="#FFFFFF" opacity="0.7"/>
+<polygon points="98,10 101,10 99.5,34" fill="#FFFFFF" opacity="0.7"/>
+<ellipse cx="64" cy="105" rx="50" ry="11" fill="none" stroke="#121429" stroke-width="9"/>
+<ellipse cx="64" cy="105" rx="50" ry="11" fill="none" stroke="#FF73BE" stroke-width="4.5"/>
+<ellipse cx="64" cy="105" rx="34" ry="6.5" fill="none" stroke="#121429" stroke-width="6"/>
+<ellipse cx="64" cy="105" rx="34" ry="6.5" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+<polygon points="46,22 82,22 85,42 43,42" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+<polygon points="44.6,29 83.4,29 84.3,35 43.7,35" fill="#4FB8FF"/>
+<path d="M40,42 C33,56 34,80 44,91 C54,100 74,100 84,91 C94,80 95,56 88,42 Z" fill="#FF73BE" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+<path d="M84,90 C93,79 93,58 88,46 C88,64 82,80 62,93 C72,97 80,95 84,90 Z" fill="#D9489A"/>
+<path d="M50,48 C60,45 72,45 80,49 C72,50 60,50 50,54 Z" fill="#FFC2E4"/>
+<path d="M50,83 C58,90 72,90 81,81" fill="none" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3.2"/>
+<line x1="60" y1="88" x2="60" y2="96" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3"/>
+<line x1="71" y1="87.5" x2="72" y2="95" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3"/>
+<path d="M33,55 C26,60 27,78 36,83 C45,85 49,76 47,66 C45,57 40,52 33,55 Z" fill="#FF94CF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+<path d="M33,62 C33,66 34,70 36,73" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(64,104) scale(2.2,0.9)" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="1.6"/>
+<polygon points="14,92 22,84 20,95" fill="#FFE14D" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5"/>
+<polygon points="114,92 106,84 108,95" fill="#FFE14D" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5"/>
+<polygon points="30,86 34,76 37,87" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5"/>
+<polygon points="98,86 94,76 91,87" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5"/>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.25"/>
+</svg>

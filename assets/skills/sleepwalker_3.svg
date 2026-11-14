@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="sleepwalker_3_bg" cx="0.5" cy="0.35" r="0.8">
+<stop offset="0" stop-color="#9a90f5"/><stop offset="0.55" stop-color="#5557c4"/><stop offset="1" stop-color="#1c1b52"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#sleepwalker_3_bg)" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5"/>
+<!-- dark under the bed -->
+<rect x="22" y="60" width="86" height="46" fill="#100f30"/>
+<line x1="12" y1="107" x2="116" y2="107" stroke="#121429" stroke-width="4" stroke-linecap="round"/>
+<!-- glowing eyes -->
+<circle cx="41" cy="90" r="11" fill="#FFF3A6" opacity="0.16"/>
+<circle cx="65" cy="94" r="11" fill="#FFF3A6" opacity="0.16"/>
+<circle cx="90" cy="89" r="11" fill="#FFF3A6" opacity="0.16"/>
+<ellipse cx="36" cy="90" rx="4" ry="5" fill="#FFF3A6"/><ellipse cx="46" cy="90" rx="4" ry="5" fill="#FFF3A6"/>
+<ellipse cx="60" cy="94" rx="4" ry="5" fill="#ffd6e6"/><ellipse cx="70" cy="94" rx="4" ry="5" fill="#ffd6e6"/>
+<ellipse cx="85" cy="89" rx="4" ry="5" fill="#FFF3A6"/><ellipse cx="95" cy="89" rx="4" ry="5" fill="#FFF3A6"/>
+<g stroke="#121429" stroke-width="2.2" stroke-linecap="round">
+<line x1="36" y1="87" x2="36" y2="93"/><line x1="46" y1="87" x2="46" y2="93"/>
+<line x1="60" y1="91" x2="60" y2="97"/><line x1="70" y1="91" x2="70" y2="97"/>
+<line x1="85" y1="86" x2="85" y2="92"/><line x1="95" y1="86" x2="95" y2="92"/>
+</g>
+<!-- little claws -->
+<polygon points="30,107 32,98 35,104 38,97 41,104 44,98 46,107" fill="#7882E6" stroke="#121429" stroke-width="2.5" stroke-linejoin="round"/>
+<polygon points="82,107 84,98 87,104 90,97 93,104 96,98 98,107" fill="#7882E6" stroke="#121429" stroke-width="2.5" stroke-linejoin="round"/>
+<!-- bed frame -->
+<rect x="12" y="24" width="13" height="83" rx="5" fill="#FFE9C9" stroke="#121429" stroke-width="4.5"/>
+<rect x="15" y="30" width="3.5" height="60" rx="1.5" fill="#ffffff"/>
+<rect x="104" y="48" width="11" height="59" rx="4.5" fill="#FFE9C9" stroke="#121429" stroke-width="4.5"/>
+<rect x="110" y="52" width="3" height="50" rx="1.5" fill="#e3c79a"/>
+<!-- mattress, pillow, blanket -->
+<rect x="23" y="46" width="84" height="18" rx="6" fill="#ffffff" stroke="#121429" stroke-width="4.5"/>
+<ellipse cx="36" cy="41" rx="12" ry="7" fill="#ffd6e6" stroke="#121429" stroke-width="4"/>
+<path d="M48,43 L107,43 L107,70 Q99,79 91,70 Q83,79 75,70 Q67,79 59,70 Q53,77 48,70 Z" fill="#B9A8FF" stroke="#121429" stroke-width="4.5" stroke-linejoin="round"/>
+<path d="M52,47 L103,47" fill="none" stroke="#e6dcff" stroke-width="3" stroke-linecap="round"/>
+<path d="M107,56 L107,70 Q99,79 91,70 Q83,79 75,70 Q67,79 59,70 Q53,77 48,70 L48,64 Q80,68 107,56 Z" fill="#8f80e0"/>
+<circle cx="62" cy="56" r="2.5" fill="#ffffff"/><circle cx="80" cy="54" r="2.5" fill="#ffffff"/><circle cx="96" cy="56" r="2.5" fill="#ffffff"/>
+<!-- crumbs -->
+<polygon points="54,112 58,110 60,114 56,116" fill="#E3A857" stroke="#121429" stroke-width="2"/>
+<polygon points="70,111 74,113 71,116" fill="#E3A857" stroke="#121429" stroke-width="2"/>
+<!-- moon and stars -->
+<path d="M84,14 A10,10 0 1 0 96,28 A12,12 0 0 1 84,14 Z" fill="#FFF3A6" stroke="#121429" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="56" cy="18" r="2.2" fill="#ffffff"/><circle cx="110" cy="34" r="2" fill="#ffffff"/><circle cx="40" cy="28" r="1.8" fill="#ffffff"/>
+</svg>

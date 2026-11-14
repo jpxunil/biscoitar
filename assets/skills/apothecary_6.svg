@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="apothecary_6_bg" cx="0.5" cy="0.5" r="0.75">
+<stop offset="0" stop-color="#d9ffd0"/><stop offset="0.4" stop-color="#3fae7c"/><stop offset="1" stop-color="#081e24"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#apothecary_6_bg)" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5"/>
+<!-- heart -->
+<path d="M64,106 C18,78 20,36 44,32 C55,31 62,38 64,46 C66,38 73,31 84,32 C108,36 110,78 64,106 Z" fill="#ff5d7a" stroke="#121429" stroke-width="5" stroke-linejoin="round"/>
+<path d="M64,100 C90,84 100,62 96,46 C98,70 84,86 64,94 Z" fill="#c2334f"/>
+<path d="M36,54 Q36,42 47,40" fill="none" stroke="#ffd0d8" stroke-width="4.5" stroke-linecap="round"/>
+<!-- pulse line -->
+<polyline points="14,72 34,72 43,56 54,98 67,28 79,86 88,72 114,72" fill="none" stroke="#121429" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="14,72 34,72 43,56 54,98 67,28 79,86 88,72 114,72" fill="none" stroke="#4CFF5A" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="14,72 34,72 43,56 54,98 67,28 79,86 88,72 114,72" fill="none" stroke="#f2fff0" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<!-- jolts -->
+<polygon points="20,16 32,16 27,27 35,27 18,46 22,32 14,32" fill="#f2fff0" stroke="#121429" stroke-width="3.5" stroke-linejoin="round"/>
+<polygon points="98,82 110,82 105,93 113,93 96,112 100,98 92,98" fill="#f2fff0" stroke="#121429" stroke-width="3.5" stroke-linejoin="round"/>
+<!-- sparks -->
+<path d="M100,20 Q100,28 108,28 Q100,28 100,36 Q100,28 92,28 Q100,28 100,20 Z" fill="#ffffff"/>
+<path d="M26,92 Q26,98 32,98 Q26,98 26,104 Q26,98 20,98 Q26,98 26,92 Z" fill="#ffffff"/>
+<circle cx="112" cy="50" r="2.5" fill="#4CFF5A"/>
+<circle cx="14" cy="56" r="2.5" fill="#4CFF5A"/>
+<circle cx="64" cy="114" r="2" fill="#d9ffd6"/>
+</svg>

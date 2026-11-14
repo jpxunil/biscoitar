@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="sleepwalker_1_bg" cx="0.5" cy="0.5" r="0.75">
+<stop offset="0" stop-color="#a99cff"/><stop offset="0.55" stop-color="#5d5fd0"/><stop offset="1" stop-color="#1f1e58"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#sleepwalker_1_bg)" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.5"/>
+<!-- face -->
+<circle cx="54" cy="72" r="39" fill="#FFEBDD" stroke="#121429" stroke-width="4.5"/>
+<path d="M80,48 Q92,66 86,88 Q78,104 62,110 Q84,96 80,48 Z" fill="#f2cdbf"/>
+<!-- white hair -->
+<path d="M15,66 Q10,24 54,22 Q98,24 93,66 Q84,42 70,52 Q62,38 50,52 Q36,40 15,66 Z" fill="#ffffff" stroke="#121429" stroke-width="4.5" stroke-linejoin="round"/>
+<path d="M70,30 Q88,36 90,56 Q82,42 70,46 Z" fill="#cfc6ff"/>
+<path d="M26,40 Q36,28 50,28" fill="none" stroke="#e6dcff" stroke-width="3" stroke-linecap="round"/>
+<!-- closed eyes -->
+<path d="M28,64 Q36,71 44,64" fill="none" stroke="#121429" stroke-width="4.5" stroke-linecap="round"/>
+<path d="M64,64 Q72,71 80,64" fill="none" stroke="#121429" stroke-width="4.5" stroke-linecap="round"/>
+<ellipse cx="28" cy="80" rx="6" ry="4" fill="#ff9fb8" opacity="0.7"/>
+<ellipse cx="82" cy="80" rx="6" ry="4" fill="#ff9fb8" opacity="0.7"/>
+<!-- yawning mouth -->
+<ellipse cx="54" cy="88" rx="14" ry="17" fill="#5a2350" stroke="#121429" stroke-width="4.5"/>
+<path d="M44,79 Q54,73 64,79 L62,82 Q54,78 46,82 Z" fill="#ffffff"/>
+<ellipse cx="54" cy="98" rx="8.5" ry="5.5" fill="#ff8fa8"/>
+<!-- tear -->
+<path d="M84,58 Q92,71 85,74 Q78,71 84,58 Z" fill="#9fe0ff" stroke="#121429" stroke-width="3" stroke-linejoin="round"/>
+<!-- sleepy puffs drifting away -->
+<circle cx="101" cy="92" r="6" fill="#e6dcff" stroke="#121429" stroke-width="3"/>
+<circle cx="107" cy="68" r="9" fill="#e6dcff" stroke="#121429" stroke-width="3.5"/>
+<circle cx="104" cy="65" r="3" fill="#ffffff"/>
+<circle cx="104" cy="40" r="11" fill="#e6dcff" stroke="#121429" stroke-width="3.5"/>
+<circle cx="100" cy="36" r="3.5" fill="#ffffff"/>
+<circle cx="108" cy="18" r="5" fill="#e6dcff" stroke="#121429" stroke-width="3"/>
+<circle cx="18" cy="18" r="2.2" fill="#ffffff" opacity="0.8"/>
+<circle cx="16" cy="112" r="2.2" fill="#ffffff" opacity="0.8"/>
+</svg>

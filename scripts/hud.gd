@@ -16,6 +16,8 @@ var skill_row: HBoxContainer
 var skill_ui: Array = []
 var skill_for := -1
 var skill_asleep := false  # o Sleepwalker troca de barra quando dorme
+var skill_tip: SkillTip
+var _cut: Control  # destaque de habilidade importante em cena (só um por vez)
 var swap_name: Label
 var swap_bar: Control
 var time_bar: Control
@@ -264,13 +266,22 @@ func _build_toast() -> void:
 func _build_skills() -> void:
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	center.offset_top = -78
-	center.offset_bottom = -22
+	center.offset_top = -104
+	center.offset_bottom = -30
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fight_ui.add_child(center)
 	skill_row = HBoxContainer.new()
-	skill_row.add_theme_constant_override("separation", 10)
+	skill_row.add_theme_constant_override("separation", 16)
+	skill_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(skill_row)
+	# ficha da habilidade ao passar o mouse num slot
+	skill_tip = SkillTip.new()
+	skill_tip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fight_ui.add_child(skill_tip)
+
+
+func _tip_on(ui: SkillSlot, key: String, slot: int, asleep: bool) -> void:
+	skill_tip.show_for(key, slot, asleep, ui.key_text, ui.get_global_rect())
 
 
 ## Barra de cast: pequena, logo abaixo do meio da tela, só enquanto você conjura.
@@ -362,39 +373,24 @@ func _show_skills(i: int) -> void:
 	var u: Unit = g.units[i]
 	var list: Array = g.kit(u)
 	skill_asleep = u.asleep
+	skill_tip.hide_tip()
 	for n in list.size():
 		if list[n] == null:
 			continue
-		var slab := UiStyle.slab(UiStyle.INK, UiStyle.SKEW, 20 if list.size() <= 5 else 14, 7)
-		slab.custom_minimum_size.x = 186 if list.size() <= 4 else (168 if list.size() == 5 else 150)
-		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 5)
-		slab.add_child(v)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 10)
-		v.add_child(row)
-		var key := UiStyle.slab(UiStyle.PAPER, 0.0, 7, 0)
-		key.add_child(UiStyle.text(Binds.label("skill_%d" % (n + 1)), 14, UiStyle.INK))
-		row.add_child(key)
-		var name_l := UiStyle.text(String(list[n]["name"]).to_upper(), 15 if list.size() <= 5 else 10, UiStyle.PAPER)
-		if list.size() > 5:
-			# seis slots: o nome quebra em duas linhas pequenas, como na prancha de habilidade do design
-			name_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			name_l.custom_minimum_size = Vector2(80, 26)
-			name_l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			name_l.add_theme_constant_override("line_spacing", -4)
-		name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(name_l)
-		var cd := UiStyle.text("", 15, UiStyle.DIM)
-		row.add_child(cd)
-		var bar := UiStyle.bar(u.color, 5, 0.5)
-		v.add_child(bar)
-		skill_row.add_child(slab)
-		skill_ui.append({"slot": n, "name": name_l, "cd": cd, "bar": bar, "slab": slab, "total": list[n]["cd"], "stacks": int(list[n].get("stacks", 0))})
+		# ícone da habilidade + a TECLA atual do slot (Binds). O mesmo arquivo de ícone da tela SKILLS.
+		var ui := SkillSlot.new()
+		ui.icon = SkillInfo.icon(u.key, n, u.asleep)
+		ui.key_text = Binds.label("skill_%d" % (n + 1))
+		ui.accent = u.color.lightened(0.25)
+		ui.mouse_entered.connect(_tip_on.bind(ui, u.key, n, u.asleep))
+		ui.mouse_exited.connect(skill_tip.hide_tip)
+		skill_row.add_child(ui)
+		skill_ui.append({"slot": n, "ui": ui, "total": list[n]["cd"], "stacks": int(list[n].get("stacks", 0))})
 
 	# a troca de personagem aparece junto, com a própria recarga
 	var sw := UiStyle.slab(UiStyle.INK, UiStyle.SKEW, 18, 7)
 	sw.custom_minimum_size.x = 170
+	sw.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var sv := VBoxContainer.new()
 	sv.add_theme_constant_override("separation", 5)
 	sw.add_child(sv)
@@ -477,29 +473,21 @@ func _process(delta: float) -> void:
 	_tick_bullets(me)
 	for s in skill_ui:
 		var n: int = s["slot"]
-		var left: float = me.skill_cd[n]
-		# habilidade fortalecida (sequência da Ringstar, Disparo da Maga): o botão brilha
-		s["slab"].modulate = Color(1, 1, 1).lerp(Color(1.9, 1.6, 0.6), 0.55 + 0.45 * sin(Time.get_ticks_msec() * 0.012)) if n == glow else Color(1, 1, 1)
-		# pronta = barra cheia e nome claro; recarregando = barra enchendo e segundos
-		if me.channel_t > 0.0 and me.channel_slot == n:
-			# carregando: a barra enche até o disparo
-			UiStyle.set_bar(s["bar"], 1.0 - me.channel_t / me.channel_total)
-			s["cd"].text = "%.1f" % me.channel_t
-			s["cd"].add_theme_color_override("font_color", UiStyle.YELLOW)
-			s["name"].modulate.a = 1.0
-			continue
+		var ui: SkillSlot = s["ui"]
+		# habilidade fortalecida (sequência da Ringstar, Disparo da Maga, próxima do sonho): o slot brilha
+		ui.glow = n == glow
+		ui.locked = me.silence_t > 0.0 or me.air_t > 0.0
+		ui.cast_k = (1.0 - me.channel_t / me.channel_total) if (me.channel_t > 0.0 and me.channel_slot == n) else -1.0
 		if s["stacks"] > 0:
-			# habilidade de acúmulos (Blood Party): a barra é o quanto já juntou
-			var full: bool = me.stacks >= s["stacks"]
-			UiStyle.set_bar(s["bar"], 1.0 if me.party_t > 0.0 else float(me.stacks) / s["stacks"])
-			s["cd"].text = ("%.0f" % ceilf(me.party_t)) if me.party_t > 0.0 else ("" if full else str(me.stacks))
-			s["cd"].add_theme_color_override("font_color", UiStyle.DANGER if me.party_t > 0.0 else UiStyle.DIM)
-			s["name"].modulate.a = 1.0 if (full or me.party_t > 0.0) else 0.45
+			# habilidade de gauge (Blood Party): acende quando o gauge enche; os segundos são a duração dela
+			ui.usable = me.stacks >= s["stacks"] or me.party_t > 0.0
+			ui.cd_left = me.party_t
 			continue
-		UiStyle.set_bar(s["bar"], 1.0 - left / maxf(s["total"], 0.1))
-		s["cd"].text = "" if left <= 0.0 else "%.0f" % ceilf(left)
-		s["cd"].add_theme_color_override("font_color", UiStyle.DIM)
-		s["name"].modulate.a = 1.0 if left <= 0.0 else 0.45
+		ui.usable = true
+		if me.key == "sleepwalker" and me.asleep and n < 5:
+			# dormindo: só a próxima da ordem, e só com Torpor pra pagar
+			ui.usable = n == me.dream_step and (n == 0 or me.torpor >= float(g.SKILLS_ASLEEP[n]["cost"]))
+		ui.cd_left = me.skill_cd[n]
 	UiStyle.set_bar(boss_bar, g.boss_hp / g.boss_max)
 	boss_pct.text = "%d%%" % ceili(g.boss_hp / g.boss_max * 100.0)
 
@@ -581,7 +569,7 @@ func _tick_bullets(me: Unit) -> void:
 		bullet_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bullet_row.draw.connect(_draw_bullets)
 		fight_ui.add_child(bullet_row)
-	bullet_row.visible = me.alive and me.key in ["maga", "apothecary", "sleepwalker"]
+	bullet_row.visible = me.alive and me.key in ["maga", "apothecary", "sleepwalker", "nurse"]
 	if bullet_row.visible:
 		bullet_row.queue_redraw()
 
@@ -590,6 +578,26 @@ func _draw_bullets() -> void:
 	var me: Unit = g.units[g.ctrl]
 	var f := ThemeDB.fallback_font
 	match me.key:
+		"nurse":
+			# gauge de Sangue: enche com parry e Blood Consumed, paga o Blood Party. Cheio: cada golpe cura.
+			var need: int = g.PARTY_NEED
+			var full: bool = me.stacks >= need
+			var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.01)
+			bullet_row.draw_rect(Rect2(-4, 36, 428, 34), UiStyle.INK)
+			if full:
+				bullet_row.draw_rect(Rect2(-8, 32, 436, 42), Color(1.0, 0.3, 0.4, 0.25 + 0.3 * pulse), false, 4.0)
+			bullet_row.draw_rect(Rect2(0, 40, 420, 26), Color(0.2, 0.03, 0.08))
+			bullet_row.draw_rect(Rect2(0, 40, 420.0 * minf(1.0, float(me.stacks) / need), 26), g.BLOOD.lightened(0.25 * pulse) if full else g.BLOOD)
+			for n in range(1, 4):
+				bullet_row.draw_rect(Rect2(420.0 * n / 4.0 - 1, 40, 2, 26), UiStyle.INK)
+			bullet_row.draw_string(f, Vector2(8, 58), "SANGUE  %d / %d" % [me.stacks, need], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, UiStyle.PAPER)
+			if me.party_t > 0.0:
+				bullet_row.draw_string(f, Vector2(0, 58), "BLOOD PARTY  %d s" % ceili(me.party_t), HORIZONTAL_ALIGNMENT_RIGHT, 412, 14, UiStyle.PAPER)
+			elif full:
+				bullet_row.draw_string(f, Vector2(0, 58), "CHEIO: CADA GOLPE CURA %d%%" % roundi(g.GAUGE_STEAL * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 412, 14, UiStyle.PAPER)
+			if me.hp / me.base_hp <= g.LOW_HP_FLOOR + 0.25:
+				bullet_row.draw_rect(Rect2(110, 12, 200, 20), UiStyle.INK)
+				bullet_row.draw_string(f, Vector2(110, 27), "VIDA BAIXA: +%d%% DE DANO" % roundi((g.low_hp_mult(me) - 1.0) * 100.0), HORIZONTAL_ALIGNMENT_CENTER, 200, 12, UiStyle.YELLOW)
 		"maga":
 			bullet_row.draw_rect(Rect2(60, 40, 300, 28), UiStyle.INK)
 			for n in g.BULLET_MAX:
@@ -637,6 +645,11 @@ func _draw_bullets() -> void:
 				bullet_row.draw_string(f, Vector2(60, 14), "AGORA: %s" % String(g.SKILLS["sleepwalker"][me.window_slot]["name"]).to_upper(), HORIZONTAL_ALIGNMENT_CENTER, 300, 12, UiStyle.INK)
 			elif me.wake_t > 0.0:
 				bullet_row.draw_string(f, Vector2(0, 14), "SEM TORPOR NECESSÁRIO, ACORDANDO", HORIZONTAL_ALIGNMENT_CENTER, 420, 13, UiStyle.DANGER)
+			if me.silence_t > 0.0:
+				# punição de quem acordou mal: anda, mas não age
+				bullet_row.draw_rect(Rect2(60, 0, 300, 18), UiStyle.INK)
+				bullet_row.draw_rect(Rect2(62, 2, 296.0 * minf(1.0, me.silence_t / g.SW_LOCK_BROKEN), 14), UiStyle.DANGER)
+				bullet_row.draw_string(f, Vector2(60, 14), "SONOLENTO: SEM AGIR  %.1f s" % me.silence_t, HORIZONTAL_ALIGNMENT_CENTER, 300, 12, UiStyle.PAPER)
 
 
 ## Ícones dos DoTs embaixo da vida da boss: cor do efeito, nome curto e os segundos que faltam.
@@ -688,8 +701,10 @@ func show_biscoito(hold := 0.7) -> void:
 	_biscoito_tw.tween_property(biscoito, "modulate:a", 0.0, 0.5)
 
 
-func flash(c: Color) -> void:
-	flash_rect.color = Color(c.r, c.g, c.b, 0.85)
+## Clarão de tela inteira, que apaga sozinho. `strength` = opacidade inicial (0.85 é o clarão cheio
+## dos golpes da boss; destaques de habilidade usam bem menos, pra não esconder a luta).
+func flash(c: Color, strength := 0.85) -> void:
+	flash_rect.color = Color(c.r, c.g, c.b, strength)
 
 
 ## Entrada da luta: party um por um da esquerda, boss descendo do topo.
@@ -743,6 +758,123 @@ func limit_cut(u: Unit) -> void:
 	face.size = Vector2(220, 220)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(face)
+
+
+## Destaque de habilidade importante (game.gd marca com "big": true), só pra quem o JOGADOR controla:
+## brilho pulsando nas bordas da tela na cor do herói, a arte dele entrando pela direita com halo e
+## faíscas, e o nome da habilidade. Um por vez: usar outra troca o destaque em cena.
+const CUT_SHADER := "shader_type canvas_item;\nrender_mode blend_add;\nuniform vec4 tint : source_color = vec4(1.0);\nuniform float power = 0.0;\nvoid fragment() {\n\tvec2 d = abs(UV - vec2(0.5)) * 2.0;\n\tfloat edge = max(pow(d.x, 3.0), pow(d.y, 2.2));\n\tfloat corner = pow(d.x * d.y, 1.5);\n\tfloat a = clamp(smoothstep(0.35, 1.0, edge) * 0.8 + corner * 0.9, 0.0, 1.0) * power;\n\tCOLOR = vec4(tint.rgb * (1.0 + a), a);\n}\n"
+const CUT_HOLD := 0.95
+
+func skill_cut(u: Unit, skill_name: String) -> void:
+	if _cut != null and is_instance_valid(_cut):
+		_cut.queue_free()
+	var col: Color = u.color.lightened(0.15)
+	_cut = Control.new()
+	_cut.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_cut.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fight_ui.add_child(_cut)
+	var root := _cut
+	# brilho nas bordas e nos cantos
+	var edge := ColorRect.new()
+	edge.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = CUT_SHADER
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	mat.set_shader_parameter("tint", col)
+	edge.material = mat
+	root.add_child(edge)
+	# a arte do personagem, à direita, acima da barra de Limit Break
+	var art_path := "res://assets/portraits/%s_art.webp" % u.key
+	var holder := Control.new()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(holder)
+	var band := CutPanel.make(Rect2(40, 60, 300, 380), [[.16, 0], [1, .06], [.84, 1], [0, .92]], col.darkened(0.25), 6, Vector2(10, 10))
+	holder.add_child(band)
+	var w := 330.0
+	if ResourceLoader.exists(art_path):
+		var tex: Texture2D = load(art_path)
+		var ts := tex.get_size()
+		var h := minf(500.0, 360.0 * ts.y / ts.x)
+		w = h * ts.x / ts.y
+		var add := CanvasItemMaterial.new()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		# halo: a mesma arte, maior e somada, na cor do herói
+		for k in 2:
+			var halo := TextureRect.new()
+			halo.texture = tex
+			halo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			halo.size = Vector2(w, h)
+			halo.position = Vector2(190 - w * 0.5, 10)
+			halo.pivot_offset = Vector2(w, h) * 0.5
+			halo.scale = Vector2.ONE * (1.07 + k * 0.08)
+			halo.modulate = Color(col.r, col.g, col.b, 0.55 - k * 0.25)
+			halo.material = add
+			halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			holder.add_child(halo)
+			halo.create_tween().set_loops(4).tween_property(halo, "scale", Vector2.ONE * (1.12 + k * 0.1), 0.16).set_trans(Tween.TRANS_SINE)
+		var art := TextureRect.new()
+		art.texture = tex
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.size = Vector2(w, h)
+		art.position = Vector2(190 - w * 0.5, 10)
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(art)
+		# clarão branco por cima da arte, que apaga rápido
+		var white := TextureRect.new()
+		white.texture = tex
+		white.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		white.size = Vector2(w, h)
+		white.position = art.position
+		white.material = add
+		white.modulate = Color(1, 1, 1, 0.9)
+		white.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(white)
+		white.create_tween().tween_property(white, "modulate:a", 0.0, 0.3)
+	# faíscas
+	var sparks := CPUParticles2D.new()
+	sparks.position = Vector2(190, 250)
+	sparks.amount = 46
+	sparks.lifetime = 0.9
+	sparks.explosiveness = 0.75
+	sparks.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	sparks.emission_rect_extents = Vector2(150, 200)
+	sparks.direction = Vector2(0, -1)
+	sparks.spread = 70.0
+	sparks.gravity = Vector2(0, -60)
+	sparks.initial_velocity_min = 40.0
+	sparks.initial_velocity_max = 190.0
+	sparks.scale_amount_min = 3.0
+	sparks.scale_amount_max = 8.0
+	sparks.color = col.lightened(0.5)
+	var smat := CanvasItemMaterial.new()
+	smat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	sparks.material = smat
+	holder.add_child(sparks)
+	# nome da habilidade
+	var tag := Chip.new()
+	tag.px = 22
+	tag.pad = 18.0
+	tag.fill = Paper.CREAM
+	tag.text = skill_name.to_upper()
+	tag.position = Vector2(190 - tag.size.x * 0.5, 418)
+	tag.rotation = deg_to_rad(-4.0)
+	holder.add_child(tag)
+	# entra da direita com um tranco, segura, sai
+	holder.position = Vector2(1300, 84)
+	flash(col, 0.22)
+	var tw := root.create_tween()
+	tw.tween_property(holder, "position:x", 900.0, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_method(func(v: float): mat.set_shader_parameter("power", v), 0.0, 1.0, 0.1)
+	tw.tween_method(func(v: float): mat.set_shader_parameter("power", v), 1.0, 0.55, 0.22)
+	tw.tween_method(func(v: float): mat.set_shader_parameter("power", v), 0.55, 0.9, 0.2)
+	tw.tween_interval(CUT_HOLD - 0.42)
+	tw.tween_property(holder, "position:x", 1320.0, 0.24).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(holder, "modulate:a", 0.0, 0.24)
+	tw.parallel().tween_method(func(v: float): mat.set_shader_parameter("power", v), 0.9, 0.0, 0.24)
+	tw.tween_callback(root.queue_free)
 
 
 ## Painel lateral que entra da direita, fica um pouco e sai: base dos avisos grandes da luta.

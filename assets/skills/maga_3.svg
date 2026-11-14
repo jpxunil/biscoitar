@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="maga_3_bg" cx="0.5" cy="0.45" r="0.75">
+<stop offset="0" stop-color="#FF9A6A"/>
+<stop offset="0.5" stop-color="#B43A78"/>
+<stop offset="1" stop-color="#2A1446"/>
+</radialGradient>
+<linearGradient id="maga_3_prism" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#FFFFFF"/>
+<stop offset="1" stop-color="#8FE9FF"/>
+</linearGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#maga_3_bg)"/>
+<circle cx="62" cy="62" r="34" fill="#FFFFFF" opacity="0.18"/>
+<polygon points="72,50 112,16 119,30 119,82 112,96 80,66" fill="#121429" stroke="#121429" stroke-width="6" stroke-linejoin="round"/>
+<polygon points="72,50 112,16 119,30" fill="#FF4D5E"/>
+<polygon points="74,54 119,30 119,46" fill="#FFD93B"/>
+<polygon points="76,58 119,46 119,64" fill="#4FE07A"/>
+<polygon points="78,62 119,64 119,82" fill="#4FB8FF"/>
+<polygon points="80,66 119,82 112,96" fill="#B36BFF"/>
+<polyline points="36,112 13,82 34,44 52,62" fill="none" stroke="#121429" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="36,112 13,82 34,44 52,62" fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="36,112 13,82 34,44 52,62" fill="none" stroke="#7DF0FF" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="62,30 92,86 32,86" fill="url(#maga_3_prism)" stroke="#121429" stroke-width="5" stroke-linejoin="round"/>
+<polygon points="62,35 62,83 37,83" fill="#5FC8EE"/>
+<polygon points="62,35 87,83 76,83" fill="#FFFFFF" opacity="0.75"/>
+<line x1="62" y1="35" x2="62" y2="83" stroke="#121429" stroke-width="2.2"/>
+<polygon points="0,-10 2.4,-2.4 10,0 2.4,2.4 0,10 -2.4,2.4 -10,0 -2.4,-2.4" transform="translate(13,82) scale(1.1)" fill="#FFE14D" stroke="#121429" stroke-width="2.4" stroke-linejoin="round"/>
+<polygon points="0,-10 2.4,-2.4 10,0 2.4,2.4 0,10 -2.4,2.4 -10,0 -2.4,-2.4" transform="translate(34,43) scale(1.1)" fill="#FFE14D" stroke="#121429" stroke-width="2.4" stroke-linejoin="round"/>
+<path d="M0,6 C-10,-2 -6,-9 0,-4 C6,-9 10,-2 0,6 Z" transform="translate(96,108) scale(1.5)" fill="#6CF09A" stroke="#121429" stroke-width="2.4" stroke-linejoin="round"/>
+<path d="M0,6 C-10,-2 -6,-9 0,-4 C6,-9 10,-2 0,6 Z" transform="translate(76,112) scale(0.8)" fill="#B6FFD0"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(84,22) scale(0.7)" fill="#FFFFFF"/>
+<polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2" transform="translate(22,24) scale(0.6)" fill="#FFFFFF" opacity="0.85"/>
+<circle cx="58" cy="104" r="2.2" fill="#FFFFFF" opacity="0.8"/>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.25"/>
+</svg>
