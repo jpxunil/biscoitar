@@ -2820,8 +2820,8 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					o.wall_t = WALL_TIME
 					_by(u)._burst(o.position, GOLD, 2.0)
 			_by(u)._faith_cross()
-			hud.flash(Color(GOLD.r, GOLD.g, GOLD.b, 0.3))
-			hud.toast("MURALHA DA FÉ", 1.6)
+			if not _quiet(u): hud.flash(Color(GOLD.r, GOLD.g, GOLD.b, 0.3))
+			if not _quiet(u): hud.toast("MURALHA DA FÉ", 1.6)
 		"Solo Consagrado":
 			_start_holy(u)
 		"Provocação":
@@ -2860,8 +2860,8 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				# impacto físico na chegada: onda de energia no chão
 				_by(u)._impact_ring(u.position + Vector3(0, 0.4, 0), BLOOD.lightened(0.2), 3.6)
 				_by(u)._burst(u.position, Color(1, 1, 1), 1.8)
-				shake_t = 0.18
-				shake_amp = 0.22
+				if not _quiet(u): shake_t = 0.18
+				if not _quiet(u): shake_amp = 0.22
 				if u.alive and _in_range(u):
 					u.punch()
 					_damage_boss(u, RUSH_DMG, true, false))
@@ -2885,14 +2885,14 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			u.bath_free = true
 			u.skill_cd[5] = 0.0
 			u.blood_party_start()
-			hud.flash(BLOOD, 0.4)
+			if not _quiet(u): hud.flash(BLOOD, 0.4)
 			_by(u)._burst(u.position, Color(1, 1, 1), 3.0)
 			_by(u)._burst(u.position, BLOOD, 6.5)
 			for k in 3:
 				_by(u)._impact_ring(u.position + Vector3(0, 0.5 + k * 0.5, 0), BLOOD.lightened(k * 0.15), 3.0 + k * 1.4)
-			shake_t = 0.35
-			shake_amp = 0.4
-			hud.toast("BLOOD PARTY: RECUPERE A VIDA TODA", 2.0)
+			if not _quiet(u): shake_t = 0.35
+			if not _quiet(u): shake_amp = 0.4
+			if not _quiet(u): hud.toast("BLOOD PARTY: RECUPERE A VIDA TODA", 2.0)
 		"Manto de Cinzas":
 			var st: Unit = u.cast_target
 			if st == null or not st.alive:
@@ -2972,7 +2972,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			u.frenzy_dmg = 0.0
 			u.skill_cd[0] = 0.0
 			_by(u)._burst(u.position, Color(0.75, 0.2, 1.0), 4.0)
-			hud.toast("FRENESI DA FERA", 1.4)
+			if not _quiet(u): hud.toast("FRENESI DA FERA", 1.4)
 		"Bora Biscoitar":
 			_provoke(u, by_ai)
 		"Toque de Brasa", "Asa da Fênix", "Sutura", "Estabilização":
@@ -2990,7 +2990,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					_by(u)._beam(u.position, ht.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.4)
 					_by(u)._impact_ring(ht.position + Vector3(0, 0.3, 0), CHEM, 2.0)
 					if u.controlled:
-						hud.toast("CORPO PREPARADO: Estabilização com %d Vestígios reanima" % REANIMATE_COST, 2.2)
+						if not _quiet(u): hud.toast("CORPO PREPARADO: Estabilização com %d Vestígios reanima" % REANIMATE_COST, 2.2)
 					return
 				if sk["name"] == "Estabilização" and u.patient == ht and u.vestiges >= REANIMATE_COST:
 					u.vestiges -= REANIMATE_COST
@@ -2998,7 +2998,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					_by(u)._beam(u.position, ht.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.4)
 					_raise(ht, REANIMATE_HP, CHEM)
 					if u.controlled:
-						hud.toast("REANIMAÇÃO", 1.4)
+						if not _quiet(u): hud.toast("REANIMAÇÃO", 1.4)
 					return
 			if ht == null or not ht.alive:
 				ht = _heal_target()
@@ -3106,7 +3106,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					u.poke_rush_t = POKE_RUSH_TIME
 					_by(u)._burst(u.position + Vector3(0, 1.0, 0), BLOOD, 2.6)
 					if u.controlled:
-						hud.toast("ESTOCADAS EM RAJADA", 1.0)
+						if not _quiet(u): hud.toast("ESTOCADAS EM RAJADA", 1.0)
 				if u.poke_rush_t > 0.0:
 					u.skill_cd[slot] *= POKE_RUSH_CD
 			elif sk["name"] == "Blood Consumed":
@@ -3197,7 +3197,7 @@ func _raw_hit(u: Unit, dmg: float, size := 84) -> void:
 	if boss_hp <= 0.0:
 		if Knowledge.practice:
 			boss_hp = boss_max
-			hud.toast("O dummy se recompôs", 1.6)
+			if not _quiet(u): hud.toast("O dummy se recompôs", 1.6)
 			return
 		boss_hp = 0.0
 		_end(true)
@@ -3282,18 +3282,18 @@ func _mercy_hit(u: Unit, part := 0) -> void:
 		ts.chain().tween_callback(sp.queue_free)
 	if u.controlled:
 		# brilho nas bordas da tela: mais forte quanto mais o golpe executou
-		hud.edge_glow(col, 0.5 + missing * 0.5 + (0.3 if strong else 0.0))
+		if not _quiet(u): hud.edge_glow(col, 0.5 + missing * 0.5 + (0.3 if strong else 0.0))
 		if missing >= 0.5 or wounded:
-			hud.toast("EXECUÇÃO  +%d%%" % roundi((total / base - 1.0) * 100.0), 1.0)
+			if not _quiet(u): hud.toast("EXECUÇÃO  +%d%%" % roundi((total / base - 1.0) * 100.0), 1.0)
 	if strong:
 		_by(u)._impact_ring(at, Color(1, 1, 1), 6.5)
-		hud.flash(Color(0.75, 0.2, 1.0), 0.2)
-		shake_t = 0.35
-		shake_amp = 0.45
+		if not _quiet(u): hud.flash(Color(0.75, 0.2, 1.0), 0.2)
+		if not _quiet(u): shake_t = 0.35
+		if not _quiet(u): shake_amp = 0.45
 	else:
-		hud.flash(Color(1, 1, 1), 0.12)
-		shake_t = 0.25
-		shake_amp = 0.32
+		if not _quiet(u): hud.flash(Color(1, 1, 1), 0.12)
+		if not _quiet(u): shake_t = 0.25
+		if not _quiet(u): shake_amp = 0.32
 	boss.hit_flash()
 	_damage_boss(u, amount, true, true)
 
@@ -3319,9 +3319,9 @@ func _mercy_slam(u: Unit, strong: bool) -> void:
 		var tw := mi.create_tween()
 		tw.tween_property(cm, "albedo_color:a", 0.0, 0.45).set_delay(0.08)
 		tw.tween_callback(mi.queue_free)
-	hud.flash(col, 0.1)
-	shake_t = 0.18
-	shake_amp = 0.3
+	if not _quiet(u): hud.flash(col, 0.1)
+	if not _quiet(u): shake_t = 0.18
+	if not _quiet(u): shake_amp = 0.3
 
 
 ## Golpe de Misericórdia na mão do jogador (MERCY_WINDOW no total):
@@ -3353,9 +3353,9 @@ func _mercy_leap(u: Unit) -> void:
 	u.face(fwd)
 	_by(u)._burst(from, col, 2.0)
 	if u.controlled:
-		hud.edge_glow(col, 0.45)
+		if not _quiet(u): hud.edge_glow(col, 0.45)
 		if strong:
-			hud.toast("MISERICÓRDIA EM FRENESI", 1.0)
+			if not _quiet(u): hud.toast("MISERICÓRDIA EM FRENESI", 1.0)
 	# 1. a adaga arremessada, com o fio de luz que a liga à mão dela
 	u.dagger_anim("thrust", 0.2)
 	var knife := Node3D.new()
@@ -3464,9 +3464,9 @@ func _last_dance(u: Unit) -> void:
 	u.frenzy_dmg = 0.0
 	if u.controlled:
 		hud.skill_cut(u, "Última Dança")
-		hud.toast("ÚLTIMA DANÇA", 1.6)
-		hud.flash(Color(0.45, 0.05, 0.7), 0.5)
-		hud.edge_glow(Color(0.8, 0.25, 1.0), 1.0)
+		if not _quiet(u): hud.toast("ÚLTIMA DANÇA", 1.6)
+		if not _quiet(u): hud.flash(Color(0.45, 0.05, 0.7), 0.5)
+		if not _quiet(u): hud.edge_glow(Color(0.8, 0.25, 1.0), 1.0)
 	var purple := Color(0.8, 0.25, 1.0)
 	var pink := Color(1.0, 0.3, 0.7)
 	var green := SIDE_COL
@@ -3504,8 +3504,8 @@ func _last_dance(u: Unit) -> void:
 	_by(u)._impact_ring(u.position + Vector3(0, 0.2, 0), purple, 4.5)
 	_by(u)._beam(u.position + Vector3(0, 1.0, 0), center, Color(1, 1, 1, 0.9), 0.18)
 	_afterimage(u, Vector3.ZERO, purple)
-	shake_t = 0.2
-	shake_amp = 0.35
+	if not _quiet(u): shake_t = 0.2
+	if not _quiet(u): shake_amp = 0.35
 	u.visual.visible = false
 	u.position = home
 	# a tempestade de cortes
@@ -3540,7 +3540,7 @@ func _last_dance(u: Unit) -> void:
 			tc.tween_callback(ci.queue_free)
 			_by(u)._burst(mi.position, col, 2.2)
 			# a tela vai ficando branca a cada corte, até estourar no fim
-			hud.flash(Color(1, 1, 1), 0.1 + 0.5 * (n + 1.0) / FINISH_HITS)
+			if not _quiet(u): hud.flash(Color(1, 1, 1), 0.1 + 0.5 * (n + 1.0) / FINISH_HITS)
 			# a silhueta dela passando
 			var ghost := _fx(u, fx_root, Fx.capsule(0.38, 1.3), Fx.mat(Color(col.r, col.g, col.b, 0.7), 0.0, true), mi.position + dir * 13.0)
 			var tg := ghost.create_tween().set_parallel(true)
@@ -3548,8 +3548,8 @@ func _last_dance(u: Unit) -> void:
 			tg.tween_property(ghost, "scale", Vector3.ONE * 0.3, 0.2)
 			tg.chain().tween_callback(ghost.queue_free)
 			_by(u)._impact_ring(center + dir * randf_range(-1.5, 1.5), col, 1.6)
-			shake_t = 0.12
-			shake_amp = 0.22
+			if not _quiet(u): shake_t = 0.12
+			if not _quiet(u): shake_amp = 0.22
 			boss.hit_flash()
 			_damage_boss(u, FINISH_HIT, true, false))
 	# ela reaparece no alto, com as adagas erguidas
@@ -3600,11 +3600,11 @@ func _last_dance(u: Unit) -> void:
 			ts.tween_property(sp, "position", center + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 10.0), 0.8).set_ease(Tween.EASE_OUT)
 			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.8)
 			ts.chain().tween_callback(sp.queue_free)
-		hud.flash(Color(1, 1, 1), 0.75)
+		if not _quiet(u): hud.flash(Color(1, 1, 1), 0.75)
 		if u.controlled:
-			hud.edge_glow(purple, 1.0)
-		shake_t = 0.6
-		shake_amp = 0.8
+			if not _quiet(u): hud.edge_glow(purple, 1.0)
+		if not _quiet(u): shake_t = 0.6
+		if not _quiet(u): shake_amp = 0.8
 		boss.hit_flash()
 		_wound(u)
 		_damage_boss(u, FINISH_END, true, true)
@@ -3660,12 +3660,12 @@ func _last_dance(u: Unit) -> void:
 			ts.tween_property(sp, "position", center + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(5.0, 14.0), 0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
 			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.9)
 			ts.chain().tween_callback(sp.queue_free)
-		hud.flash(Color(1, 1, 1), 1.0)
+		if not _quiet(u): hud.flash(Color(1, 1, 1), 1.0)
 		if u.controlled:
-			hud.edge_glow(pink, 1.0)
-			hud.toast("CORTE FINAL  +%d" % roundi(echo), 1.6)
-		shake_t = 0.9
-		shake_amp = 1.1
+			if not _quiet(u): hud.edge_glow(pink, 1.0)
+			if not _quiet(u): hud.toast("CORTE FINAL  +%d" % roundi(echo), 1.6)
+		if not _quiet(u): shake_t = 0.9
+		if not _quiet(u): shake_amp = 1.1
 		boss.hit_flash()
 		u.face(boss_pos - u.position)
 		_raw_hit(u, echo))
@@ -3687,7 +3687,7 @@ func _wound(u: Unit) -> void:
 		tw.tween_property(cm, "albedo_color:a", 0.0, 0.5)
 		tw.tween_callback(mi.queue_free)
 	if u.controlled:
-		hud.toast("FERIMENTO: +%d%% DE DANO DA PARTY" % roundi((WOUND_MULT - 1.0) * 100.0), 1.0)
+		if not _quiet(u): hud.toast("FERIMENTO: +%d%% DE DANO DA PARTY" % roundi((WOUND_MULT - 1.0) * 100.0), 1.0)
 
 
 ## O furacão da Dança Carmesim em Frenesi: uma coluna de anéis de corte que sobe girando e abre no alto.
@@ -3725,9 +3725,9 @@ func _hurricane(u: Unit, col: Color) -> void:
 					_by(u)._impact_ring(u.position + Vector3(0, 0.2, 0), col, 3.0 + n * 0.4)
 				_afterimage(u, Vector3(cos(n * 2.4), 0, sin(n * 2.4)) * 2.0, col))
 	if u.controlled:
-		hud.edge_glow(col, 0.7)
-	shake_t = 0.4
-	shake_amp = 0.35
+		if not _quiet(u): hud.edge_glow(col, 0.7)
+	if not _quiet(u): shake_t = 0.4
+	if not _quiet(u): shake_amp = 0.35
 
 
 ## Dança Carmesim: ela gira de verdade, com as duas facas abertas, cortando tudo em volta.
@@ -3776,8 +3776,8 @@ func _crimson_dance(u: Unit, dmg: float) -> void:
 			if is_instance_valid(u) and u.alive:
 				_afterimage(u, Vector3(cos(a), 0, sin(a)) * 1.5, col))
 	_by(u)._burst(u.position, col, 3.8)
-	shake_t = 0.2
-	shake_amp = 0.2
+	if not _quiet(u): shake_t = 0.2
+	if not _quiet(u): shake_amp = 0.2
 	if _in_range(u):
 		_damage_boss(u, dmg, true, true)
 
@@ -3921,7 +3921,7 @@ func _aim_mark(u: Unit) -> void:
 	aim_node.scale = Vector3.ONE * 2.4
 	aim_node.create_tween().tween_property(aim_node, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if u.controlled:
-		hud.toast("MARCADA", 0.7)
+		if not _quiet(u): hud.toast("MARCADA", 0.7)
 
 
 func _tick_aim(delta: float) -> void:
@@ -3967,7 +3967,7 @@ func _use_aim(u: Unit) -> float:
 	boss.hit_flash()
 	_by(u)._popup(int(AIM_BONUS), AIM_COL, 54, at + Vector3(0, 1.8, 0), "RUPTURA +")
 	if u.controlled:
-		hud.toast("RUPTURA ARCANA", 0.8)
+		if not _quiet(u): hud.toast("RUPTURA ARCANA", 0.8)
 	return AIM_BONUS
 
 
@@ -3984,7 +3984,7 @@ func _rainbow(u: Unit) -> void:
 		u.bullets.clear()
 		_damage_boss(u, BULLET_TRIPLE, true, true)
 		_knock_back(u, BULLET_KNOCK)
-		hud.toast("TIRO TRIPLO", 0.9)
+		if not _quiet(u): hud.toast("TIRO TRIPLO", 0.9)
 		return
 	var kind: int = u.bullets.pop_front()
 	var col: Color = BULLETS[kind]["col"]
@@ -4016,7 +4016,7 @@ func _ricochet(u: Unit) -> void:
 		u.ricochet_out = true
 		u.set_meta("rico_fairy", true)
 		if u.controlled:
-			hud.toast("RICOCHETE NA FADA", 0.9)
+			if not _quiet(u): hud.toast("RICOCHETE NA FADA", 0.9)
 		return
 	u.set_meta("rico_fairy", false)
 	if u.salvo_t <= 0.0 or u.position.distance_to(boss_pos) > MELEE_RANGE:
@@ -4029,7 +4029,7 @@ func _ricochet(u: Unit) -> void:
 	u.ricochet_tick = 0.0
 	u.ricochet_out = true
 	if u.controlled:
-		hud.toast("RICOCHETE NO ESCUDO", 0.9)
+		if not _quiet(u): hud.toast("RICOCHETE NO ESCUDO", 0.9)
 
 
 ## Um trecho do ricochete: prisma brilhante viajando de `from` a `to`, com rastro e faísca na batida.
@@ -4115,7 +4115,7 @@ func _salvo(u: Unit) -> void:
 	tb.tween_property(bub_m, "albedo_color:a", 0.0, 0.7).set_delay(0.25)
 	tb.chain().tween_callback(bub.queue_free)
 	if u.controlled:
-		hud.toast(("FADA ASTRAL  ·  −%d BALAS" if fairy else "SALVA ASTRAL  ·  −%d BALAS") % cost, 1.2)
+		if not _quiet(u): hud.toast(("FADA ASTRAL  ·  −%d BALAS" if fairy else "SALVA ASTRAL  ·  −%d BALAS") % cost, 1.2)
 
 
 # ---- Fada Astral
@@ -4257,9 +4257,9 @@ func _cannon_charge(u: Unit, time: float) -> void:
 		orbit.create_tween().tween_property(orbit, "rotation:z", TAU * 2.0, time).set_ease(Tween.EASE_IN)
 		orbit.create_tween().tween_property(orbit, "scale", Vector3.ONE * 0.35, time).set_ease(Tween.EASE_IN)
 		if u.controlled:
-			hud.toast("SUPERCANHÃO: %d BALAS" % BULLET_MAX, 1.6)
+			if not _quiet(u): hud.toast("SUPERCANHÃO: %d BALAS" % BULLET_MAX, 1.6)
 	elif u.controlled:
-		hud.toast("CARREGANDO O CANHÃO", 1.2)
+		if not _quiet(u): hud.toast("CARREGANDO O CANHÃO", 1.2)
 	# postura de disparo: ela firma os pés
 	u.visual.scale = Vector3(1.12, 0.9, 1.12)
 
@@ -4299,10 +4299,10 @@ func _cannon(u: Unit) -> void:
 	_by(u)._impact_ring(hit, u.color.lightened(0.4), 6.0 + loaded * 0.5)
 	_by(u)._impact_ring(hit, Color(1, 1, 1), 4.0)
 	_by(u)._burst(hit, u.color.lightened(0.4), 6.0 + loaded)
-	hud.flash(Color(1.0, 0.9, 0.6), 0.28)
-	shake_t = 0.35
-	shake_amp = 0.35
-	hud.toast("CANHÃO ESTELAR" + (" ×%d" % loaded if loaded > 0 else ""), 1.6)
+	if not _quiet(u): hud.flash(Color(1.0, 0.9, 0.6), 0.28)
+	if not _quiet(u): shake_t = 0.35
+	if not _quiet(u): shake_amp = 0.35
+	if not _quiet(u): hud.toast("CANHÃO ESTELAR" + (" ×%d" % loaded if loaded > 0 else ""), 1.6)
 	_damage_boss(u, amount, true, true)
 	_knock_back(u, 2.0)
 	if rig != null:
@@ -4339,10 +4339,10 @@ func _cannon_super(u: Unit, total: float, rig: Node3D) -> void:
 	var from := u.position + Vector3(0, 1.7, 0)
 	var hit := _bp(Vector3(0, 4.0, -11.5))
 	var length := from.distance_to(hit)
-	hud.toast("SUPERCANHÃO ARCO-ÍRIS", 2.0)
-	hud.flash(Color(1, 1, 1), 0.35)
-	shake_t = CANNON_SUPER_TIME
-	shake_amp = 0.3
+	if not _quiet(u): hud.toast("SUPERCANHÃO ARCO-ÍRIS", 2.0)
+	if not _quiet(u): hud.flash(Color(1, 1, 1), 0.35)
+	if not _quiet(u): shake_t = CANNON_SUPER_TIME
+	if not _quiet(u): shake_amp = 0.3
 	var beam := Node3D.new()
 	fx_root.add_child(beam)
 	beam.position = from
@@ -4382,9 +4382,9 @@ func _cannon_super(u: Unit, total: float, rig: Node3D) -> void:
 		for n in RAINBOW.size():
 			_by(u)._impact_ring(hit, RAINBOW[n], 4.0 + n * 1.3)
 		_by(u)._burst(hit, Color(1, 1, 1), 12.0)
-		hud.flash(Color(1, 1, 1), 0.4)
-		shake_t = 0.5
-		shake_amp = 0.6
+		if not _quiet(u): hud.flash(Color(1, 1, 1), 0.4)
+		if not _quiet(u): shake_t = 0.5
+		if not _quiet(u): shake_amp = 0.6
 		if is_instance_valid(u) and u.alive:
 			_knock_back(u, 4.5))
 	if rig != null:
@@ -4638,10 +4638,10 @@ func _lance_charge(u: Unit, time: float) -> void:
 			tr.tween_callback(ring.queue_free)
 		_by(u)._burst(_bp(Vector3(0, 11.0, -10.6)), Color(1, 1, 1), 4.0)
 		if u.controlled:
-			hud.toast("LANÇA PERFEITA!", 1.2)
-			hud.flash(FIRE_MINT, 0.12)
+			if not _quiet(u): hud.toast("LANÇA PERFEITA!", 1.2)
+			if not _quiet(u): hud.flash(FIRE_MINT, 0.12)
 	elif grade == 1 and u.controlled:
-		hud.toast("BOA LANÇA", 0.9)
+		if not _quiet(u): hud.toast("BOA LANÇA", 0.9)
 	# fagulhas subindo da mão dele até o céu
 	_by(u)._beam(u.position + Vector3(0, 1.2, 0), _bp(Vector3(0, 10.0, -10.6)), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.5), time)
 
@@ -4697,7 +4697,7 @@ func _lance_hit(u: Unit, amount: float, marked: bool, grade := 0) -> void:
 			tp.chain().tween_callback(pillar.queue_free)
 		for k in 4:
 			_by(u)._impact_ring(at, [Color(1, 1, 1), FIRE_MINT, FIRE, FIRE_CYAN][k], 6.0 + k * 2.0)
-		hud.toast("PERFEITO!", 0.9)
+		if not _quiet(u): hud.toast("PERFEITO!", 0.9)
 	elif grade == 1:
 		_by(u)._impact_ring(at, FIRE_MINT, 5.5)
 	if marked:
@@ -4706,9 +4706,9 @@ func _lance_hit(u: Unit, amount: float, marked: bool, grade := 0) -> void:
 		_by(u)._burst(at, FIRE, 4.6)
 		for k in 3:
 			_by(u)._impact_ring(at, [Color(1, 1, 1), FIRE, FIRE_CYAN][k], 3.0 + k * 1.6)
-		hud.flash(FIRE_MINT, 0.18)
-		shake_t = 0.25
-		shake_amp = 0.25 + 0.25 * clampf((amount - LANCE_MIN) / (LANCE_MAX - LANCE_MIN), 0.0, 1.0)
+		if not _quiet(u): hud.flash(FIRE_MINT, 0.18)
+		if not _quiet(u): shake_t = 0.25
+		if not _quiet(u): shake_amp = 0.25 + 0.25 * clampf((amount - LANCE_MIN) / (LANCE_MAX - LANCE_MIN), 0.0, 1.0)
 	else:
 		_by(u)._burst(at, Color(0.6, 0.7, 0.7), 1.6)
 	boss.hit_flash()
@@ -4831,7 +4831,7 @@ func _solar(u: Unit) -> void:
 	u.face(boss_pos - u.position)
 	u.wings_open(true, 0.35)
 	if u.controlled:
-		hud.toast("JUÍZO SOLAR", 1.6)
+		if not _quiet(u): hud.toast("JUÍZO SOLAR", 1.6)
 	var up := u.visual.create_tween()
 	up.tween_property(u.visual, "position:y", SOLAR_HEIGHT, SOLAR_RISE).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	up.tween_interval(SOLAR_FLOAT)
@@ -4877,9 +4877,9 @@ func _solar_hit(u: Unit, marked: bool, hit: Vector3) -> void:
 		tp.tween_property(p, "position", hit + Vector3(cos(a), sin(a) * 0.7, 0.3) * randf_range(5.0, 9.0), 0.7).set_ease(Tween.EASE_OUT)
 		tp.tween_property(p, "scale", Vector3.ONE * 0.1, 0.7)
 		tp.chain().tween_callback(p.queue_free)
-	hud.flash(FIRE_MINT, 0.35)
-	shake_t = 0.55
-	shake_amp = 0.55
+	if not _quiet(u): hud.flash(FIRE_MINT, 0.35)
+	if not _quiet(u): shake_t = 0.55
+	if not _quiet(u): shake_amp = 0.55
 	boss.hit_flash()
 	if not is_instance_valid(u):
 		return
@@ -4941,7 +4941,7 @@ func _countdown(u: Unit) -> void:
 	for n in 3:
 		u.skill_cd[n] = minf(u.skill_cd[n], COUNT_GCD)
 	_by(u)._burst(u.position, STAR, 4.0)
-	hud.toast("CONTAGEM REGRESSIVA", 1.2)
+	if not _quiet(u): hud.toast("CONTAGEM REGRESSIVA", 1.2)
 
 
 ## SUPERSTAR!: ela pega o microfone e aponta pra boss (SUPERSTAR_WIND), e só então a rajada sai, em
@@ -4951,7 +4951,7 @@ func _superstar(u: Unit) -> void:
 	u.face(boss_pos - u.position)
 	u.glove_anim("mic", SUPERSTAR_WIND)
 	if u.controlled:
-		hud.toast("SUPERSTAR!", 1.0)
+		if not _quiet(u): hud.toast("SUPERSTAR!", 1.0)
 	# microfone na mão direita, com um brilho que cresce durante o preparo
 	var mic := Node3D.new()
 	u.gloves[1].add_child(mic)
@@ -4999,7 +4999,7 @@ func _knockout_jump(u: Unit) -> void:
 	u.air_t = KNOCKOUT_AIR
 	u.channel_t = 0.0
 	if u.controlled:
-		hud.toast("NOCAUTE FINAL", 1.4)
+		if not _quiet(u): hud.toast("NOCAUTE FINAL", 1.4)
 	_by(u)._burst(u.position, STAR, 3.0)
 	# o corpo vai até o ponto de queda enquanto o boneco sobe, paira e desce
 	var land := u.position + to_boss.normalized() * go if go > 0.1 else u.position
@@ -5076,9 +5076,9 @@ func _knockout_land(u: Unit) -> void:
 		ts.tween_property(star, "position:y", randf_range(2.5, 5.5), 0.3).set_ease(Tween.EASE_OUT)
 		ts.tween_property(star, "scale", Vector3.ONE * 0.1, 0.6)
 		ts.chain().tween_callback(star.queue_free)
-	hud.flash(STAR.lightened(0.3), 0.22)
-	shake_t = 0.45
-	shake_amp = 0.55
+	if not _quiet(u): hud.flash(STAR.lightened(0.3), 0.22)
+	if not _quiet(u): shake_t = 0.45
+	if not _quiet(u): shake_amp = 0.55
 	# dano: a boss leva se o ponto de ataque dela está dentro da onda
 	if at.distance_to(boss_pos) <= KNOCKOUT_R:
 		_damage_boss(u, KNOCKOUT_DMG, true, true)
@@ -5222,6 +5222,8 @@ func _chimes(notes: Array, gap := 0.08, volume_db := -9.0) -> void:
 	var by := _take_by()
 	if autoplay:
 		return
+	if _quiet(by):
+		notes = notes.slice(0, 1)
 	for n in notes.size():
 		var note: int = notes[n]
 		if n == 0:
@@ -5271,7 +5273,7 @@ func _embalo_add(u: Unit, n: int) -> void:
 		_by(u)._swirl(u.position + Vector3(0, 2.8, 0), ROSE_GOLD, 1.5, 0.7)
 		_by(u)._ring_floor(u.position, ROSE_GOLD, 1.0, skirt_r(u), 0.6)
 		if u.controlled:
-			hud.toast("SAIA ABERTA: EMBALO MÁXIMO", 1.2)
+			if not _quiet(u): hud.toast("SAIA ABERTA: EMBALO MÁXIMO", 1.2)
 
 
 ## Passo de Valsa: o compasso de três tempos. Os dois primeiros são passos; o terceiro é o Giro.
@@ -5307,8 +5309,8 @@ func _giro(u: Unit, hit: Vector3) -> float:
 	_by(u)._swirl(hit + Vector3(0.5, 0.4, 0.1), Color(1, 1, 1), 1.1, 0.45)
 	_by(u)._petals(hit, 10, 2.4, 1.2, 0.8, 0.7)
 	_by(u)._burst(hit, ROSE_GOLD, 2.2)
-	shake_t = maxf(shake_t, 0.12)
-	shake_amp = maxf(shake_amp, 0.12)
+	if not _quiet(u): shake_t = maxf(shake_t, 0.12)
+	if not _quiet(u): shake_amp = maxf(shake_amp, 0.12)
 	_embalo_add(u, 1)
 	_duet_echo(u)
 	return amount
@@ -5408,7 +5410,7 @@ func _duet(u: Unit) -> void:
 	_duet_strike(u, o, DUET_DMG, true)
 	u.waltz_step = 2  # o próximo Passo de Valsa já é o Giro (o botão brilha)
 	if fresh and u.controlled:
-		hud.toast("PAR DE DANÇA: %s" % o.unit_name.to_upper(), 1.2)
+		if not _quiet(u): hud.toast("PAR DE DANÇA: %s" % o.unit_name.to_upper(), 1.2)
 
 
 ## Pirueta: três voltas na ponta do pé. Enquanto gira (TWIRL_TIME), golpe nenhum pega nela (ver hurt:
@@ -5450,14 +5452,14 @@ func _bravo(u: Unit) -> void:
 	_by(u)._rose_rain(u.position)
 	_by(u)._chimes([12, 16, 19], 0.06)
 	if u.controlled:
-		hud.toast("BRAVO!", 0.9)
-		hud.flash(ROSE_GOLD, 0.25)
+		if not _quiet(u): hud.toast("BRAVO!", 0.9)
+		if not _quiet(u): hud.flash(ROSE_GOLD, 0.25)
 
 
 ## Rosas jogadas da plateia: caem em volta dela e ficam um instante no chão.
 func _rose_rain(at: Vector3) -> void:
 	var by := _take_by()
-	for k in 7:
+	for k in (2 if _quiet(by) else 7):
 		var a := randf() * TAU
 		var land := Vector3(at.x + cos(a) * randf_range(0.8, 2.4), 0.08, at.z + sin(a) * randf_range(0.8, 2.4))
 		var rose := _fx_rose(by, fx_root, 0.17)
@@ -5515,8 +5517,8 @@ func _crescendo(u: Unit) -> void:
 			_by(u)._swirl(o.position + Vector3(0, 2.2, 0), ROSE_GOLD, 1.0, 0.6)
 			_by(u)._ring_floor(o.position, ROSE_GOLD, 0.3, 1.3, 0.5)
 	if u.controlled:
-		hud.toast("CRESCENDO: BÔNUS DA SAIA EM DOBRO", 1.4)
-		hud.edge_glow(ROSE_GOLD, 0.8, 0.8)
+		if not _quiet(u): hud.toast("CRESCENDO: BÔNUS DA SAIA EM DOBRO", 1.4)
+		if not _quiet(u): hud.edge_glow(ROSE_GOLD, 0.8, 0.8)
 
 
 ## Grande Baile: a arena vira salão por BALL_TIME. A party inteira conta como dentro da saia, o Embalo
@@ -5527,8 +5529,8 @@ func _grand_ball(u: Unit) -> void:
 	u.waltz_anim("ball", 1.2)
 	_by(u)._ball_build()
 	_by(u)._chimes([0, 7, 4, 7, 12, 16, 12, 19], 0.11)
-	hud.toast("GRANDE BAILE", 1.6)
-	hud.flash(LILAC.lightened(0.3), 0.3)
+	if not _quiet(u): hud.toast("GRANDE BAILE", 1.6)
+	if not _quiet(u): hud.flash(LILAC.lightened(0.3), 0.3)
 	_by(u)._ring_floor(u.position, ROSE_GOLD, 0.5, arena_r, 0.9)
 	_by(u)._ring_floor(u.position, LILAC.lightened(0.3), 0.3, arena_r * 0.8, 0.7)
 	_by(u)._petals(u.position + Vector3(0, 1.2, 0), 30, 5.0, 3.0, 1.3, 0.6)
@@ -5536,8 +5538,8 @@ func _grand_ball(u: Unit) -> void:
 		if o.alive:
 			_by(u)._swirl(o.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.7, 0.8, true)
 			_by(u)._swirl(o.position + Vector3(0, 2.4, 0), Color(1, 1, 1), 0.9, 0.6)
-	shake_t = maxf(shake_t, 0.25)
-	shake_amp = maxf(shake_amp, 0.2)
+	if not _quiet(u): shake_t = maxf(shake_t, 0.25)
+	if not _quiet(u): shake_amp = maxf(shake_amp, 0.2)
 
 
 ## O salão: a roseta da saia do tamanho da arena, o lustre descendo do alto e um foco de luz por herói.
@@ -5619,10 +5621,10 @@ func _ball_finale(u: Unit) -> void:
 	_by(u)._swirl(hit, Color(1, 1, 1), 3.0, 0.7)
 	_by(u)._petals(hit, 44, 5.5, 2.6, 1.4, 0.7)
 	_by(u)._burst(hit, ROSE_GOLD, 7.0)
-	hud.flash(ROSE_GOLD, 0.3)
-	hud.toast("ÚLTIMO ACORDE", 1.2)
-	shake_t = 0.4
-	shake_amp = 0.45
+	if not _quiet(u): hud.flash(ROSE_GOLD, 0.3)
+	if not _quiet(u): hud.toast("ÚLTIMO ACORDE", 1.2)
+	if not _quiet(u): shake_t = 0.4
+	if not _quiet(u): shake_amp = 0.45
 	for o in units:
 		if o.alive and o.hp < o.max_hp:
 			o.hp = minf(o.max_hp, o.hp + BALL_END_HEAL)
@@ -5694,10 +5696,12 @@ func _ai_waltz(u: Unit, delta: float) -> void:
 func _tick_valsa_view(delta: float) -> void:
 	var any := false
 	var any_ball := false
+	var valsa_quiet := true
 	for v in units:
 		if v.key != "valsa":
 			continue
 		any = true
+		valsa_quiet = valsa_quiet and not v.controlled
 		var on: bool = v.alive
 		v.aura.visible = on
 		if on:
@@ -5724,6 +5728,7 @@ func _tick_valsa_view(delta: float) -> void:
 		var mk: MeshInstance3D = valsa_marks[i]
 		var b := valsa_bonus(o)
 		mk.visible = b > 0.0
+		mk.transparency = FX_QUIET_FADE if valsa_quiet else 0.0
 		if mk.visible:
 			mk.position = Vector3(o.position.x, 0.07, o.position.z)
 			mk.rotation.z -= delta * (2.5 + b * 20.0)
@@ -5871,7 +5876,7 @@ func _necropsy(u: Unit) -> void:
 		u.vestiges += 1
 		_by(u)._burst(u.position + Vector3(0, 2.2, 0), CHEM, 1.2)
 		if u.controlled:
-			hud.toast("VESTÍGIO %d/%d" % [u.vestiges, VESTIGE_MAX], 0.9)
+			if not _quiet(u): hud.toast("VESTÍGIO %d/%d" % [u.vestiges, VESTIGE_MAX], 0.9)
 	u.face(boss_pos - u.position)
 	u.punch()
 	_attack_fx(u, true)
@@ -5887,7 +5892,7 @@ func _hemostatic(u: Unit) -> void:
 		if u.vestiges >= VESTIGE_MAX and not get_dot("decomp").is_empty():
 			add_dot("contam", "Contaminação", Color(0.75, 0.3, 0.9), CONTAM_TIME, 0.0, u)
 			_by(u)._beam(u.position, _bp(Vector3(0, 3.0, -11.5)), Color(0.75, 0.3, 0.9, 0.95), 0.4)
-			hud.toast("CONTAMINAÇÃO", 1.2)
+			if not _quiet(u): hud.toast("CONTAMINAÇÃO", 1.2)
 			return
 		ally = u
 	if not ally.alive:
@@ -5905,8 +5910,8 @@ func _thanato(u: Unit) -> void:
 		remove_dot("contam")
 		u.vestiges = 0
 		_by(u)._burst(_bp(Vector3(0, 3, -11.5)), Color(0.6, 0.85, 0.2), 7.0)
-		hud.flash(Color(0.6, 0.85, 0.2, 0.3))
-		hud.toast("NUVEM TÓXICA", 1.6)
+		if not _quiet(u): hud.flash(Color(0.6, 0.85, 0.2, 0.3))
+		if not _quiet(u): hud.toast("NUVEM TÓXICA", 1.6)
 		_damage_boss(u, TOXIC_DMG, true, true)
 		add_dot("toxica", "Nuvem Tóxica", Color(0.6, 0.85, 0.2), TOXIC_TIME, TOXIC_DPS, u)
 		return
@@ -5915,7 +5920,7 @@ func _thanato(u: Unit) -> void:
 		u.vestiges = 0
 		boost = CLOUD_BOOST
 	_by(u)._burst(u.position, CHEM, 7.0)
-	hud.toast("NUVEM CONSERVANTE" + (" +" if boost > 1.0 else ""), 1.4)
+	if not _quiet(u): hud.toast("NUVEM CONSERVANTE" + (" +" if boost > 1.0 else ""), 1.4)
 	for o in units:
 		if not o.alive:
 			continue
@@ -6008,7 +6013,7 @@ func _sleep_skill(u: Unit, slot: int) -> void:
 				gain += SW_ECHO_TORPOR
 				_by(u)._burst(_bp(Vector3(0, 3.5, -11.5)), Color(1, 1, 1), 3.4)
 				if u.controlled:
-					hud.toast("FRESTA!", 0.6)
+					if not _quiet(u): hud.toast("FRESTA!", 0.6)
 				break
 		_torpor_add(u, gain)
 		_sw_hit(u, amount, amount > 60.0)
@@ -6039,9 +6044,9 @@ func _sleep_skill(u: Unit, slot: int) -> void:
 		u.crumbs = false
 		u.pillow_full = false
 		if u.controlled:
-			hud.toast("FORA DA SEQUÊNCIA", 0.8)
+			if not _quiet(u): hud.toast("FORA DA SEQUÊNCIA", 0.8)
 	elif slot > 1 and u.controlled:
-		hud.toast("PERFEITO", 0.5)
+		if not _quiet(u): hud.toast("PERFEITO", 0.5)
 	_dream_add(stacks)
 	_torpor_add(u, gain)
 	# A sequência só existe a partir do Puxar o Lençol: a janela da próxima abre apenas depois de
@@ -6071,7 +6076,7 @@ func _sw_toggle(u: Unit) -> void:
 	u.skill_cd[0] = u.bite_cd
 	_by(u)._burst(u.position, DREAM, 3.0)
 	if u.controlled:
-		hud.toast("DORMINDO", 0.9)
+		if not _quiet(u): hud.toast("DORMINDO", 0.9)
 
 
 ## Acorda. `lose`: perde o Torpor que sobrou (acordou no meio, ou faltou Torpor).
@@ -6086,7 +6091,7 @@ func _sw_wake(u: Unit, lose: bool, clean := false) -> void:
 	u.channel_t = 0.0
 	if u.controlled and lock > 0.0:
 		var why := "ACORDOU À TOA" if u.dream_step == 0 else ("VISITA CURTA" if u.dream_step == 1 else "ROTAÇÃO QUEBRADA")
-		hud.toast("%s: %d s sem agir" % [why, int(lock)], 1.4)
+		if not _quiet(u): hud.toast("%s: %d s sem agir" % [why, int(lock)], 1.4)
 	u.bite_cd = u.skill_cd[0]
 	u.asleep = false
 	u.dream_step = 0
@@ -6118,7 +6123,7 @@ func _sw_dream(u: Unit, slot: int) -> void:
 		add_dot("pesadelo", "Pesadelo Persistente", DREAM, NIGHTMARE_TIME, NIGHTMARE_DPS, u)
 		u.near_t = NEAR_PERFECT if perfect else NEAR_OTHER
 		if u.controlled:
-			hud.toast("PERTO DO SONHO %d s" % int(u.near_t), 0.9)
+			if not _quiet(u): hud.toast("PERTO DO SONHO %d s" % int(u.near_t), 0.9)
 		u.skill_cd[0] = _sw_cd(u, sk["cd"])
 	elif u.torpor < cost:
 		return
@@ -6126,8 +6131,8 @@ func _sw_dream(u: Unit, slot: int) -> void:
 	_sw_hit(u, amount, slot >= 3)
 	if slot == 4:
 		# A Casa que Engole: fecha a sequência, protege a party e acorda sozinho
-		hud.flash(Color(DREAM.r, DREAM.g, DREAM.b, 0.4))
-		hud.toast("A CASA QUE ENGOLE", 1.4)
+		if not _quiet(u): hud.flash(Color(DREAM.r, DREAM.g, DREAM.b, 0.4))
+		if not _quiet(u): hud.toast("A CASA QUE ENGOLE", 1.4)
 		for o in units:
 			if o.alive:
 				o.shield_hp = maxf(o.shield_hp, o.max_hp * HOUSE_SHIELD)
@@ -6141,7 +6146,7 @@ func _sw_dream(u: Unit, slot: int) -> void:
 		# não dá pra pagar a próxima: acorda sozinho daqui a 1 s e perde o que sobrou
 		u.wake_t = 1.0
 		if u.controlled:
-			hud.toast("SEM TORPOR NECESSÁRIO, ACORDANDO", 1.0)
+			if not _quiet(u): hud.toast("SEM TORPOR NECESSÁRIO, ACORDANDO", 1.0)
 
 
 ## Ecos do Pesadelo: quatro Frestas abrem na boss depois de A Cama Caiu! perfeita.
@@ -6329,7 +6334,7 @@ func _rebirth(u: Unit) -> void:
 		var h: Dictionary = hearths[hearths.size() - 1]
 		from = h["node"].position
 		_hearth_empower(h)
-	hud.toast("RENASCIMENTO", 1.6)
+	if not _quiet(u): hud.toast("RENASCIMENTO", 1.6)
 	# cura e reviver saem já no nascimento
 	for o in units:
 		if not o.alive:
@@ -6337,7 +6342,7 @@ func _rebirth(u: Unit) -> void:
 			o.weak_t = WEAK_TIME
 			_spawn_cards(o)
 			_by(u)._burst(o.position, Color(1.0, 0.95, 0.6), 3.0)
-			hud.toast(o.unit_name + " voltou", 2.0)
+			if not _quiet(u): hud.toast(o.unit_name + " voltou", 2.0)
 		else:
 			o.hp = minf(o.max_hp, o.hp + REBIRTH_HEAL)
 			_by(u)._burst(o.position, FLAME, 1.8)
@@ -6512,9 +6517,9 @@ func _phoenix_hit(u: Unit, hit: Vector3, gold: Color) -> void:
 		ts.tween_property(sp, "position", hit + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 8.0), 0.7).set_ease(Tween.EASE_OUT)
 		ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.7)
 		ts.chain().tween_callback(sp.queue_free)
-	hud.flash(Color(1.0, 0.6, 0.2), 0.3)
-	shake_t = 0.5
-	shake_amp = 0.5
+	if not _quiet(u): hud.flash(Color(1.0, 0.6, 0.2), 0.3)
+	if not _quiet(u): shake_t = 0.5
+	if not _quiet(u): shake_amp = 0.5
 	boss.hit_flash()
 	if not is_instance_valid(u):
 		return
@@ -6874,11 +6879,11 @@ func _bloodbath(u: Unit) -> void:
 		td.tween_property(drop, "position", ground, 0.3).set_ease(Tween.EASE_IN)
 		td.tween_callback(drop.queue_free)
 		td.tween_callback(_by_call.bind(u, &"_burst", [ground, BLOOD, 0.8]))
-	hud.flash(BLOOD, 0.2)
-	shake_t = 0.25
-	shake_amp = 0.25
+	if not _quiet(u): hud.flash(BLOOD, 0.2)
+	if not _quiet(u): shake_t = 0.25
+	if not _quiet(u): shake_amp = 0.25
 	if u.controlled:
-		hud.toast("BLOODBATH: ESCOLHA A HABILIDADE FORTALECIDA" + ("  (x%d)" % BATH_CHARGES_ULT if ult else ""), 1.8)
+		if not _quiet(u): hud.toast("BLOODBATH: ESCOLHA A HABILIDADE FORTALECIDA" + ("  (x%d)" % BATH_CHARGES_ULT if ult else ""), 1.8)
 
 
 ## A habilidade do slot vai sair fortalecida pelo Bloodbath? Se sim, gasta uma carga (e, sobrando carga,
@@ -6913,7 +6918,7 @@ func _consumed_big(u: Unit) -> void:
 	_by(u)._burst(u.position + Vector3(0, 1.0, 0), Color(1, 1, 1), 2.2)
 	_blood_return(u, 6)
 	if u.controlled:
-		hud.toast("COMPARTILHAMENTO DE SANGUE", 1.4)
+		if not _quiet(u): hud.toast("COMPARTILHAMENTO DE SANGUE", 1.4)
 
 
 ## Extração fortalecida pelo Bloodbath (no Blood Party): ela carrega a seringa na boss por EXTRACT_BIG_TIME.
@@ -6932,7 +6937,7 @@ func _extract_big(u: Unit) -> void:
 	u.set_fill(1.0, EXTRACT_BIG_TIME)
 	var at := boss_pos + Vector3(0, 2.4, 1.7)
 	if u.controlled:
-		hud.toast("EXTRAÇÃO TOTAL", 1.6)
+		if not _quiet(u): hud.toast("EXTRAÇÃO TOTAL", 1.6)
 	# a esfera de sangue crescendo na boss
 	var orb_m := Fx.mat(Color(BLOOD.r * 2.6, BLOOD.g * 1.6, BLOOD.b * 1.6, 0.85), 0.0, true)
 	var orb := _fx(u, fx_root, Fx.sphere(1.0), orb_m, at)
@@ -6952,8 +6957,8 @@ func _extract_big(u: Unit) -> void:
 				tw.tween_callback(drop.queue_free)
 			if n % 4 == 0:
 				_by(u)._impact_ring(at, BLOOD.lightened(k * 0.4), 1.5 + k * 3.0)
-			shake_t = 0.12
-			shake_amp = 0.08 + k * 0.2
+			if not _quiet(u): shake_t = 0.12
+			if not _quiet(u): shake_amp = 0.08 + k * 0.2
 			for m in u.syringe_mats:
 				(m as StandardMaterial3D).albedo_color = Color(3.2 + k * 6.0, 0.2 + k * 0.6, 0.4 + k * 0.6))
 	get_tree().create_timer(EXTRACT_BIG_TIME, false).timeout.connect(func():
@@ -6981,9 +6986,9 @@ func _extract_big(u: Unit) -> void:
 			ts.tween_property(sp, "position", at + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 9.0), 0.7).set_ease(Tween.EASE_OUT)
 			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.7)
 			ts.chain().tween_callback(sp.queue_free)
-		hud.flash(BLOOD, 0.45)
-		shake_t = 0.6
-		shake_amp = 0.7
+		if not _quiet(u): hud.flash(BLOOD, 0.45)
+		if not _quiet(u): shake_t = 0.6
+		if not _quiet(u): shake_amp = 0.7
 		boss.hit_flash()
 		_damage_boss(u, EXTRACT_BIG_DMG / (PARTY_DMG_MULT if u.party_t > 0.0 else 1.0), true, true)
 		if u.party_t > 0.0:
@@ -7010,7 +7015,7 @@ func _extract(u: Unit, big := false) -> void:
 	u.set_fill(1.0, EXTRACT_TIME)
 	var at := boss_pos + Vector3(0, 2.2, 1.7)
 	if u.controlled:
-		hud.toast("EXTRAÇÃO", 1.0)
+		if not _quiet(u): hud.toast("EXTRAÇÃO", 1.0)
 	var steps := 10
 	for n in steps:
 		get_tree().create_timer(EXTRACT_TIME * n / steps, false).timeout.connect(func():
@@ -7032,9 +7037,9 @@ func _extract(u: Unit, big := false) -> void:
 		_by(u)._burst(at, BLOOD, 5.5)
 		for k in 3:
 			_by(u)._impact_ring(at, BLOOD.lightened(k * 0.15), 3.0 + k * 1.5)
-		hud.flash(BLOOD, 0.22)
-		shake_t = 0.3
-		shake_amp = 0.35
+		if not _quiet(u): hud.flash(BLOOD, 0.22)
+		if not _quiet(u): shake_t = 0.3
+		if not _quiet(u): shake_amp = 0.35
 		boss.hit_flash()
 		_damage_boss(u, EXTRACT_DMG / PARTY_DMG_MULT, true, true)
 		if u.party_t > 0.0:
@@ -7066,12 +7071,12 @@ func _end_taste(u: Unit) -> void:
 		_by(u)._burst(u.position + Vector3(0, 1.0, 0), BLOOD, 4.6)
 		for k in 3:
 			_by(u)._impact_ring(u.position + Vector3(0, 0.4 + k * 0.5, 0), [Color(1, 1, 1), BLOOD, BLOOD.lightened(0.3)][k], 2.6 + k * 1.2)
-		shake_t = 0.25
-		shake_amp = 0.3
+		if not _quiet(u): shake_t = 0.25
+		if not _quiet(u): shake_amp = 0.3
 		_blood_return(u, 4)
 		_by(u)._popup(int(u.hp - u.taste_prev), BLOOD.lightened(0.35), 60, u.position + Vector3(0, 2.6, 0), "+")
 		if u.controlled:
-			hud.flash(Color(1.0, 1.0, 1.0, 0.25))
+			if not _quiet(u): hud.flash(Color(1.0, 1.0, 1.0, 0.25))
 	else:
 		u.hp = u.taste_prev
 
@@ -7113,7 +7118,7 @@ func _tick_blood(u: Unit, delta: float) -> void:
 				u.hp = u.max_hp
 				_by(u)._burst(u.position, Color(1, 1, 1), 3.0)
 				if u.controlled:
-					hud.toast("SOBREVIVEU AO BLOOD PARTY", 1.6)
+					if not _quiet(u): hud.toast("SOBREVIVEU AO BLOOD PARTY", 1.6)
 			else:
 				_by(u)._burst(u.position, BLOOD.darkened(0.3), 5.0)
 				kill(u, "não recuperou a vida toda no Blood Party")
@@ -9859,11 +9864,11 @@ func _drop_cookie(at: Vector3, delay: float, size: float, victim: Unit) -> void:
 ## _beam, _popup, _sfx...) recebem o dono por `_by(u)._burst(...)` e começam com `_take_by()`.
 ## Sem dono (boss, cenário, avisos de mecânica), nada é mexido. Na troca, `_fx_refresh` reaplica
 ## em tudo o que ainda está vivo: quem você assumiu volta inteiro na hora.
-const FX_QUIET_FADE := 0.68    # transparência da malha (0 = inteira, 1 = invisível)
-const FX_QUIET_DIM := 0.4      # o mesmo, pros shaders que escrevem ALPHA (uniform de instância fx_dim)
-const FX_QUIET_SIZE := 0.65    # estouros, volutas e números de dano encolhem pra isso
-const FX_QUIET_COUNT := 0.35   # fração das partículas (pétalas, brasas) que ainda nasce
-const FX_QUIET_DB := -12.0     # sons e notas musicais do herói
+const FX_QUIET_FADE := 0.86    # transparência da malha (0 = inteira, 1 = invisível)
+const FX_QUIET_DIM := 0.14      # o mesmo, pros shaders que escrevem ALPHA (uniform de instância fx_dim)
+const FX_QUIET_SIZE := 0.5    # estouros, volutas e números de dano encolhem pra isso
+const FX_QUIET_COUNT := 0.15   # fração das partículas (pétalas, brasas) que ainda nasce
+const FX_QUIET_DB := -24.0     # sons e notas musicais do herói
 
 var _fx_by: Unit = null
 

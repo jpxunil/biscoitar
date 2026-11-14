@@ -6,7 +6,8 @@ extends Control
 ##   em cima: tempo de luta e o DPS somado da party;
 ##   uma linha por herói, do que mais bateu pro que menos: DPS, parte do dano da party e dano total;
 ##   clicar numa linha abre o detalhe do herói: dano por habilidade (game.gd: unit.dmg_log).
-## Os números vêm de game.meter_rows(); este nó só desenha.
+## Os números vêm de game.meter_rows(); este nó só desenha. Fica escondido até o jogador ligar em
+## OPÇÕES > JOGO (Settings.dps_meter, desligado por padrão).
 
 const W := 300.0
 const PAD := 8.0
@@ -37,6 +38,11 @@ func setup(game) -> void:
 
 func _process(_delta: float) -> void:
 	if g == null:
+		return
+	# é opcional: só aparece com a opção ligada (OPÇÕES > JOGO). O dano é registrado de qualquer jeito,
+	# então ligar no meio da luta já mostra a luta inteira.
+	visible = Settings.dps_meter
+	if not visible:
 		return
 	_fit()
 	queue_redraw()

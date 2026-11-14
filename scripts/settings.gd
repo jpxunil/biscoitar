@@ -16,6 +16,8 @@ const CHANNELS := [
 ## bus -> 0..1
 static var volume: Dictionary = {}
 static var mute_all := false
+## Interface da luta. Medidor de dano (ui/kit/dps_meter.gd): desligado por padrão; liga na aba JOGO.
+static var dps_meter := false
 static var _booted := false
 
 
@@ -40,6 +42,10 @@ static func _defaults() -> void:
 static func set_volume(bus: StringName, v: float) -> void:
 	volume[bus] = clampf(v, 0.0, 1.0)
 	apply_audio()
+
+
+static func set_dps_meter(on: bool) -> void:
+	dps_meter = on
 
 
 static func set_mute_all(on: bool) -> void:
@@ -76,6 +82,7 @@ static func write(path: String) -> Error:
 	for c in CHANNELS:
 		cfg.set_value("audio", String(c["bus"]), volume.get(c["bus"], 1.0))
 	cfg.set_value("audio", "mute_all", mute_all)
+	cfg.set_value("hud", "dps_meter", dps_meter)
 	var b := Binds.to_dict()
 	for id in b:
 		cfg.set_value("binds", id, b[id])
@@ -89,6 +96,7 @@ static func read(path: String) -> void:
 	for c in CHANNELS:
 		volume[c["bus"]] = clampf(float(cfg.get_value("audio", String(c["bus"]), 1.0)), 0.0, 1.0)
 	mute_all = bool(cfg.get_value("audio", "mute_all", false))
+	dps_meter = bool(cfg.get_value("hud", "dps_meter", false))
 	var b := {}
 	if cfg.has_section("binds"):
 		for id in cfg.get_section_keys("binds"):

@@ -28,6 +28,7 @@ var _hint: Label
 # som
 var _sliders := {}  # bus -> {"slider": InkSlider, "value": Label}
 var _mute: ShineButton
+var _meter: ShineButton
 
 # atalhos
 var _rows := {}  # id -> {"chips": [ShineButton, ShineButton], "reset": ShineButton, "skill": Label}
@@ -71,16 +72,16 @@ func _ready() -> void:
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	tag.add_child(title)
 
-	var names := ["SOM", "ATALHOS"]
+	var names := ["SOM", "ATALHOS", "JOGO"]
 	for k in names.size():
 		var b := _button(names[k], Paper.CREAM, Paper.INK, 26)
-		b.position = Vector2(590 + k * 206, 54)
+		b.position = Vector2(384 + k * 206, 54)
 		b.size = Vector2(194, 54)
 		b.pressed.connect(_show_tab.bind(k))
 		_box.add_child(b)
 		_tabs.append(b)
 
-	for build in [_build_sound, _build_binds]:
+	for build in [_build_sound, _build_binds, _build_game]:
 		var page := Control.new()
 		page.position = Vector2(40, 132)
 		page.size = PAGE
@@ -217,6 +218,34 @@ func _refresh_sound() -> void:
 		_sliders[bus]["slider"].modulate.a = 0.45 if Settings.mute_all else 1.0
 	_mute.text = "SILENCIAR TUDO: " + ("SIM" if Settings.mute_all else "NÃO")
 	_mute.fill = DANGER if Settings.mute_all else Paper.CREAM
+
+
+# ---------------------------------------------------------------- jogo
+
+## Opções da interface da luta. Por enquanto, só o medidor de dano.
+func _build_game(page: Control) -> void:
+	var l := _title("MEDIDOR DE DANO", 20)
+	l.position = Vector2(8, 18)
+	l.size = Vector2(330, 34)
+	page.add_child(l)
+	_meter = _button("", Paper.CREAM, Paper.INK, 18)
+	_meter.position = Vector2(350, 10)
+	_meter.size = Vector2(260, 54)
+	_meter.pressed.connect(func():
+		Settings.set_dps_meter(not Settings.dps_meter)
+		Settings.save()
+		_refresh_game())
+	page.add_child(_meter)
+	var note := _text("Mostra, no canto de cima da luta, o dano de cada herói na luta inteira: DPS, parte do dano da party e total. Clicar num herói abre o dano por habilidade. Vale na hora, até no meio de uma luta.", 14, DIM)
+	note.position = Vector2(8, 84)
+	note.size = Vector2(900, 66)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	page.add_child(note)
+
+
+func _refresh_game() -> void:
+	_meter.text = "LIGADO" if Settings.dps_meter else "DESLIGADO"
+	_meter.fill = Paper.GOLD if Settings.dps_meter else Paper.CREAM
 
 
 # ---------------------------------------------------------------- atalhos
@@ -515,6 +544,7 @@ func open(hero := -1, tab := 0) -> void:
 	_show_hero(hero if hero >= 0 else Knowledge.start_hero)
 	_refresh_sound()
 	_refresh_binds()
+	_refresh_game()
 	_show_tab(tab)
 	_box.scale = Vector2.ONE * 0.94
 	_box.modulate.a = 0.0
@@ -576,7 +606,8 @@ func _input(event: InputEvent) -> void:
 		return
 	match k:
 		KEY_ESCAPE: close()
-		KEY_LEFT, KEY_A, KEY_RIGHT, KEY_D: _show_tab(1 - _tab)
+		KEY_LEFT, KEY_A: _show_tab(posmod(_tab - 1, _pages.size()))
+		KEY_RIGHT, KEY_D: _show_tab(posmod(_tab + 1, _pages.size()))
 
 
 func _capture_input(event: InputEvent) -> void:

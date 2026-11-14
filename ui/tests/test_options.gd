@@ -115,6 +115,19 @@ func _initialize() -> void:
 	hud.pause._btns[2].pressed.emit()
 	await process_frame
 	check(opt.visible and not hud.pause.visible and paused, "OPÇÕES no pause abre a tela e a luta segue pausada")
+	# aba JOGO: o medidor de dano é opcional e vem desligado
+	check(not Settings.dps_meter and not hud.meter.visible and opt._tabs.size() == 3, "o medidor de dano vem desligado, e as opções têm a aba JOGO")
+	opt._show_tab(2)
+	check(opt._pages[2].visible and not opt._pages[0].visible and opt._meter.text == "DESLIGADO", "a aba JOGO mostra o medidor como DESLIGADO")
+	opt._meter.pressed.emit()
+	hud.meter._process(0.0)
+	check(Settings.dps_meter and opt._meter.text == "LIGADO" and hud.meter.visible, "clicar liga: o medidor aparece na luta na hora")
+	opt._meter.pressed.emit()
+	hud.meter._process(0.0)
+	check(not Settings.dps_meter and opt._meter.text == "DESLIGADO" and not hud.meter.visible, "clicar de novo desliga")
+	opt._meter.pressed.emit()
+	await key(KEY_RIGHT)
+	check(opt._tab == 0, "as setas dão a volta pelas três abas")
 	opt._show_tab(1)
 	opt._rows["order_atk"]["chips"][0].pressed.emit()
 	check(opt._cap.get("id", "") == "order_atk", "clicar no atalho entra em modo de captura")
@@ -187,6 +200,7 @@ func _initialize() -> void:
 	# ---- salvar e carregar
 	var path := "user://settings_test.cfg"
 	check(Settings.write(path) == OK, "grava o arquivo de configuração")
+	Settings.set_dps_meter(false)
 	Binds.reset_all()
 	Settings.reset_audio()
 	check(not AudioServer.is_bus_mute(0) and is_equal_approx(AudioServer.get_bus_volume_linear(sfx), 1.0), "restaurar padrão do som volta pra 100%")
@@ -194,6 +208,7 @@ func _initialize() -> void:
 	Settings.apply_audio()
 	check(is_equal_approx(Settings.volume[&"SFX"], 0.4) and is_equal_approx(Settings.volume[&"Master"], 0.7) and Settings.mute_all, "volumes voltam do arquivo")
 	check(is_equal_approx(AudioServer.get_bus_volume_linear(sfx), 0.4), "e são aplicados no bus")
+	check(Settings.dps_meter, "o medidor de dano ligado volta do arquivo")
 	check(Binds.keys["order_hold"][0] == KEY_H and Binds.keys["pause"][1] == KEY_F10 and Binds.keys["skill_2"][0] == KEY_M and Binds.keys["order_atk"][0] == 0, "atalhos voltam do arquivo")
 	await key(KEY_H)
 	check(true, "sem erro depois de recarregar")

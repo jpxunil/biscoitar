@@ -1159,10 +1159,15 @@ func _initialize() -> void:
 	main.add_dot("teste", "Veneno de Teste", Color.WHITE, 5.0, 10.0, u)
 	await wait(1.2)
 	check(u.dmg_log.has("Veneno de Teste") and u.dmg_log["Veneno de Teste"]["dmg"] >= 10.0, "dano por segundo entra com o nome do efeito")
+	await frames_of(3)
+	check(not Settings.dps_meter and not main.hud.meter.visible, "o medidor é opcional: desligado por padrão, não aparece (mas o dano foi registrado mesmo assim)")
+	Settings.set_dps_meter(true)
 	main.hud.meter.open = u.idx
 	await frames_of(3)
+	check(main.hud.meter.visible, "ligado nas opções, aparece na hora, já com a luta inteira")
 	check(main.hud.meter.skills_of(u)[0][0] == "Jab Estelar" and main.hud.meter.size.y > main.hud.meter._list_h(), "o detalhe do herói lista as habilidades da que mais deu dano pra que menos")
 	check(not main.hud.cards[main.ctrl].get_node("Body/Dps").visible, "o card não mostra mais DPS (só a Fraqueza, quando tem)")
+	Settings.set_dps_meter(false)
 
 	# ================================================================ APOTECÁRIO
 	main = await fight(7)
