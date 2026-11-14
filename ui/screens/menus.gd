@@ -7,6 +7,7 @@ extends Control
 ##   vitória -> loja -> bosses
 ##   título -> tutoriais -> (cena do tutorial) -> tutoriais
 ##   título -> SKILLS (consulta das habilidades de todos os personagens) -> título
+##   cartas <-> GEAR (o alternador CARTAS | GEAR no título das duas telas, ou TAB; mantém o herói)
 ##   cartas -> SKILLS (botão pequeno embaixo do VOLTAR, abre no herói que está sendo visto) -> cartas
 ##   título -> opções (a tela de opções é do hud.gd: é a mesma que o pause abre)
 ## Cada tela é uma cena própria em ui/screens/, que também abre sozinha com F6.
@@ -26,6 +27,8 @@ var _gear := false
 var _skills_from_cards := false
 var _skills_hero := -1
 var _cards_hero := -1
+## As cartas estavam no caminho de uma luta quando o jogador virou pro GEAR: a volta mantém o botão de luta.
+var _fight_cards := false
 
 
 func setup(game) -> void:
@@ -44,9 +47,14 @@ func setup(game) -> void:
 		s.visible = false
 	gear_screen.back_pressed.connect(show_screen.bind("bosses"))
 	gear_screen.cards_pressed.connect(func(hero: int):
-		_gear = true
+		_gear = not _fight_cards
 		_cards_hero = hero
 		show_screen("cards"))
+	cards.gear_pressed.connect(func(hero: int):
+		# a outra face do alternador: a tela GEAR no mesmo herói
+		_fight_cards = not _gear
+		_gear_hero = hero
+		show_screen("gear"))
 	bosses.equip_pressed.connect(show_screen.bind("gear"))
 	title.play_pressed.connect(show_screen.bind("saves"))
 	title.skills_pressed.connect(show_screen.bind("skills"))
@@ -130,6 +138,7 @@ func show_screen(id: String) -> void:
 			skills.open(_skills_hero if _skills_hero >= 0 else Knowledge.start_hero)
 			_skills_hero = -1
 		"bosses":
+			_fight_cards = false
 			bosses.visible = true
 			bosses.open()
 			_celebrate()

@@ -30,6 +30,10 @@ var combo := 0
 var dmg_acc := 0.0
 var dmg_timer := 0.0
 var dmg_total := 0.0
+## Medidor de dano da luta (ui/kit/dps_meter.gd): de onde vem o dano que ele está causando agora
+## (a última habilidade usada) e o total por habilidade: nome -> {"dmg", "hits"}.
+var dmg_src := ""
+var dmg_log := {}
 var dmg_bucket := 0.0
 var dmg_buckets: Array[float] = []
 var dps := 0.0

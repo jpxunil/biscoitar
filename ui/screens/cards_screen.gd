@@ -11,6 +11,8 @@ signal ready_pressed
 signal back_pressed
 ## Abrir a tela SKILLS no herói que está sendo visto (o botão pequeno embaixo do VOLTAR).
 signal skills_pressed(hero: int)
+## Trocar pra tela GEAR no herói que está sendo visto (a metade GEAR do alternador do título, ou TAB).
+signal gear_pressed(hero: int)
 ## Uma carta mudou de lugar (equipou, tirou ou trocou de slot).
 signal deck_changed
 
@@ -90,6 +92,12 @@ const ART_MAX_H := 840.0
 const ART_FACE := {"tank": 0.44, "ringstar": 0.37, "apothecary": 0.37}
 const ART_FACE_Y := 245.0
 const CARD_HALF := Vector2(CardView.W, CardView.H) * 0.5
+## A roleta é um anel fechado: as cartas dão a volta e aparecem dos dois lados da carta em foco.
+## Com menos de RING_MIN cartas na mão, o anel é completado com cartas trancadas (só enfeite).
+const RING_MIN := 11
+## Quantos passos pra cada lado ainda aparecem na tela; além disso a carta está embaixo da borda.
+const ARC := 5.4
+const DuoToggleKit := preload("res://ui/kit/duo_toggle.gd")
 
 
 ## Control que desenha com uma função: `fn` recebe o próprio nó.
@@ -276,7 +284,6 @@ var _pager: Draw
 var _spin_prev: ShineButton
 var _spin_next: ShineButton
 var _art_tw: Tween
-var _ticks_tw: Tween
 var _push_at := -1
 var _name_tag: Control
 var _name_panel: CutPanel
@@ -302,6 +309,14 @@ var _sel := -1
 ## Um dicionário por carta: {cv, src ("slot"/"hand"), idx, id, kind, home, rot0, hover, press, drag_ok, alt, tw, spoke}
 var _slots: Array = []
 var _spokes: Array = []
+## Cartas trancadas que completam o anel: {spoke, slot, cv}. Não são cartas: não entram em `_hand`,
+## não recebem mouse e não mexem em Knowledge.
+var _fillers: Array = []
+## Tamanho do anel (cartas + trancadas) e o giro atual dele, em passos (a carta `_turn` está no topo).
+var _ring := RING_MIN
+var _turn := 0.0
+var _turn_tw: Tween
+var _toggle: Control
 var _pend = null
 var _drag = null
 var _ghost: CardView
@@ -328,6 +343,7 @@ func _ready() -> void:
 func open(hero_idx: int, show_ready := true) -> void:
 	hero = clampi(hero_idx, 0, Knowledge.HEROES.size() - 1)
 	_show_ready = show_ready
+	_toggle.pop()
 	# com a party montada, o seletor mostra só os quatro dela (na aula do tutorial, todos)
 	# sem party montada (ou na aula), entram os primeiros da lista: o seletor tem lugar pra cinco
 	var team: Array = Knowledge.party if (Knowledge.party_ready() and tutor.is_empty()) else ORDER.slice(0, TILE_X.size())
@@ -419,6 +435,10 @@ func refresh(animate := false, dir := 0) -> void:
 		_face_frame.visible = false
 		frame = {"w": float(tutor.get("art_w", 400.0)), "x": 880.0, "y": 8.0}
 	_bubble.visible = tutor.is_empty()
+	# aula: o título fica sozinho (sem a metade GEAR); numa luta, a etiqueta da boss ao lado
+	_toggle.solo = not tutor.is_empty()
+	_toggle.accent = _th["acc"]
+	_boss.visible = _show_ready
 	_skills_btn.visible = tutor.is_empty()
 	_name_tag.visible = tutor.is_empty()
 	_role_tag.visible = tutor.is_empty()
@@ -474,7 +494,6 @@ func refresh(animate := false, dir := 0) -> void:
 		if Knowledge.is_new(hero, _hand[k]):
 			_focus = k
 			break
-	_ticks.rotation = deg_to_rad(-_focus * STEP)
 	_build_cards(animate)
 	if animate:
 		_art.modulate.a = 0.0
@@ -613,14 +632,13 @@ func _build() -> void:
 	_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_top.z_index = 10
 	_add(_stage, _top)
-	_add(_top, CutPanel.make(Rect2(20, 10, 216, 62), [[0, 0], [1, .08], [.95, 1], [.03, .9]], Paper.CREAM, 4))
-	var title := Paper.label("CARTAS", 38, Paper.INK, Paper.display())
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_add(_top, title, Vector2(20, 10), Vector2(216, 62))
-	title.pivot_offset = title.size * 0.5
-	title.rotation = deg_to_rad(-2.0)
-	_boss = _drawer(_top, _draw_boss, Vector2(245, 22), Vector2(186, 42))
+	# título: o alternador CARTAS | GEAR (a mesma peça, no mesmo lugar, da tela GEAR)
+	_toggle = DuoToggleKit.new()
+	_toggle.active = 0
+	_add(_top, _toggle, Vector2(20, 10))
+	_toggle.flipped.connect(func(_to: int): gear_pressed.emit(hero))
+	# contra quem é a luta (só quando a tela leva pra uma luta)
+	_boss = _drawer(_top, _draw_boss, Vector2(296, 24), Vector2(138, 38))
 
 	# seletor de herói
 	_strip_bar = _add(_top, CutPanel.make(Rect2(448, 10, 450, 62), [[.02, 0], [1, .06], [.98, 1], [0, .92]], Paper.NAVY, 4))
@@ -797,6 +815,49 @@ func _draw_ticks(d: Draw) -> void:
 	d.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+## Carta trancada que completa o anel da roleta: enfeite, não é carta de verdade (sem id, sem mouse).
+## Escura, com moldura tracejada, cadeado e a etiqueta EM BREVE, pra não se confundir com as "?"
+## (que são cartas reais ainda não conquistadas).
+func _draw_locked(d: Draw, slot: int) -> void:
+	var full := Rect2(Vector2.ZERO, d.size)
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(9)
+	sb.bg_color = Paper.INK
+	d.draw_style_box(sb, Rect2(Vector2(4, 5), d.size))
+	sb.bg_color = Color("1b1d3f")
+	sb.border_color = Paper.INK
+	sb.set_border_width_all(3)
+	d.draw_style_box(sb, full)
+	# riscos diagonais bem apagados, recortados no miolo
+	var inner := full.grow(-9.0)
+	var box := PackedVector2Array([inner.position, Vector2(inner.end.x, inner.position.y), inner.end, Vector2(inner.position.x, inner.end.y)])
+	for n in 4:
+		var y := -20.0 + n * 46.0 + (slot % 2) * 14.0
+		var band := PackedVector2Array([Vector2(0, y + 40), Vector2(d.size.x, y), Vector2(d.size.x, y + 14), Vector2(0, y + 54)])
+		for piece in Geometry2D.intersect_polygons(band, box):
+			d.draw_colored_polygon(piece, Color(Paper.CREAM, 0.05))
+	var dash := Color(Paper.CREAM, 0.38)
+	var c0 := inner.position
+	var c1 := inner.end
+	for seg in [[c0, Vector2(c1.x, c0.y)], [Vector2(c1.x, c0.y), c1], [c1, Vector2(c0.x, c1.y)], [Vector2(c0.x, c1.y), c0]]:
+		d.draw_dashed_line(seg[0], seg[1], dash, 2.0, 7.0)
+	# cadeado
+	var mid := Vector2(d.size.x * 0.5, 66.0)
+	var lock := Color(Paper.CREAM, 0.62)
+	d.draw_arc(mid + Vector2(0, -6), 11.0, PI, TAU, 16, lock, 5.0, true)
+	d.draw_rect(Rect2(mid + Vector2(-11 - 2.5, -6), Vector2(5, 8)), lock)
+	d.draw_rect(Rect2(mid + Vector2(11 - 2.5, -6), Vector2(5, 8)), lock)
+	d.draw_rect(Rect2(mid + Vector2(-17, 0), Vector2(34, 26)), lock)
+	d.draw_circle(mid + Vector2(0, 10), 4.0, Color("1b1d3f"))
+	d.draw_rect(Rect2(mid + Vector2(-1.5, 11), Vector2(3, 9)), Color("1b1d3f"))
+	# etiqueta
+	var f := Paper.display()
+	var tag := Paper.moved(Paper.skew_rect(Vector2(78, 20), 12), Vector2((d.size.x - 78) * 0.5, 108))
+	d.draw_colored_polygon(tag, Paper.INK)
+	d.draw_colored_polygon(Paper.inset(tag, 2.0), Color("3a3f7a"))
+	d.draw_string(f, Vector2((d.size.x - 78) * 0.5, 122.5), "EM BREVE", HORIZONTAL_ALIGNMENT_CENTER, 78, 10, Color(Paper.CREAM, 0.85))
+
+
 func _draw_pointer(d: Draw) -> void:
 	d.draw_colored_polygon(PackedVector2Array([Vector2(0, 0), Vector2(44, 0), Vector2(22, 36)]), Paper.INK)
 	d.draw_colored_polygon(PackedVector2Array([Vector2(8, 4), Vector2(36, 4), Vector2(22, 27)]), Paper.GOLD)
@@ -808,18 +869,18 @@ func _draw_boss(d: Draw) -> void:
 	d.draw_colored_polygon(pts, Paper.INK)
 	d.draw_colored_polygon(Paper.inset(pts, 3), Paper.PINK)
 	var f := Paper.display()
-	var nm: String = ("TREINO LIVRE" if Knowledge.practice else Knowledge.BOSS_INFO[Knowledge.boss]["name"]) if _show_ready else "GEAR"
-	var vs := "VS" if _show_ready else ""
+	var nm: String = "TREINO LIVRE" if Knowledge.practice else Knowledge.BOSS_INFO[Knowledge.boss]["name"]
+	var vs := "VS"
 	var w1 := f.get_string_size(vs, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 	var px := 17
-	while px > 11 and f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + w1 + 30 > d.size.x:
+	while px > 9 and f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + w1 + 28 > d.size.x:
 		px -= 1
 	var w2 := f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
 	var gap := 8.0 if vs != "" else 0.0
 	var x := (d.size.x - w1 - gap - w2) * 0.5
 	if vs != "":
-		d.draw_string(f, Vector2(x, 26), vs, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Paper.INK)
-	d.draw_string(f, Vector2(x + w1 + gap, 27), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px, Paper.INK)
+		d.draw_string(f, Vector2(x, 24), vs, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Paper.INK)
+	d.draw_string(f, Vector2(x + w1 + gap, 19 + px * 0.36), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px, Paper.INK)
 
 
 func _draw_hp(d: Draw) -> void:
@@ -998,6 +1059,7 @@ func _build_cards(deal := false, drop := "") -> void:
 		c.queue_free()
 	_slots.clear()
 	_spokes.clear()
+	_fillers.clear()
 	_peek = null
 	var deck := Knowledge.deck(hero)
 	for kind in Knowledge.KINDS:
@@ -1021,7 +1083,6 @@ func _build_cards(deal := false, drop := "") -> void:
 		var spoke := Control.new()
 		spoke.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		spoke.position = HUB
-		spoke.rotation = deg_to_rad((k - _focus) * STEP)
 		_cards.add_child(spoke)
 		var cv := CardView.make(id, "face" if mine else "back")
 		if mine:
@@ -1042,16 +1103,38 @@ func _build_cards(deal := false, drop := "") -> void:
 			"rot0": 0.0, "hover": false, "press": false, "drag_ok": mine, "alt": k % 2 == 1, "tw": null, "spoke": spoke}
 		_spokes.append(info)
 		_wire(info)
+	# o anel fecha: o que falta pra dar a volta vira carta trancada, só de enfeite
+	_ring = maxi(_hand.size(), RING_MIN)
+	for s in range(_hand.size(), _ring):
+		var spoke := Control.new()
+		spoke.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		spoke.position = HUB
+		spoke.z_index = 1
+		_cards.add_child(spoke)
+		var lock := _drawer(spoke, _draw_locked.bind(s), Vector2(-CARD_HALF.x, -RADIUS - CARD_HALF.y), Vector2(CardView.W, CardView.H))
+		lock.pivot_offset = CARD_HALF
+		_fillers.append({"spoke": spoke, "slot": s, "cv": lock})
+	if _turn_tw != null:
+		_turn_tw.kill()
+		_turn_tw = null
+	_turn = float(_focus)
+	_place()
 	for info in _slots + _spokes:
 		_settle(info, true)
 	if deal:
+		for fl in _fillers:
+			var far_f := absf(_ring_off(fl["slot"]))
+			if far_f < ARC:
+				var lock: Control = fl["cv"]
+				lock.modulate.a = 0.0
+				lock.create_tween().tween_property(lock, "modulate:a", 1.0, 0.2).set_delay(0.16 + far_f * 0.045)
 		for info in _slots:
 			if info["id"] != "":
 				_deal(info, info["idx"] * 0.045)
 		for info in _spokes:
 			# só as que aparecem na tela, abrindo a partir da carta em foco
-			var far := absi(info["idx"] - _focus)
-			if far <= 4:
+			var far := absf(_ring_off(info["idx"]))
+			if far < ARC:
 				_deal(info, 0.16 + far * 0.045)
 	if drop != "":
 		# a carta que acabou de encaixar chega maior e inclinada e assenta
@@ -1240,26 +1323,53 @@ func _settle_all() -> void:
 
 # ---------------------------------------------------------------- roleta
 
+## Gira uma carta pra frente ou pra trás. O anel é fechado: da última carta, pra frente, a roleta
+## segue girando no mesmo sentido (passando pelas trancadas, se houver) até a primeira.
 func _spin(dir: int) -> void:
-	_set_focus(_focus + dir)
+	var n := _hand.size()
+	if n > 1:
+		_set_focus(posmod(_focus + dir, n), dir)
 
 
-func _set_focus(k: int) -> void:
+## Quantos passos o lugar `slot` do anel está da carta do topo (negativo = à esquerda).
+func _ring_off(slot: int) -> float:
+	return wrapf(slot - _turn, -_ring * 0.5, _ring * 0.5)
+
+
+func _set_turn(v: float) -> void:
+	_turn = v
+	_place()
+
+
+## Põe cada raio (cartas e trancadas) no ângulo dele pro giro atual. Quem passa do fim do arco
+## reaparece do outro lado; a troca acontece embaixo da borda da tela, fora de vista.
+func _place() -> void:
+	for info in _spokes + _fillers:
+		var sp: Control = info["spoke"]
+		var off := _ring_off(info["slot"] if info.has("slot") else info["idx"])
+		sp.rotation = deg_to_rad(off * STEP)
+		sp.visible = absf(off) < ARC
+	# as marcas do aro são iguais a cada passo: basta girar a fração
+	_ticks.rotation = deg_to_rad(-fposmod(_turn, 1.0) * STEP)
+
+
+## Traz a carta `k` da mão pro topo. `dir` (1 ou -1) obriga o sentido do giro; sem ele, vai pelo
+## caminho mais curto.
+func _set_focus(k: int, dir := 0) -> void:
 	_focus = clampi(k, 0, maxi(0, _hand.size() - 1))
 	_sel = -1
-	for info in _spokes:
-		var sp: Control = info["spoke"]
-		# girar de novo antes de parar: o giro anterior é cancelado, senão os dois brigam pelo mesmo raio
-		if info.get("spin") != null:
-			info["spin"].kill()
-		var tw := sp.create_tween()
-		info["spin"] = tw
-		# passa um pouco do ponto e volta, como roleta parando
-		tw.tween_property(sp, "rotation", deg_to_rad((info["idx"] - _focus) * STEP), 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	if _ticks_tw != null:
-		_ticks_tw.kill()
-	_ticks_tw = _ticks.create_tween()
-	_ticks_tw.tween_property(_ticks, "rotation", deg_to_rad(-_focus * STEP), 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var delta := wrapf(float(_focus) - _turn, -_ring * 0.5, _ring * 0.5)
+	if dir > 0 and delta < -0.5:
+		delta += _ring
+	elif dir < 0 and delta > 0.5:
+		delta -= _ring
+	# girar de novo antes de parar: o giro anterior é cancelado e o novo parte de onde a roleta está
+	if _turn_tw != null:
+		_turn_tw.kill()
+	_turn_tw = create_tween()
+	# passa um pouco do ponto e volta, como roleta parando (volta mais longa leva um pouco mais)
+	_turn_tw.tween_method(_set_turn, _turn, _turn + delta, 0.5 + minf(absf(delta), 10.0) * 0.03).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_turn_tw.tween_callback(func(): _set_turn(float(_focus)))
 	_settle_all()
 	_update_details()
 
@@ -1465,8 +1575,8 @@ func _update_details() -> void:
 	_detail_id = id
 	_d_tile.queue_redraw()
 	_pager.queue_redraw()
-	# setas da roleta apagadas nas pontas
-	for pair in [[_spin_prev, _focus > 0], [_spin_next, _focus < _hand.size() - 1]]:
+	# o anel dá a volta: as setas só apagam quando não há pra onde girar
+	for pair in [[_spin_prev, _hand.size() > 1], [_spin_next, _hand.size() > 1]]:
 		pair[0].disabled = not pair[1]
 		pair[0].modulate.a = 1.0 if pair[1] else 0.35
 	_d_kind.visible = id != ""
@@ -1579,6 +1689,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_D, KEY_RIGHT: _switch(1)
 		KEY_Q: _spin(-1)
 		KEY_E: _spin(1)
+		KEY_TAB: gear_pressed.emit(hero)
 		KEY_ENTER, KEY_KP_ENTER:
 			if _show_ready:
 				ready_pressed.emit()

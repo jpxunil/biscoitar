@@ -19,7 +19,8 @@ const NAVY2 := Color("2B3384")
 const PURPLE := Color("5B2BB8")
 const DIM := Color("B9BEEA")
 const DANGER := Color("C0183A")
-const BOSS_COL := [Color("D9984F"), Color("40CCE6"), Color("FF61A8"), Color("9E5CFF")]
+## Faixa da linha onde ficam as medalhas dos bosses (entre a party e a carteira).
+const MEDALS := Rect2(404, 12, 390, 80)
 
 var _stage: Control
 var _rows: Array[Control] = []
@@ -314,53 +315,105 @@ func _fill(n: int) -> void:
 		none.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		row.add_child(none)
 
-	# até onde foi: um selo por boss, com o melhor ranking
+	# até onde foi: uma medalha por boss (cabe qualquer quantidade, ver _draw_medals)
 	var ranks: Dictionary = info["rank"]
-	var stamps := Control.new()
-	stamps.position = Vector2(430, 22)
-	stamps.size = Vector2(360, 64)
-	stamps.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	stamps.draw.connect(func():
-		for b in Knowledge.BOSS_INFO.size():
-			var c := Vector2(25 + b * 88, 29)
-			stamps.draw_circle(c, 25, Paper.INK)
-			stamps.draw_circle(c, 20, BOSS_COL[b % BOSS_COL.size()] if ranks.has(b) else Color("C9C2A6")))
-	row.add_child(stamps)
-	for b in Knowledge.BOSS_INFO.size():
-		if ranks.has(b):
-			var chip := Chip.new()
-			chip.px = 14
-			chip.skew = 0.0
-			chip.pad = 7.0
-			chip.ink = PURPLE
-			chip.shadow = Vector2.ZERO
-			chip.text = Knowledge.RANKS[int(ranks[b])]
-			chip.position = Vector2(430 + 34 + b * 88, 48)
-			chip.rotation = deg_to_rad(-7.0)
-			row.add_child(chip)
+	var medals := Control.new()
+	medals.name = "Medals"
+	medals.position = MEDALS.position
+	medals.size = MEDALS.size
+	medals.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	medals.draw.connect(_draw_medals.bind(medals, ranks))
+	row.add_child(medals)
 
-	# carteira do save
+	# carteira do save: moedas em cima, tickets embaixo, cada um na sua etiqueta
 	var wallet := Control.new()
-	wallet.position = Vector2(800, 30)
-	wallet.size = Vector2(170, 44)
+	wallet.name = "Wallet"
+	wallet.position = Vector2(806, 14)
+	wallet.size = Vector2(150, 76)
 	wallet.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wallet.draw.connect(func():
-		wallet.draw_circle(Vector2(11, 22), 11, Color("C9871A"))
-		wallet.draw_circle(Vector2(11, 22), 6, Paper.GOLD)
-		var tk := Paper.moved(Paper.poly(Vector2(28, 18), [[0, 0], [1, 0], [1, .3], [.88, .5], [1, .7], [1, 1], [0, 1], [0, .7], [.12, .5], [0, .3]]), Vector2(92, 13))
-		wallet.draw_colored_polygon(tk, Color("9E5CFF")))
+	wallet.draw.connect(_draw_wallet.bind(wallet, int(info["money"]), int(info["tickets"])))
 	row.add_child(wallet)
-	var coins := Paper.label(str(info["money"]), 22, Paper.INK, Paper.display())
-	coins.position = Vector2(830, 30)
-	coins.size = Vector2(60, 44)
-	coins.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(coins)
-	var tickets := Paper.label(str(info["tickets"]), 22, Paper.INK, Paper.display())
-	tickets.position = Vector2(928, 30)
-	tickets.size = Vector2(40, 44)
-	tickets.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(tickets)
 	_add_picked(row)
+
+
+## Medalhas dos bosses dentro da faixa MEDALS, pra qualquer quantidade de bosses:
+##   até 7: uma fila de medalhas redondas, com o melhor ranking num carimbo embaixo de cada uma;
+##   mais que isso: duas ou três filas de fichas menores, com o ranking escrito dentro.
+## O passo entre elas encolhe pra caber na largura: nada passa da faixa nem encosta na carteira.
+func _draw_medals(d: Control, ranks: Dictionary) -> void:
+	var n := Knowledge.BOSS_INFO.size()
+	if n <= 0:
+		return
+	var f := Paper.display(0.0)
+	var empty := Color("C9C2A6")
+	if n <= 7:
+		var step := minf(62.0, d.size.x / n)
+		var r := minf(20.0, step * 0.5 - 6.0)
+		for b in n:
+			var c := Vector2(step * (b + 0.5), 4.0 + r)
+			var won := ranks.has(b)
+			d.draw_circle(c + Vector2(3, 4), r + 4.0, Paper.INK)
+			d.draw_circle(c, r + 4.0, Paper.INK)
+			d.draw_circle(c, r, _boss_col(b) if won else empty)
+			if not won:
+				d.draw_circle(c, r * 0.34, Color("A8A084"))
+				continue
+			# carimbo do ranking, embaixo da medalha e dentro do passo dela
+			var txt: String = Knowledge.RANKS[int(ranks[b])]
+			var px := 15
+			var w := maxf(26.0, f.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x + 12.0)
+			w = minf(w, step - 6.0)
+			var box := Paper.moved(Paper.skew_rect(Vector2(w, 24), 8.0), Vector2(c.x - w * 0.5, 2.0 * r + 10.0))
+			d.draw_colored_polygon(Paper.moved(box, Vector2(2, 3)), Paper.INK)
+			d.draw_colored_polygon(box, Paper.INK)
+			d.draw_colored_polygon(Paper.inset(box, 3.0), Paper.CREAM)
+			d.draw_string(f, Vector2(c.x - w * 0.5, 2.0 * r + 10.0 + 18.0), txt, HORIZONTAL_ALIGNMENT_CENTER, w, px, PURPLE)
+		return
+	var lines := 2 if n <= 16 else 3
+	var per := ceili(float(n) / lines)
+	var step2 := minf(70.0, d.size.x / per)
+	var lh := d.size.y / lines
+	var px2 := clampi(int(minf(lh * 0.42, step2 * 0.3)), 8, 15)
+	for b in n:
+		var at := Vector2(step2 * (b % per) + 3.0, lh * (b / per) + 3.0)
+		var sz := Vector2(step2 - 8.0, lh - 9.0)
+		var chip := Paper.moved(Paper.skew_rect(sz, 8.0), at)
+		var won2 := ranks.has(b)
+		d.draw_colored_polygon(Paper.moved(chip, Vector2(2, 3)), Paper.INK)
+		d.draw_colored_polygon(chip, Paper.INK)
+		d.draw_colored_polygon(Paper.inset(chip, 3.0), _boss_col(b) if won2 else empty)
+		if won2:
+			var txt2: String = Knowledge.RANKS[int(ranks[b])]
+			d.draw_string(f, Vector2(at.x, at.y + sz.y * 0.5 + px2 * 0.38), txt2, HORIZONTAL_ALIGNMENT_CENTER, sz.x, px2, Paper.INK)
+		else:
+			d.draw_circle(at + sz * 0.5, minf(sz.y * 0.16, 4.0), Color("A8A084"))
+
+
+func _boss_col(b: int) -> Color:
+	return BossScreen.HAIR[b % BossScreen.HAIR.size()]
+
+
+## Carteira: duas etiquetas escuras, uma embaixo da outra. O ícone fica à esquerda e o número,
+## alinhado à direita, tem a etiqueta inteira pra ele (cabe até 99999 sem encostar no ícone).
+func _draw_wallet(d: Control, money: int, tickets: int) -> void:
+	var f := Paper.display(0.0)
+	var vals := [money, tickets]
+	for k in 2:
+		var at := Vector2(4.0 - k * 6.0, k * 39.0 + 2.0)
+		var sz := Vector2(140, 32)
+		var tag := Paper.moved(Paper.skew_rect(sz, 8.0), at)
+		d.draw_colored_polygon(Paper.moved(tag, Vector2(3, 4)), Paper.INK)
+		d.draw_colored_polygon(tag, Paper.INK)
+		d.draw_colored_polygon(Paper.inset(tag, 3.0), Color("1A1E52"))
+		var ic := at + Vector2(22, sz.y * 0.5)
+		if k == 0:
+			d.draw_circle(ic, 10, Color("C9871A"))
+			d.draw_circle(ic, 7, Paper.GOLD)
+			d.draw_circle(ic, 3, Color("C9871A"))
+		else:
+			var tk := Paper.moved(Paper.poly(Vector2(26, 16), [[0, 0], [1, 0], [1, .3], [.88, .5], [1, .7], [1, 1], [0, 1], [0, .7], [.12, .5], [0, .3]]), ic - Vector2(13, 8))
+			d.draw_colored_polygon(tk, Color("B98CFF"))
+		d.draw_string(f, Vector2(at.x + 40.0, at.y + sz.y * 0.5 + 7.0), str(vals[k]), HORIZONTAL_ALIGNMENT_RIGHT, sz.x - 54.0, 19, Paper.CREAM)
 
 
 ## Etiqueta dourada "SELECIONADO", presa no canto de cima da linha.

@@ -1,14 +1,20 @@
 class_name GearScreen
 extends Control
 ## Tela GEAR do menu: o equipamento de cada personagem.
-## Kit de papel, na linha das telas de cartas e de skills: as setas em cima trocam de personagem
-## (todos os nove), a arte dele fica à esquerda com o quadro de ATRIBUTOS embaixo.
-## No meio, a ficha do herói (por enquanto o retrato no lugar do modelo 3D) com os GEAR_SLOTS ao
-## lado; à direita a mochila (ITENS) e o slot de consumível; embaixo as PASSIVAS (cartas já
-## aprendidas e as que estão sendo aprendidas) e a ficha do que estiver escolhido.
+## Kit de papel, na linha das telas de cartas e de skills, e a tela inteira veste a cor do herói:
+## a paleta sai de Knowledge.HEROES[h]["color"] (ver `_palette`); a Maga, que é arco-íris, ganha
+## faixas de sete cores no lugar de uma cor só.
+##   - à esquerda, um campo diagonal escuro com as faixas do herói e a arte dele bem grande; por
+##     cima do pé da arte, os ATRIBUTOS em tiras inclinadas;
+##   - em cima, o alternador CARTAS | GEAR (a mesma peça da tela de cartas) e o seletor de herói;
+##   - no meio, a ficha: placa do nome, retrato pequeno (no lugar do modelo 3D) e os GEAR_SLOTS
+##     em zigue-zague, ligados ao retrato;
+##   - à direita a mochila (ITENS) e, numa faixa própria, o consumível;
+##   - embaixo as PASSIVAS (cartas aprendidas e as que estão sendo aprendidas) e a ficha do que
+##     estiver escolhido.
 ##   Clique numa peça da mochila pra escolher; clique de novo (ou ENTER) pra equipar no primeiro
 ##   slot livre. Clique duas vezes num slot ocupado pra tirar.
-##   A D / ← → personagem · ENTER equipa/tira · ESC volta.
+##   A D / ← → personagem · ENTER equipa/tira · TAB cartas · ESC volta.
 
 signal back_pressed
 signal cards_pressed(hero: int)
@@ -18,10 +24,31 @@ const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8, 9]
 const DIM := Color("B9BEEA")
 const BONUS := Color("54DE85")
 const BASE_SPEED := 6.5
-const HINT := "CLIQUE escolhe  ·  CLIQUE DE NOVO ou ENTER equipa/tira  ·  A D personagem  ·  ESC volta"
+const HINT := "CLIQUE escolhe  ·  DE NOVO ou ENTER equipa/tira  ·  A D personagem  ·  TAB cartas  ·  ESC volta"
+## As sete cores da Maga (as mesmas da sombra arco-íris dela, em ui/kit/art_shadow.gd).
+const RAINBOW := [Color("ff4059"), Color("ff9933"), Color("ffe040"), Color("59e673"), Color("40d9ff"), Color("6680ff"), Color("cc66ff")]
+## Heróis com tratamento arco-íris.
+const RAINBOW_HEROES := ["maga"]
+const DuoToggleKit := preload("res://ui/kit/duo_toggle.gd")
+## Borda inclinada do campo da arte: x no topo e no pé da tela.
+const FIELD_TOP := 452.0
+const FIELD_BOT := 290.0
+
+
+## Control que desenha com uma função: `fn` recebe o próprio nó.
+class Deco extends Control:
+	var fn: Callable
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		if fn.is_valid():
+			fn.call(self)
 
 
 ## Um quadradinho da tela: slot de equipamento, peça da mochila ou passiva.
+## Papel recortado: dois cantos cortados, contorno INK e sombra dura.
 class Tile extends Control:
 	signal clicked
 	signal hovered(on: bool)
@@ -30,10 +57,12 @@ class Tile extends Control:
 	## "gear" peça/slot · "passive" carta aprendida · "learning" carta sendo aprendida
 	var mode := "gear"
 	var pct := 0.0
-	var tag := ""              # número do slot, no canto
+	var tag := ""              # número do slot, numa etiqueta no canto
 	var selected := false
 	var badge: Texture2D       # rosto de quem está com a peça agora
 	var empty_fill := Color(0.07, 0.08, 0.2, 0.75)
+	## Cor do herói: o "+" e os riscos do lugar vazio.
+	var glow := Paper.CREAM
 	var _hot := false
 
 	func _init() -> void:
@@ -53,69 +82,88 @@ class Tile extends Control:
 			accept_event()
 			clicked.emit()
 
+	func _shape() -> PackedVector2Array:
+		var c := minf(size.x, size.y) * 0.16
+		return PackedVector2Array([Vector2(0, 0), Vector2(size.x - c, 0), Vector2(size.x, c), Vector2(size.x, size.y), Vector2(c, size.y), Vector2(0, size.y - c)])
+
+	## Pinta `poly` só onde ele cai dentro de `inner`.
+	func _clip(poly: PackedVector2Array, inner: PackedVector2Array, col: Color) -> void:
+		for piece in Geometry2D.intersect_polygons(poly, inner):
+			draw_colored_polygon(piece, col)
+
+	func _box(r: Rect2) -> PackedVector2Array:
+		return PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])
+
 	func _draw() -> void:
-		var r := Rect2(Vector2.ZERO, size)
-		draw_rect(Rect2(Vector2(4, 5), size), Paper.INK)
-		draw_rect(r, Paper.INK)
-		var inner := r.grow(-3.0)
+		var pts := _shape()
+		var inner := Paper.inset(pts, 3.0)
+		draw_colored_polygon(Paper.moved(pts, Vector2(4, 5)), Paper.INK)
+		if selected:
+			for ring in Geometry2D.offset_polygon(pts, 7.0, Geometry2D.JOIN_MITER):
+				draw_colored_polygon(ring, Paper.INK)
+			for ring in Geometry2D.offset_polygon(pts, 5.0, Geometry2D.JOIN_MITER):
+				draw_colored_polygon(ring, Paper.GOLD)
+		elif _hot:
+			for ring in Geometry2D.offset_polygon(pts, 3.0, Geometry2D.JOIN_MITER):
+				draw_colored_polygon(ring, Paper.CREAM)
+		draw_colored_polygon(pts, Paper.INK)
 		var card: Dictionary = Knowledge.CARDS.get(id, {})
 		if card.is_empty():
-			# lugar vazio: fundo escuro com um "+"
-			draw_rect(inner, empty_fill)
+			# lugar vazio: fundo escuro riscado na cor do herói, com um "+"
+			draw_colored_polygon(inner, empty_fill)
+			for n in 3:
+				var y := size.y * (0.1 + n * 0.42)
+				_clip(PackedVector2Array([Vector2(0, y + size.y * 0.3), Vector2(size.x, y - size.y * 0.1), Vector2(size.x, y + size.y * 0.06), Vector2(0, y + size.y * 0.46)]), inner, Color(glow, 0.13))
 			var c := size * 0.5
-			var k := size.x * 0.14
-			var plus := Color(Paper.CREAM.r, Paper.CREAM.g, Paper.CREAM.b, 0.3)
-			draw_line(c - Vector2(k, 0), c + Vector2(k, 0), plus, 4.0)
-			draw_line(c - Vector2(0, k), c + Vector2(0, k), plus, 4.0)
+			var k := size.x * 0.15
+			var plus := Color(glow, 0.75)
+			draw_line(c - Vector2(k, 0), c + Vector2(k, 0), plus, 5.0)
+			draw_line(c - Vector2(0, k), c + Vector2(0, k), plus, 5.0)
 		elif mode == "gear":
 			var pal: Dictionary = Paper.KIND.get(card["kind"], Paper.KIND["white"])
-			draw_rect(inner, pal["bg"])
+			draw_colored_polygon(inner, pal["bg"])
 			# faixa diagonal, como a janela da carta
-			draw_colored_polygon(PackedVector2Array([
-				inner.position + Vector2(inner.size.x * 0.45, 0), inner.position + Vector2(inner.size.x, 0),
-				inner.position + Vector2(inner.size.x, inner.size.y * 0.55), inner.position + Vector2(inner.size.x * 0.1, inner.size.y),
-				inner.position + Vector2(0, inner.size.y), inner.position + Vector2(0, inner.size.y * 0.75)]), pal["art"])
+			_clip(PackedVector2Array([Vector2(size.x * 0.45, 0), Vector2(size.x, 0), Vector2(size.x, size.y * 0.55), Vector2(size.x * 0.1, size.y), Vector2(0, size.y), Vector2(0, size.y * 0.75)]), inner, pal["art"])
 			var band := 17.0
 			var side := minf(size.x, size.y - band) * 0.56
 			Paper.draw_suit(self, card["cat"], Vector2((size.x - side) * 0.5, (size.y - band - side) * 0.5 + 1.0), side, Paper.INK)
 			# nome curto no rodapé
-			draw_rect(Rect2(3, size.y - band - 3, size.x - 6, band), Paper.INK)
+			_clip(_box(Rect2(0, size.y - band - 3, size.x, band + 3)), inner, Paper.INK)
 			var f := Paper.body(800)
 			var nm := String(card["name"]).to_upper()
 			if f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x > size.x - 10.0:
 				nm = nm.split(" ")[-1] if nm.split(" ").size() > 1 and nm.split(" ")[0].length() <= 4 else nm.split(" ")[0]
 			var px := 10
-			while px > 7 and f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > size.x - 8.0:
+			while px > 7 and f.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > size.x - 12.0:
 				px -= 1
-			draw_string(f, Vector2(3, size.y - 7.5), nm, HORIZONTAL_ALIGNMENT_CENTER, size.x - 6, px, Paper.CREAM)
+			draw_string(f, Vector2(5, size.y - 7.5), nm, HORIZONTAL_ALIGNMENT_CENTER, size.x - 8, px, Paper.CREAM)
 		elif mode == "passive":
-			draw_rect(inner, Paper.GOLD)
-			draw_rect(Rect2(inner.position, Vector2(inner.size.x, inner.size.y * 0.3)), Paper.GOLD_HOVER)
+			draw_colored_polygon(inner, Paper.GOLD)
+			_clip(_box(Rect2(0, 0, size.x, size.y * 0.32)), inner, Paper.GOLD_HOVER)
 			var side2 := minf(size.x, size.y) * 0.56
 			Paper.draw_suit(self, card["cat"], (size - Vector2(side2, side2)) * 0.5, side2, Paper.INK)
 		else:
 			# aprendendo: naipe apagado, porcentagem e barra
-			draw_rect(inner, empty_fill)
+			draw_colored_polygon(inner, empty_fill)
 			var side3 := minf(size.x * 0.5, size.y * 0.36)
-			Paper.draw_suit(self, card["cat"], Vector2((size.x - side3) * 0.5, 7.0), side3, Color(Paper.CREAM.r, Paper.CREAM.g, Paper.CREAM.b, 0.55))
+			Paper.draw_suit(self, card["cat"], Vector2((size.x - side3) * 0.5, 7.0), side3, Color(Paper.CREAM, 0.55))
 			var f2 := Paper.display(0.0)
 			var px2 := 12 if size.x >= 46.0 else 10
 			draw_string(f2, Vector2(0, size.y - 15.0), "%d%%" % int(pct), HORIZONTAL_ALIGNMENT_CENTER, size.x, px2, Paper.CREAM)
-			var bar := Rect2(6, size.y - 12.0, size.x - 12.0, 6.0)
+			var bar := Rect2(8, size.y - 12.0, size.x - 14.0, 6.0)
 			draw_rect(bar, Paper.INK)
 			draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(pct / 100.0, 0.0, 1.0), bar.size.y)), Paper.GOLD)
 		if tag != "":
-			draw_rect(Rect2(0, 0, 18, 18), Paper.INK)
-			draw_string(Paper.display(0.0), Vector2(0, 14), tag, HORIZONTAL_ALIGNMENT_CENTER, 18, 11, Paper.GOLD)
+			# número do slot: etiqueta inclinada pendurada no canto
+			var tg := Paper.moved(Paper.skew_rect(Vector2(24, 20), 12), Vector2(-8, -8))
+			draw_colored_polygon(Paper.moved(tg, Vector2(2, 3)), Paper.INK)
+			draw_colored_polygon(tg, Paper.INK)
+			draw_colored_polygon(Paper.inset(tg, 2.5), Paper.GOLD)
+			draw_string(Paper.display(0.0), Vector2(-8, 7), tag, HORIZONTAL_ALIGNMENT_CENTER, 24, 12, Paper.INK)
 		if badge != null:
-			var b := Rect2(size.x - 24, -4, 26, 26)
+			var b := Rect2(size.x - 22, -6, 26, 26)
 			draw_rect(b, Paper.INK)
 			draw_texture_rect_region(badge, b.grow(-2.0), Rect2(Vector2(badge.get_width() * 0.1, badge.get_height() * 0.16), Vector2.ONE * badge.get_width() * 0.8))
-		if selected:
-			draw_rect(r.grow(3.0), Paper.GOLD, false, 4.0)
-			draw_rect(r.grow(6.0), Paper.INK, false, 2.0)
-		elif _hot:
-			draw_rect(r.grow(2.0), Paper.CREAM, false, 3.0)
 
 
 var hero := 0
@@ -124,9 +172,12 @@ var _stage: Control
 var _bg: Control
 var _built := false
 var _th := {}
+## Paleta da tela, derivada da cor do herói (ver `_palette`).
+var _pal := {}
 var _art: TextureRect
 var _art_home := Vector2.ZERO
 var _t := 0.0
+var _toggle: Control
 var _hero_name: Label
 var _hero_role: Label
 var _hero_face: TextureRect
@@ -134,12 +185,15 @@ var _near: Array = []        # rostos dos vizinhos no seletor (antes, depois)
 var _p_center: CutPanel
 var _p_items: CutPanel
 var _p_pass: CutPanel
-var _p_attr: CutPanel
-var _c_name: Label
-var _c_role_holder: Control
+## Tudo que se redesenha quando o herói muda (campos de cor, lombadas, faixas).
+var _decos: Array = []
+## Etiquetas de seção que vestem a cor do herói.
+var _chips: Array = []
+var _c_head: Control
 var _model: TextureRect
 var _model_back: CutPanel
 var _slots_box: Control
+var _slot_count: Label
 var _bag_box: Control
 var _bag_empty: Label
 var _item_box: Control
@@ -168,6 +222,7 @@ func open(hero_idx: int) -> void:
 	_build()
 	hero = clampi(hero_idx, 0, Knowledge.HEROES.size() - 1)
 	_sel = {"zone": "", "id": "", "idx": -1}
+	_toggle.pop()
 	_refresh(0)
 
 
@@ -184,7 +239,75 @@ static func _game_const(cname: String, fallback: Variant) -> Variant:
 	return _consts.get(cname, fallback)
 
 
+## A identidade de cor do herói `i`, tirada de Knowledge.HEROES[i]["color"]:
+##   main  a cor dele, viva (placas, etiquetas, valores)   · light  a mesma cor, clara
+##   bg    a cor que inunda o fundo · bg2 recortes e pontos do fundo
+##   deep  painéis (escuro puxado pro tom dele) · deep2  painel mais claro
+##   acc   destaque (o do tema de papel dele) com acc_t = texto em cima
+##   rainbow  true pra Maga: as faixas viram as sete cores de RAINBOW
+static func _palette(i: int) -> Dictionary:
+	var h: Dictionary = Knowledge.HEROES[i]
+	var c: Color = h["color"]
+	var th: Dictionary = Paper.THEMES.get(h["key"], Paper.THEMES["tank"])
+	var hue := c.h
+	var sat := clampf(c.s, 0.5, 0.82)
+	# amarelo e laranja escurecidos viram marrom: nos tons quentes o fundo fica mais claro
+	var warm := clampf(1.0 - absf(hue - 0.11) / 0.09, 0.0, 1.0)
+	var pal := {
+		"main": Color.from_hsv(hue, sat, maxf(c.v, 0.92)),
+		"light": Color.from_hsv(hue, 0.3, 1.0),
+		"bg": Color.from_hsv(hue, clampf(sat + 0.08, 0.55, 0.88), lerpf(0.72, 0.96, warm)),
+		"bg2": Color.from_hsv(hue, clampf(sat - 0.04, 0.45, 0.8), lerpf(0.84, 1.0, warm)),
+		"deep": Color.from_hsv(hue, 0.62, 0.27).lerp(Paper.INK, 0.2),
+		"deep2": Color.from_hsv(hue, 0.56, 0.42).lerp(Paper.INK, 0.15),
+		"acc": th["acc"],
+		"acc_t": th["acc_t"],
+		"rainbow": RAINBOW_HEROES.has(h["key"]),
+	}
+	if pal["rainbow"]:
+		# arco-íris sobre violeta: nada de marrom com laranja
+		pal["deep"] = Color("1c1549")
+		pal["deep2"] = Color("2f2573")
+		pal["acc"] = Paper.PINK
+		pal["acc_t"] = Paper.INK
+	return pal
+
+
+## Cor da faixa `n` do herói: a cor dele, ou uma das sete da Maga.
+func _stripe_color(n: int) -> Color:
+	if _pal.get("rainbow", false):
+		return RAINBOW[posmod(n, RAINBOW.size())]
+	return _pal.get("main", Paper.GOLD)
+
+
 # ---------------------------------------------------------------- montagem
+
+func _deco(fn: Callable, at := Vector2.ZERO, sz := Vector2.ZERO) -> Deco:
+	var d := Deco.new()
+	d.fn = fn
+	d.position = at
+	d.size = sz
+	_stage.add_child(d)
+	_decos.append(d)
+	return d
+
+
+## Etiqueta de seção pendurada na borda de um painel. `hero_color`: veste a cor do herói.
+func _section(text: String, at: Vector2, hero_color := true, rot := -3.0) -> Chip:
+	var chip := Chip.new()
+	chip.px = 15
+	chip.pad = 13.0
+	chip.fill = Paper.GOLD
+	chip.shadow = Vector2(-3, 4)
+	chip.text = text
+	chip.position = at
+	chip.pivot_offset = chip.size * 0.5
+	chip.rotation = deg_to_rad(rot)
+	_stage.add_child(chip)
+	if hero_color:
+		_chips.append(chip)
+	return chip
+
 
 func _build() -> void:
 	if _built:
@@ -195,7 +318,7 @@ func _build() -> void:
 	_bg = Control.new()
 	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bg.draw.connect(func(): _bg.draw_rect(Rect2(Vector2.ZERO, _bg.size), _th.get("bg", Paper.NAVY)))
+	_bg.draw.connect(func(): _bg.draw_rect(Rect2(Vector2.ZERO, _bg.size), _pal.get("bg", Paper.NAVY)))
 	add_child(_bg)
 	_stage = Control.new()
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -208,28 +331,14 @@ func _build() -> void:
 	_stage.offset_top = -STAGE.y * 0.5
 	_stage.offset_bottom = STAGE.y * 0.5
 	add_child(_stage)
-	var back := Control.new()
+	var back := _deco(_draw_back, Vector2.ZERO, STAGE)
 	back.name = "Back"
-	back.size = STAGE
-	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	back.draw.connect(_draw_back.bind(back))
-	_stage.add_child(back)
 
-	# arte do personagem, à esquerda (fica atrás dos painéis)
+	# arte do personagem, à esquerda (fica atrás dos painéis e das tiras de atributos)
 	_art = TextureRect.new()
 	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(_art)
-
-	var tag := CutPanel.make(Rect2(20, 14, 190, 66), [[0, 0], [1, .08], [.95, 1], [.03, .9]], Paper.CREAM, 5, Vector2(7, 7))
-	_stage.add_child(tag)
-	var title := Paper.label("GEAR", 40, Paper.INK, Paper.display())
-	title.size = Vector2(190, 66)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	title.rotation = deg_to_rad(-2.0)
-	title.pivot_offset = title.size * 0.5
-	tag.add_child(title)
 
 	_build_selector()
 	_build_attributes()
@@ -237,6 +346,13 @@ func _build() -> void:
 	_build_items()
 	_build_passives()
 	_build_detail()
+
+	# título: o alternador CARTAS | GEAR (a mesma peça, no mesmo lugar, da tela de cartas)
+	_toggle = DuoToggleKit.new()
+	_toggle.active = 1
+	_toggle.position = Vector2(20, 10)
+	_toggle.flipped.connect(func(_to: int): cards_pressed.emit(hero))
+	_stage.add_child(_toggle)
 
 	var vb := ShineButton.new()
 	vb.text = "VOLTAR"
@@ -248,44 +364,41 @@ func _build() -> void:
 	vb.fg = Paper.INK
 	vb.fg_hover = Paper.CREAM
 	vb.shadow = Vector2(5, 5)
-	vb.position = Vector2(28, 664)
-	vb.size = Vector2(132, 42)
+	vb.position = Vector2(28, 668)
+	vb.size = Vector2(132, 40)
 	vb.pressed.connect(func(): back_pressed.emit())
 	_stage.add_child(vb)
-	var cb := ShineButton.new()
-	cb.text = "CARTAS"
-	cb.font_px = 15
-	cb.fill = Paper.GOLD
-	cb.fill_hover = Paper.GOLD_HOVER
-	cb.shadow = Vector2(5, 5)
-	cb.position = Vector2(182, 666)
-	cb.size = Vector2(118, 38)
-	cb.pressed.connect(func(): cards_pressed.emit(hero))
-	_stage.add_child(cb)
 
 
 ## Seletor de personagem: seta, vizinho apagado, rosto + nome + função, vizinho apagado, seta.
 func _build_selector() -> void:
-	_stage.add_child(CutPanel.make(Rect2(300, 16, 580, 64), [[.02, 0], [1, .06], [.98, 1], [0, .94]], Paper.INK, 0, Vector2(6, 7)))
+	_stage.add_child(CutPanel.make(Rect2(330, 14, 560, 64), [[.02, 0], [1, .06], [.98, 1], [0, .94]], Paper.INK, 0, Vector2(6, 7)))
+	# filete na cor do herói no pé do seletor
+	_deco(func(d: Deco):
+		var n := 7 if _pal.get("rainbow", false) else 1
+		for k in n:
+			var x0 := d.size.x * k / n
+			var x1 := d.size.x * (k + 1) / n
+			d.draw_colored_polygon(PackedVector2Array([Vector2(x0 + 3, 0), Vector2(x1 + 3, 0), Vector2(x1, d.size.y), Vector2(x0, d.size.y)]), _stripe_color(k)), Vector2(340, 68), Vector2(534, 6))
 	var prev := _arrow(-1)
-	prev.position = Vector2(308, 24)
+	prev.position = Vector2(340, 22)
 	prev.pressed.connect(_switch.bind(-1))
 	_stage.add_child(prev)
 	var next := _arrow(1)
-	next.position = Vector2(824, 24)
+	next.position = Vector2(832, 22)
 	next.pressed.connect(_switch.bind(1))
 	_stage.add_child(next)
 	for k in 2:
 		var nf := TextureRect.new()
 		nf.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		nf.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		nf.position = Vector2(366 if k == 0 else 780, 28)
+		nf.position = Vector2(398 if k == 0 else 790, 22)
 		nf.size = Vector2(32, 42)
 		nf.modulate = Color(1, 1, 1, 0.4)
 		nf.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_stage.add_child(nf)
 		_near.append(nf)
-	var face_frame := CutPanel.make(Rect2(414, 20, 44, 56), [[0, 0], [1, 0], [1, 1], [0, 1]], Paper.CREAM, 0, Vector2.ZERO)
+	var face_frame := CutPanel.make(Rect2(444, 16, 44, 56), [[0, 0], [1, 0], [1, 1], [0, 1]], Paper.CREAM, 0, Vector2.ZERO)
 	face_frame.rotation = deg_to_rad(-3.0)
 	_stage.add_child(face_frame)
 	_hero_face = TextureRect.new()
@@ -295,158 +408,149 @@ func _build_selector() -> void:
 	_hero_face.size = Vector2(38, 50)
 	face_frame.add_child(_hero_face)
 	_hero_name = Paper.label("", 26, Paper.CREAM, Paper.display())
-	_hero_name.position = Vector2(472, 18)
-	_hero_name.size = Vector2(300, 34)
+	_hero_name.position = Vector2(502, 14)
+	_hero_name.size = Vector2(280, 34)
 	_hero_name.clip_text = true
 	_stage.add_child(_hero_name)
 	_hero_role = Paper.label("", 14, Paper.GOLD, Paper.body(800))
-	_hero_role.position = Vector2(474, 50)
-	_hero_role.size = Vector2(300, 22)
+	_hero_role.position = Vector2(504, 44)
+	_hero_role.size = Vector2(280, 22)
 	_hero_role.clip_text = true
 	_stage.add_child(_hero_role)
 
 
+## Atributos: uma tira inclinada por linha, por cima do pé da arte (as tiras são montadas em
+## `_fill_attributes`, porque os números mudam com o equipamento).
 func _build_attributes() -> void:
-	_p_attr = CutPanel.make(Rect2(24, 478, 300, 170), [[0, .03], [1, 0], [.985, 1], [.02, .97]], Paper.INK, 5, Vector2(8, 8))
-	_stage.add_child(_p_attr)
-	var chip := Chip.new()
-	chip.px = 14
-	chip.pad = 12.0
-	chip.fill = Paper.GOLD
-	chip.shadow = Vector2(-3, 4)
-	chip.text = "ATRIBUTOS"
-	chip.position = Vector2(40, 466)
-	_stage.add_child(chip)
 	_attr_box = Control.new()
-	_attr_box.position = Vector2(42, 504)
-	_attr_box.size = Vector2(264, 136)
+	_attr_box.position = Vector2(20, 504)
+	_attr_box.size = Vector2(320, 150)
 	_attr_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(_attr_box)
+	_section("ATRIBUTOS", Vector2(30, 472))
 
 
-## Ficha do herói: nome, função, retrato (no lugar do modelo 3D) e a coluna de slots.
+## Ficha do herói: placa do nome, retrato (no lugar do modelo 3D) e os slots em zigue-zague.
 func _build_center() -> void:
-	_p_center = CutPanel.make(Rect2(346, 100, 420, 376), [[0, .01], [1, 0], [.985, 1], [.015, .99]], Paper.NAVY, 6, Vector2(10, 10))
+	_p_center = CutPanel.make(Rect2(352, 100, 414, 376), [[0, .03], [.88, 0], [1, .09], [.985, 1], [.015, .985]], Paper.NAVY, 6, Vector2(10, 10))
 	_stage.add_child(_p_center)
-	_c_name = Paper.label("", 24, Paper.CREAM, Paper.display())
-	_c_name.position = Vector2(366, 110)
-	_c_name.size = Vector2(250, 32)
-	_c_name.clip_text = true
-	_stage.add_child(_c_name)
-	_c_role_holder = Control.new()
-	_c_role_holder.position = Vector2(368, 144)
-	_c_role_holder.size = Vector2(250, 24)
-	_c_role_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stage.add_child(_c_role_holder)
-	_model_back = CutPanel.make(Rect2(372, 182, 252, 276), [[0, 0], [1, .02], [.98, 1], [.02, .98]], Paper.CREAM, 5, Vector2(7, 8))
+	# faixa diagonal na cor do herói por dentro do painel, e as linhas que ligam o retrato aos slots
+	_deco(_draw_center, Vector2(352, 100), Vector2(414, 376))
+	_c_head = Control.new()
+	_c_head.position = Vector2(372, 116)
+	_c_head.size = Vector2(250, 60)
+	_c_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stage.add_child(_c_head)
+	_model_back = CutPanel.make(Rect2(384, 190, 172, 204), [[0, 0], [1, .02], [.98, 1], [.02, .98]], Paper.CREAM, 5, Vector2(7, 8))
+	_model_back.pivot_offset = _model_back.size * 0.5
+	_model_back.rotation = deg_to_rad(-4.0)
 	_stage.add_child(_model_back)
 	_model = TextureRect.new()
 	_model.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_model.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	_model.position = Vector2(384, 194)
-	_model.size = Vector2(228, 252)
+	_model.position = Vector2(11, 11)
+	_model.size = Vector2(150, 182)
 	_model.clip_contents = true
 	_model.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stage.add_child(_model)
+	_model_back.add_child(_model)
 	var soon := Chip.new()
-	soon.px = 10
-	soon.pad = 8.0
+	soon.px = 9
+	soon.pad = 7.0
 	soon.skew = 8.0
 	soon.border = 2.0
 	soon.shadow = Vector2(-2, 3)
 	soon.text = "MODELO 3D EM BREVE"
-	soon.position = Vector2(498 - soon.size.x * 0.5, 446)
-	_stage.add_child(soon)
-	var lt := Paper.label("EQUIPADO", 14, Paper.GOLD, Paper.display())
-	lt.position = Vector2(640, 116)
-	lt.size = Vector2(112, 22)
-	lt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stage.add_child(lt)
+	soon.position = Vector2(86 - soon.size.x * 0.5, 190)
+	_model_back.add_child(soon)
+	_slot_count = Paper.label("", 13, DIM, Paper.body(700))
+	_slot_count.position = Vector2(382, 424)
+	_slot_count.size = Vector2(230, 40)
+	_slot_count.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_slot_count.add_theme_constant_override("line_spacing", -4)
+	_stage.add_child(_slot_count)
 	_slots_box = Control.new()
-	_slots_box.position = Vector2(662, 148)
-	_slots_box.size = Vector2(70, 310)
+	_slots_box.position = Vector2(628, 126)
+	_slots_box.size = Vector2(120, 340)
 	_slots_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(_slots_box)
+	_section("EQUIPADO", Vector2(626, 86), true, 3.0)
 
 
-## Mochila: equipamentos soltos e, embaixo, o consumível.
+## Mochila: equipamentos soltos e, numa faixa própria embaixo, o consumível.
 func _build_items() -> void:
-	_p_items = CutPanel.make(Rect2(790, 100, 466, 376), [[.01, 0], [1, .01], [.99, 1], [0, .99]], Paper.NAVY, 6, Vector2(10, 10))
+	_p_items = CutPanel.make(Rect2(790, 100, 466, 376), [[.01, .02], [.93, 0], [1, .08], [.99, 1], [0, .985]], Paper.NAVY, 6, Vector2(10, 10))
 	_stage.add_child(_p_items)
-	var lt := Paper.label("ITENS", 20, Paper.GOLD, Paper.display())
-	lt.position = Vector2(812, 110)
-	lt.size = Vector2(200, 30)
-	_stage.add_child(lt)
+	_deco(_draw_items, Vector2(790, 100), Vector2(466, 376))
+	_section("ITENS", Vector2(806, 88))
 	var sub := Paper.label("mochila: o que dá pra equipar", 13, DIM, Paper.body(700))
-	sub.position = Vector2(960, 116)
+	sub.position = Vector2(930, 120)
 	sub.size = Vector2(278, 20)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_stage.add_child(sub)
 	_bag_box = Control.new()
-	_bag_box.position = Vector2(814, 150)
+	_bag_box.position = Vector2(818, 150)
 	_bag_box.size = Vector2(420, 220)
 	_bag_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(_bag_box)
 	_bag_empty = Paper.label("Mochila vazia.\nOs equipamentos são vendidos na loja de itens.", 15, DIM, Paper.body(700))
-	_bag_empty.position = Vector2(814, 190)
+	_bag_empty.position = Vector2(818, 200)
 	_bag_empty.size = Vector2(420, 80)
 	_bag_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_bag_empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_stage.add_child(_bag_empty)
-	var line := ColorRect.new()
-	line.color = Color(Paper.CREAM.r, Paper.CREAM.g, Paper.CREAM.b, 0.18)
-	line.position = Vector2(812, 380)
-	line.size = Vector2(424, 3)
-	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_stage.add_child(line)
-	var ct := Paper.label("CONSUMÍVEL", 13, Paper.CYAN, Paper.display())
-	ct.position = Vector2(812, 388)
-	ct.size = Vector2(140, 20)
+	var ct := Chip.new()
+	ct.px = 12
+	ct.pad = 10.0
+	ct.border = 3.0
+	ct.fill = Paper.CYAN
+	ct.shadow = Vector2(-3, 4)
+	ct.text = "CONSUMÍVEL"
+	ct.position = Vector2(808, 386)
+	ct.pivot_offset = ct.size * 0.5
+	ct.rotation = deg_to_rad(-4.0)
 	_stage.add_child(ct)
-	var cs := Paper.label("um por luta", 12, DIM, Paper.body(700))
-	cs.position = Vector2(812, 406)
-	cs.size = Vector2(140, 18)
+	var cs := Paper.label("um por luta", 13, Color("9fe9f7"), Paper.body(700))
+	cs.position = Vector2(814, 428)
+	cs.size = Vector2(130, 18)
 	_stage.add_child(cs)
 	_item_box = Control.new()
-	_item_box.position = Vector2(960, 392)
-	_item_box.size = Vector2(280, 66)
+	_item_box.position = Vector2(962, 398)
+	_item_box.size = Vector2(280, 64)
 	_item_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(_item_box)
 
 
 func _build_passives() -> void:
-	_p_pass = CutPanel.make(Rect2(346, 494, 910, 102), [[0, .04], [1, 0], [.995, 1], [.005, .96]], Paper.NAVY, 5, Vector2(8, 8))
+	_p_pass = CutPanel.make(Rect2(352, 498, 904, 100), [[0, .05], [1, 0], [.994, 1], [.006, .95]], Paper.NAVY, 5, Vector2(8, 8))
 	_stage.add_child(_p_pass)
-	var lt := Paper.label("PASSIVAS", 16, Paper.GOLD, Paper.display())
-	lt.position = Vector2(366, 502)
-	lt.size = Vector2(160, 24)
-	_stage.add_child(lt)
+	_deco(func(d: Deco): _draw_spine(d, 7.0), Vector2(352, 498), Vector2(904, 100))
+	_section("PASSIVAS", Vector2(368, 486))
 	_pass_count = Paper.label("", 13, DIM, Paper.body(700))
-	_pass_count.position = Vector2(700, 504)
+	_pass_count.position = Vector2(700, 506)
 	_pass_count.size = Vector2(538, 20)
 	_pass_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_stage.add_child(_pass_count)
 	_pass_box = Control.new()
-	_pass_box.position = Vector2(366, 530)
-	_pass_box.size = Vector2(872, 54)
+	_pass_box.position = Vector2(378, 532)
+	_pass_box.size = Vector2(860, 54)
 	_pass_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(_pass_box)
 	_pass_empty = Paper.label("Nenhuma ainda. Lute com as cartas de aprendizado no baralho: em 100% elas viram passiva.", 15, DIM, Paper.body(700))
-	_pass_empty.position = Vector2(366, 544)
-	_pass_empty.size = Vector2(872, 24)
+	_pass_empty.position = Vector2(378, 546)
+	_pass_empty.size = Vector2(860, 24)
 	_stage.add_child(_pass_empty)
 
 
 ## Ficha do que estiver escolhido (ou embaixo do mouse).
 func _build_detail() -> void:
-	_stage.add_child(CutPanel.make(Rect2(346, 612, 910, 78), [[.004, 0], [1, .04], [.996, 1], [0, .96]], Paper.CREAM, 5, Vector2(8, 8)))
+	_stage.add_child(CutPanel.make(Rect2(352, 614, 904, 78), [[.004, 0], [1, .04], [.996, 1], [0, .96]], Paper.CREAM, 5, Vector2(8, 8)))
 	_d_name = Paper.label("", 20, Paper.INK, Paper.display())
-	_d_name.position = Vector2(366, 618)
+	_d_name.position = Vector2(372, 620)
 	_d_name.size = Vector2(330, 28)
 	_d_name.clip_text = true
 	_stage.add_child(_d_name)
 	_d_chips = Control.new()
-	_d_chips.position = Vector2(370, 652)
+	_d_chips.position = Vector2(376, 654)
 	_d_chips.size = Vector2(330, 26)
 	_d_chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(_d_chips)
@@ -454,15 +558,15 @@ func _build_detail() -> void:
 	_d_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_d_desc.add_theme_constant_override("line_spacing", -4)
 	_d_desc.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_d_desc.position = Vector2(712, 618)
-	_d_desc.size = Vector2(526, 66)
+	_d_desc.position = Vector2(716, 620)
+	_d_desc.size = Vector2(522, 66)
 	_d_desc.clip_text = true
 	_stage.add_child(_d_desc)
-	# faixa escura atrás da dica: o fundo de alguns temas é claro
-	_stage.add_child(CutPanel.make(Rect2(676, 697, 588, 20), [[.01, 0], [1, 0], [.99, 1], [0, 1]], Color(Paper.INK, 0.82), 0, Vector2.ZERO))
+	# faixa escura atrás da dica: o fundo de alguns heróis é claro
+	_stage.add_child(CutPanel.make(Rect2(596, 698, 668, 20), [[.01, 0], [1, 0], [.99, 1], [0, 1]], Color(Paper.INK, 0.86), 0, Vector2.ZERO))
 	_hint = Paper.label(HINT, 13, DIM, Paper.body(700))
-	_hint.position = Vector2(346, 696)
-	_hint.size = Vector2(904, 20)
+	_hint.position = Vector2(352, 697)
+	_hint.size = Vector2(898, 20)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_stage.add_child(_hint)
 
@@ -480,15 +584,123 @@ func _arrow(dir: int) -> ShineButton:
 	return b
 
 
-func _draw_back(d: Control) -> void:
-	var dot: Color = _th.get("bg2", Color("2B3384"))
+# ---------------------------------------------------------------- desenho
+
+## x da borda inclinada do campo da arte na altura y.
+func _field_x(y: float) -> float:
+	return lerpf(FIELD_TOP, FIELD_BOT, y / STAGE.y)
+
+
+## Fundo: a cor do herói inunda a tela; à esquerda, um campo escuro cortado na diagonal com o
+## nome gigante e as faixas dele (as sete cores, na Maga).
+func _draw_back(d: Deco) -> void:
+	if _pal.is_empty():
+		return
+	var name_up := String(Knowledge.HEROES[hero]["name"]).to_upper()
+	var field := PackedVector2Array([Vector2(-1400, -700), Vector2(_field_x(-700.0), -700), Vector2(_field_x(1420.0), 1420), Vector2(-1400, 1420)])
+	d.draw_colored_polygon(field, _pal["deep"])
+	# nome gigante, como textura do campo (o que passar da borda é coberto pelo fundo, logo abaixo)
+	var f := Paper.display()
+	var px := 150
+	while px > 70 and f.get_string_size(name_up, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > 560.0:
+		px -= 4
+	d.draw_set_transform(Vector2(-14, 236), deg_to_rad(-11.0), Vector2.ONE)
+	d.draw_string(f, Vector2.ZERO, name_up, HORIZONTAL_ALIGNMENT_LEFT, -1, px, _pal["deep2"])
+	d.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# faixas subindo pra direita
+	var bands: Array = []
+	if _pal["rainbow"]:
+		for n in 7:
+			bands.append([352.0 + n * 30.0, 30.0, RAINBOW[n]])
+	else:
+		bands = [[388.0, 132.0, _pal["main"]], [540.0, 40.0, _pal["acc"]], [598.0, 16.0, Paper.CREAM]]
+	for b in bands:
+		var y: float = b[0]
+		var th: float = b[1]
+		var band := PackedVector2Array([Vector2(-1400, y + 560.0), Vector2(520, y - 208.0), Vector2(520, y - 208.0 + th), Vector2(-1400, y + 560.0 + th)])
+		for piece in Geometry2D.intersect_polygons(band, field):
+			d.draw_colored_polygon(piece, b[2])
+	# o resto da tela: a cor do herói, com um recorte mais claro em cima e pontos de retícula
+	var rest := PackedVector2Array([Vector2(_field_x(-700.0), -700), Vector2(2700, -700), Vector2(2700, 1420), Vector2(_field_x(1420.0), 1420)])
+	d.draw_colored_polygon(rest, _pal["bg"])
+	var dot: Color = _pal["bg2"]
 	for iy in 36:
 		for ix in 64:
-			d.draw_circle(Vector2(ix * 20 + 10, iy * 20 + 10), 5.0, Color(dot.r, dot.g, dot.b, 0.5))
-	# palco da arte, à esquerda, com as faixas do tema
-	d.draw_colored_polygon(Paper.moved(Paper.poly(Vector2(400, 760), [[0, 0], [1, 0], [.72, 1], [0, 1]]), Vector2(-20, -20)), _th.get("stage", _th.get("deep", Paper.INK)))
-	d.draw_colored_polygon(Paper.moved(Paper.poly(Vector2(380, 130), [[0, .5], [1, 0], [1, .5], [0, 1]]), Vector2(-10, 300)), _th.get("acc", Paper.GOLD))
-	d.draw_colored_polygon(Paper.moved(Paper.poly(Vector2(380, 56), [[0, .6], [1, 0], [1, .4], [0, 1]]), Vector2(-10, 404)), _th.get("stripe3", Paper.CREAM))
+			var c := Vector2(ix * 20 + 10, iy * 20 + 10)
+			if c.x > _field_x(c.y) + 12.0:
+				d.draw_circle(c, 5.0, Color(dot, 0.6))
+	d.draw_colored_polygon(PackedVector2Array([Vector2(_field_x(-10.0), -10), Vector2(1300, -10), Vector2(1300, 150), Vector2(_field_x(92.0), 92)]), dot)
+	d.draw_colored_polygon(PackedVector2Array([Vector2(900, 730), Vector2(1300, 640), Vector2(1300, 730)]), Paper.CREAM)
+	# a borda do campo: um talho INK com um filete claro
+	var top := Vector2(_field_x(-700.0), -700)
+	var bot := Vector2(_field_x(1420.0), 1420)
+	d.draw_line(top + Vector2(5, 0), bot + Vector2(5, 0), Paper.INK, 16.0, true)
+	d.draw_line(top + Vector2(18, 0), bot + Vector2(18, 0), _pal["light"], 5.0, true)
+
+
+## Lombada do painel: uma barra inclinada na cor do herói junto da borda esquerda (sete cores na Maga).
+func _draw_spine(d: Deco, inset: float) -> void:
+	if _pal.is_empty():
+		return
+	var n := 7 if _pal["rainbow"] else 1
+	var y0 := inset + 5.0
+	var y1 := d.size.y - inset - 2.0
+	for k in n:
+		var a := lerpf(y0, y1, float(k) / n)
+		var b := lerpf(y0, y1, float(k + 1) / n)
+		d.draw_colored_polygon(PackedVector2Array([Vector2(inset + 1, a), Vector2(inset + 11, a), Vector2(inset + 11, b), Vector2(inset + 1, b)]), _stripe_color(k))
+
+
+## Miolo da ficha: faixa diagonal do herói, lombada e as linhas que ligam o retrato a cada slot.
+func _draw_center(d: Deco) -> void:
+	if _pal.is_empty():
+		return
+	var inner := Paper.inset(Paper.poly(d.size, _p_center.shape), 6.0)
+	# faixa diagonal atravessando o painel por trás do retrato
+	var n := 7 if _pal["rainbow"] else 1
+	var thick := 96.0 / n
+	for k in n:
+		var y := 250.0 + k * thick
+		var band := PackedVector2Array([Vector2(0, y + 60), Vector2(d.size.x, y - 110), Vector2(d.size.x, y - 110 + thick), Vector2(0, y + 60 + thick)])
+		var col := _stripe_color(k)
+		for piece in Geometry2D.intersect_polygons(band, inner):
+			d.draw_colored_polygon(piece, Color(col, 0.9) if _pal["rainbow"] else _pal["deep2"])
+	_draw_spine(d, 8.0)
+	# papel escuro atrás do texto de baixo (a faixa colorida passa por ali)
+	var note := Paper.moved(Paper.skew_rect(Vector2(232, 46), 10.0), Vector2(20, 320))
+	d.draw_colored_polygon(note, Color(Paper.INK, 0.88))
+	# do retrato pra cada slot
+	var from := Vector2(196, 196)
+	for k in Knowledge.GEAR_SLOTS:
+		var to := _slot_at(k) + _slots_box.position - d.position + Vector2(6, 39)
+		var elbow := Vector2(to.x - 30.0, to.y)
+		d.draw_polyline(PackedVector2Array([from, elbow, to]), Paper.INK, 9.0, true)
+		d.draw_polyline(PackedVector2Array([from, elbow, to]), _stripe_color(k * 2), 3.0, true)
+
+
+## Miolo da mochila: lombada e a faixa do consumível, cortada na diagonal.
+func _draw_items(d: Deco) -> void:
+	if _pal.is_empty():
+		return
+	var inner := Paper.inset(Paper.poly(d.size, _p_items.shape), 6.0)
+	var band := PackedVector2Array([Vector2(0, 292), Vector2(d.size.x, 268), Vector2(d.size.x, d.size.y), Vector2(0, d.size.y)])
+	for piece in Geometry2D.intersect_polygons(band, inner):
+		d.draw_colored_polygon(piece, Color("0f3442"))
+	var edge := PackedVector2Array([Vector2(0, 288), Vector2(d.size.x, 264), Vector2(d.size.x, 270), Vector2(0, 294)])
+	for piece in Geometry2D.intersect_polygons(edge, inner):
+		d.draw_colored_polygon(piece, Paper.CYAN)
+	_draw_spine(d, 8.0)
+	# lugares da mochila ainda sem peça: recortes tracejados, pra grade não sumir quando ela está vazia
+	var have := Knowledge.gear_bag(hero).size()
+	var off := _bag_box.position - d.position
+	for n in range(have, 15):
+		var at := off + Vector2((n % 5) * 84 + 4, (n / 5) * 76)
+		var c := 68.0 * 0.16
+		var cell := PackedVector2Array([at, at + Vector2(68 - c, 0), at + Vector2(68, c), at + Vector2(68, 68), at + Vector2(c, 68), at + Vector2(0, 68 - c), at])
+		if at.y + 68.0 > 262.0:
+			continue
+		for k in cell.size() - 1:
+			d.draw_dashed_line(cell[k], cell[k + 1], Color(_pal["light"], 0.2), 2.0, 6.0)
 
 
 # ---------------------------------------------------------------- conteúdo
@@ -508,49 +720,65 @@ func _face(i: int) -> Texture2D:
 func _refresh(dir: int) -> void:
 	var h: Dictionary = Knowledge.HEROES[hero]
 	_th = Paper.THEMES.get(h["key"], Paper.THEMES["tank"])
+	_pal = _palette(hero)
 	_bg.queue_redraw()
-	_stage.get_node("Back").queue_redraw()
-	_p_center.fill = _th["deep"]
-	_p_items.fill = _th["deep"]
-	_p_pass.fill = _th["deep2"]
-	_p_attr.fill = _th["deep2"]
-	_model_back.fill = _th["bg2"]
+	for d in _decos:
+		d.queue_redraw()
+	for chip in _chips:
+		chip.fill = _pal["main"]
+		chip.queue_redraw()
+	_toggle.accent = _pal["acc"]
+	_p_center.fill = _pal["deep"]
+	_p_items.fill = _pal["deep"]
+	_p_pass.fill = _pal["deep2"]
+	_model_back.fill = _pal["light"]
 	var nm := String(h["name"]).to_upper()
 	_hero_name.text = nm
 	_hero_role.text = String(h["role"]).to_upper()
+	_hero_role.add_theme_color_override("font_color", _pal["light"])
 	_hero_face.texture = _face(hero)
 	var at := ORDER.find(hero)
 	_near[0].texture = _face(ORDER[posmod(at - 1, ORDER.size())])
 	_near[1].texture = _face(ORDER[posmod(at + 1, ORDER.size())])
-	_c_name.text = nm
-	var px := 24
-	while px > 14 and Paper.display().get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > 246.0:
-		px -= 1
-	_c_name.add_theme_font_size_override("font_size", px)
-	_clear(_c_role_holder)
+	# placa do nome na cor do herói, com a função pendurada embaixo
+	_clear(_c_head)
+	var plate := Chip.new()
+	plate.px = 22
+	while plate.px > 13 and Paper.display().get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, plate.px).x > 200.0:
+		plate.px -= 1
+	plate.pad = 14.0
+	plate.border = 4.0
+	plate.shadow = Vector2(-4, 5)
+	plate.fill = _pal["main"]
+	plate.text = nm
+	plate.position = Vector2(4, 0)
+	plate.pivot_offset = plate.size * 0.5
+	plate.rotation = deg_to_rad(-3.0)
+	_c_head.add_child(plate)
 	var rc := Chip.new()
 	rc.px = 11
 	rc.pad = 9.0
 	rc.skew = 8.0
 	rc.border = 2.0
 	rc.shadow = Vector2(-2, 3)
-	rc.fill = _th["acc"]
-	rc.ink = _th["acc_t"]
+	rc.fill = _pal["acc"]
+	rc.ink = _pal["acc_t"]
 	rc.text = String(h["role"]).to_upper()
-	_c_role_holder.add_child(rc)
+	rc.position = Vector2(22, plate.size.y + 2.0)
+	_c_head.add_child(rc)
 	_model.texture = _face(hero)
-	# arte de corpo inteiro: a maior que cabe na coluna da esquerda, sem distorcer
+	# arte de corpo inteiro, grande: ocupa a coluna da esquerda e o pé fica atrás dos atributos
 	var art := "res://assets/portraits/%s_art.webp" % h["key"]
 	_art.visible = ResourceLoader.exists(art)
 	if _art.visible:
 		var tex: Texture2D = load(art)
 		var ts := tex.get_size()
-		var w := minf(318.0, 540.0 * ts.x / ts.y)
+		var w := minf(372.0, 640.0 * ts.x / ts.y)
 		_art.texture = tex
 		_art.size = Vector2(w, w * ts.y / ts.x)
 		ArtShadow.for_hero(_art, h["key"])
-		# figura baixa encosta no quadro de atributos em vez de flutuar no topo
-		_art_home = Vector2(172.0 - w * 0.5, 96.0 + maxf(0.0, 400.0 - _art.size.y))
+		# figura baixa desce até encostar nos atributos em vez de flutuar no topo
+		_art_home = Vector2(176.0 - w * 0.5, 88.0 + maxf(0.0, 420.0 - _art.size.y))
 		_art.position = _art_home - Vector2(60.0 * dir, 0)
 		_art.modulate.a = 0.0 if dir != 0 else 1.0
 		var tw := _art.create_tween().set_parallel(true)
@@ -569,8 +797,10 @@ func _tile(box: Control, at: Vector2, side: Vector2, id: String, zone: String, i
 	var t := Tile.new()
 	t.position = at
 	t.size = side
+	t.pivot_offset = side * 0.5
 	t.id = id
-	t.empty_fill = Color(_th["deep2"], 1.0).darkened(0.25)
+	t.empty_fill = Color(_pal["deep2"], 1.0).darkened(0.35)
+	t.glow = _pal["light"]
 	t.selected = _sel["zone"] == zone and ((idx >= 0 and _sel["idx"] == idx) or (idx < 0 and _sel["id"] == id))
 	t.clicked.connect(_click.bind(zone, id, idx))
 	t.hovered.connect(func(on: bool):
@@ -580,6 +810,11 @@ func _tile(box: Control, at: Vector2, side: Vector2, id: String, zone: String, i
 			_show(_sel["zone"], _sel["id"], _sel["idx"]))
 	box.add_child(t)
 	return t
+
+
+## Canto de cima do slot de equipamento `n`, dentro de `_slots_box`: uma coluna em zigue-zague.
+func _slot_at(n: int) -> Vector2:
+	return Vector2(34.0 if n % 2 == 1 else 0.0, n * 86.0)
 
 
 ## Consumíveis que o jogador tem e este herói pode usar.
@@ -609,19 +844,27 @@ func _learning() -> Array:
 
 ## Remonta tudo que depende do estado: slots, mochila, consumível, passivas, atributos e ficha.
 func _fill() -> void:
-	# slots de equipamento
+	# slots de equipamento: zigue-zague, cada um inclinado pra um lado
 	_clear(_slots_box)
 	var worn: Array = Knowledge.gear_of(hero)
+	var used := 0
 	for n in Knowledge.GEAR_SLOTS:
 		var id: String = String(worn[n]) if n < worn.size() else ""
-		var t := _tile(_slots_box, Vector2(0, n * 78), Vector2(70, 70), id, "slot", n)
+		if id != "":
+			used += 1
+		var t := _tile(_slots_box, _slot_at(n), Vector2(78, 78), id, "slot", n)
 		t.tag = str(n + 1)
+		t.rotation = deg_to_rad(3.0 if n % 2 == 1 else -3.0)
+		if _pal["rainbow"]:
+			t.glow = RAINBOW[(n * 2) % RAINBOW.size()]
+	_slot_count.text = "%d de %d slots em uso.\nDois cliques num slot tiram a peça." % [used, Knowledge.GEAR_SLOTS]
 	# mochila
 	_clear(_bag_box)
 	var bag: Array = Knowledge.gear_bag(hero)
 	_bag_empty.visible = bag.is_empty()
 	for n in bag.size():
 		var t := _tile(_bag_box, Vector2((n % 5) * 84 + 4, (n / 5) * 76), Vector2(68, 68), bag[n], "bag")
+		t.rotation = deg_to_rad([-1.5, 1.0, -0.6, 1.6, -1.0][n % 5])
 		var who := Knowledge.holder(bag[n])
 		if who >= 0 and who != hero:
 			t.badge = _face(who)
@@ -631,7 +874,9 @@ func _fill() -> void:
 	var held: String = String(slots[0]) if slots.size() > 0 else ""
 	var st := _tile(_item_box, Vector2(0, 0), Vector2(64, 64), held, "islot", 0)
 	st.empty_fill = Paper.KIND["item"]["eb"]
-	var x := 96.0
+	st.glow = Paper.CYAN
+	st.rotation = deg_to_rad(-3.0)
+	var x := 100.0
 	for id in _consumables():
 		if id == held:
 			continue
@@ -640,9 +885,9 @@ func _fill() -> void:
 		if who >= 0 and who != hero:
 			t.badge = _face(who)
 		x += 78.0
-	if x > 96.0:
-		var arrow := Paper.label("‹", 30, DIM, Paper.body(800))
-		arrow.position = Vector2(66, 8)
+	if x > 100.0:
+		var arrow := Paper.label("‹", 30, Paper.CYAN, Paper.body(800))
+		arrow.position = Vector2(68, 8)
 		arrow.size = Vector2(28, 44)
 		arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_item_box.add_child(arrow)
@@ -684,31 +929,32 @@ func _fill_attributes() -> void:
 		["CRÍTICO", "%d%%" % roundi(crit * 100.0), "+50% dano" if crit > 0.0 else ""],
 	]
 	for n in rows.size():
-		var y := n * 34.0
-		if n > 0:
-			var line := ColorRect.new()
-			line.color = Color(Paper.CREAM.r, Paper.CREAM.g, Paper.CREAM.b, 0.14)
-			line.position = Vector2(0, y - 1)
-			line.size = Vector2(264, 2)
-			_attr_box.add_child(line)
-		var l := Paper.label(rows[n][0], 13, DIM, Paper.display())
-		l.position = Vector2(0, y)
-		l.size = Vector2(120, 32)
-		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_attr_box.add_child(l)
-		var has_bonus: bool = rows[n][2] != ""
-		var v := Paper.label(rows[n][1], 20, BONUS if has_bonus else Paper.CREAM, Paper.body(800))
-		v.position = Vector2(110, y)
-		v.size = Vector2(70, 32)
-		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		v.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_attr_box.add_child(v)
-		if has_bonus:
-			var b := Paper.label(rows[n][2], 14, BONUS, Paper.body(800))
-			b.position = Vector2(188, y)
-			b.size = Vector2(80, 32)
-			b.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			_attr_box.add_child(b)
+		# uma tira por atributo, cada uma um pouco mais pra direita que a de cima
+		var row: Array = rows[n]
+		var strip := Deco.new()
+		strip.position = Vector2(8.0 + n * 9.0, n * 37.0)
+		strip.size = Vector2(286, 30)
+		strip.fn = _draw_stat.bind(String(row[0]), String(row[1]), String(row[2]), _stripe_color(n * 2))
+		_attr_box.add_child(strip)
+
+
+## Tira de atributo: nome no papel escuro, valor numa placa na cor do herói e, se o equipamento
+## mexeu nele, o bônus em verde na ponta.
+func _draw_stat(d: Deco, label: String, value: String, bonus: String, col: Color) -> void:
+	var pts := Paper.skew_rect(d.size, 12.0)
+	d.draw_colored_polygon(Paper.moved(pts, Vector2(5, 5)), Paper.INK)
+	d.draw_colored_polygon(pts, Paper.INK)
+	d.draw_colored_polygon(Paper.inset(pts, 3.0), _pal["deep2"])
+	var f := Paper.display()
+	var fb := Paper.body(800)
+	d.draw_string(f, Vector2(16, 21), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Paper.CREAM)
+	# placa do valor
+	var plate := Paper.moved(Paper.skew_rect(Vector2(74, d.size.y), 12.0), Vector2(132, 0))
+	for piece in Geometry2D.intersect_polygons(plate, Paper.inset(pts, 3.0)):
+		d.draw_colored_polygon(piece, col)
+	d.draw_string(fb, Vector2(132, 23), value, HORIZONTAL_ALIGNMENT_CENTER, 74, 20, Paper.INK)
+	if bonus != "":
+		d.draw_string(fb, Vector2(210, 21), bonus, HORIZONTAL_ALIGNMENT_LEFT, 72, 14 if bonus.length() <= 5 else 12, BONUS)
 
 
 static func _num(v: float) -> String:
@@ -748,6 +994,7 @@ func _show(zone: String, id: String, idx: int) -> void:
 		else:
 			_d_name.text = String(Knowledge.HEROES[hero]["name"]).to_upper()
 			_d_desc.text = "Passe o mouse ou clique num slot, numa peça da mochila ou numa passiva pra ver o que ela faz."
+		_d_name.add_theme_font_size_override("font_size", 20)
 		return
 	_d_name.text = String(card["name"]).to_upper()
 	var px := 20
@@ -844,6 +1091,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_A, KEY_LEFT: _switch(-1)
 		KEY_D, KEY_RIGHT: _switch(1)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE: _act()
+		KEY_TAB: cards_pressed.emit(hero)
 		KEY_ESCAPE: back_pressed.emit()
 		_: return
 	get_viewport().set_input_as_handled()

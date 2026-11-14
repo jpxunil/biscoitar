@@ -1130,6 +1130,40 @@ func _initialize() -> void:
 	await wait(1.2)
 	check(u.glide < 0.1 and absf(u.legs[0].rotation.x) < 0.15 and absf(u.legs[1].rotation.x) < 0.15, "parou: volta à pose normal")
 
+	# ================================================================ MEDIDOR DE DANO DA LUTA
+	main = await fight(6)
+	u = main.units[main.ctrl]
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	check(main.hud.meter != null and main.hud.meter.open == -1, "o medidor de dano está na luta, com o detalhe fechado")
+	main.use_skill(u, 0)
+	ready(u)
+	main.use_skill(u, 1)
+	ready(u)
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.dmg_log["Jab Estelar"]["dmg"], 44.0) and u.dmg_log["Jab Estelar"]["hits"] == 2 and is_equal_approx(u.dmg_log["Direto de Campeã"]["dmg"], 40.0), "cada golpe entra na habilidade de onde veio (2 Jabs = 44, 1 Direto = 40)")
+	var m_rows: Array = main.meter_rows()
+	var m_sum := 0.0
+	var m_share := 0.0
+	for r in m_rows:
+		m_sum += r["dmg"]
+		m_share += r["share"]
+	check(m_rows.size() == 4 and m_rows[0]["unit"] == u and m_rows[0]["dmg"] >= m_rows[1]["dmg"] and is_equal_approx(m_share, 1.0), "as linhas vêm de quem mais bateu pra quem menos, e as partes somam 100%")
+	check(is_equal_approx(m_rows[0]["dps"], u.dmg_total / maxf(main.fight_time, 1.0)), "o DPS é dano total / tempo de luta (a luta inteira)")
+	var m_dps: float = m_rows[0]["dps"]
+	await wait(1.0)
+	var m_now: float = main.meter_rows()[0]["dps"]
+	check(m_now > 0.0 and m_now < m_dps and absf(u.dmg_total - 84.0) < 0.01, "parar de bater dilui o DPS aos poucos, mas o dano da luta continua contado")
+	var m_ai: Unit = main.units[(main.ctrl + 1) % 4]
+	check(m_ai.dmg_log.has("Ataque automático") and m_ai.dmg_log["Ataque automático"]["hits"] == 0, "o dano contínuo da IA entra como Ataque automático, sem contar golpe")
+	main.add_dot("teste", "Veneno de Teste", Color.WHITE, 5.0, 10.0, u)
+	await wait(1.2)
+	check(u.dmg_log.has("Veneno de Teste") and u.dmg_log["Veneno de Teste"]["dmg"] >= 10.0, "dano por segundo entra com o nome do efeito")
+	main.hud.meter.open = u.idx
+	await frames_of(3)
+	check(main.hud.meter.skills_of(u)[0][0] == "Jab Estelar" and main.hud.meter.size.y > main.hud.meter._list_h(), "o detalhe do herói lista as habilidades da que mais deu dano pra que menos")
+	check(not main.hud.cards[main.ctrl].get_node("Body/Dps").visible, "o card não mostra mais DPS (só a Fraqueza, quando tem)")
+
 	# ================================================================ APOTECÁRIO
 	main = await fight(7)
 	u = main.units[main.ctrl]
@@ -2239,6 +2273,33 @@ func _initialize() -> void:
 	check(not main.hell_fire.visible, "e o fogo apaga")
 	Knowledge.boss = 1
 	Knowledge.know = {}
+
+	# ---- Efeitos por dono: só quem está na sua mão aparece inteiro
+	main = await fight(0)
+	var fx_mine: Unit = main.units[main.ctrl]
+	var fx_ally: Unit = main.units[(main.ctrl + 1) % 4]
+	var fx_fade: float = main.FX_QUIET_FADE
+	main._start_hearth(fx_ally)
+	main._start_holy(fx_mine)
+	var ally_mesh: MeshInstance3D = main.hearths[-1]["node"].get_child(0)
+	var mine_mesh: MeshInstance3D = main.holy[-1]["node"].get_child(0)
+	check(is_equal_approx(ally_mesh.transparency, fx_fade), "efeito de herói fora da sua mão nasce apagado")
+	check(ally_mesh.visible and fx_fade < 1.0, "mas continua visível")
+	check(is_zero_approx(mine_mesh.transparency), "o do herói que você controla nasce inteiro")
+	var fx_n0: int = main.fx_root.get_child_count()
+	main._by(fx_ally)._petals(Vector3.ZERO, 20, 2.0)
+	check(main.fx_root.get_child_count() - fx_n0 == ceili(20 * main.FX_QUIET_COUNT), "e com menos partículas")
+	fx_n0 = main.fx_root.get_child_count()
+	main._by(fx_mine)._petals(Vector3.ZERO, 20, 2.0)
+	check(main.fx_root.get_child_count() - fx_n0 == 20, "as suas saem todas")
+	check(main._fx_by == null, "o dono não vaza pro próximo efeito")
+	main._burst(Vector3.ZERO, Color.RED, 2.0)
+	var boss_mesh: MeshInstance3D = main.fx_root.get_child(main.fx_root.get_child_count() - 1)
+	check(is_zero_approx(boss_mesh.transparency) and not boss_mesh.is_in_group("hero_fx"), "efeito sem dono (boss, cenário) não é mexido")
+	main.swap_cd = 0.0
+	main.set_ctrl(fx_ally.idx)
+	check(is_zero_approx(ally_mesh.transparency), "trocou: o que já estava em campo do herói assumido volta inteiro na hora")
+	check(is_equal_approx(mine_mesh.transparency, fx_fade), "e o do herói que você largou apaga")
 
 	print("Results: %d passed, %d failed" % [passed, failed])
 	quit(1 if failed > 0 else 0)

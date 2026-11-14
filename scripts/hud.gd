@@ -42,6 +42,7 @@ var cards: Array = []
 var boss_center: Control
 var legend: Control
 var fight_ui: Control
+var meter: DpsMeter
 var biscoito: TextureRect
 var _biscoito_tw: Tween
 var cast_plate: PanelContainer
@@ -78,6 +79,10 @@ func setup(game) -> void:
 	_build_toast()
 	_build_skills()
 	_build_lb()
+	# medidor de dano da luta inteira (substitui o DPS que ficava em cada card)
+	meter = DpsMeter.new()
+	fight_ui.add_child(meter)
+	meter.setup(g)
 	_build_castbar()
 
 	# rosto do biscoito: aparece com fade quando alguém usa o Bora Biscoitar
@@ -640,8 +645,6 @@ func _process(delta: float) -> void:
 			card.state_text = u.action_text
 		if card.weak != (u.weak_t > 0.0):
 			card.weak = u.weak_t > 0.0
-		if card.dps != roundi(u.dps):
-			card.dps = roundi(u.dps)
 		if card.chosen != u.chosen:
 			card.chosen = u.chosen
 		if card.targeted != u.targeted:
@@ -684,22 +687,27 @@ func _process(delta: float) -> void:
 func _tick_bullets(me: Unit) -> void:
 	if bullet_row == null:
 		bullet_row = Control.new()
-		bullet_row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-		bullet_row.offset_left = -210
-		bullet_row.offset_right = 210
-		# acima do aviso central (toast), pra um não cobrir o outro
-		bullet_row.offset_top = -214
-		bullet_row.offset_bottom = -144
 		bullet_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bullet_row.draw.connect(_draw_bullets)
 		fight_ui.add_child(bullet_row)
 	bullet_row.visible = me.alive and me.key in ["maga", "apothecary", "sleepwalker", "nurse", "valsa"]
 	if bullet_row.visible:
+		# F6: passa pro próximo modelo do recurso deste herói (pra comparar jogando)
+		var f6 := Input.is_physical_key_pressed(KEY_F6)
+		if f6 and not bullet_row.get_meta("f6", false):
+			toast("GAUGE: %s   ·   F6 troca" % HeroGauge.cycle(me.key), 1.8)
+		bullet_row.set_meta("f6", f6)
+		# o lugar na tela depende do modelo: em cima das habilidades (acima do aviso central),
+		# do lado do boneco ou em cima dele
+		HeroGauge.place(bullet_row, me, g)
 		bullet_row.queue_redraw()
 
 
 func _draw_bullets() -> void:
 	var me: Unit = g.units[g.ctrl]
+	# o desenho de cada recurso, na cara do herói, mora em ui/kit/hero_gauge.gd
+	if HeroGauge.draw(bullet_row, me, g):
+		return
 	var f := ThemeDB.fallback_font
 	match me.key:
 		"nurse":

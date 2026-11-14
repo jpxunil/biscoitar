@@ -951,6 +951,9 @@ var fairy_node: Node3D
 var fairy_owner: Unit
 var fairy_shot := 0.0
 var plain_hit := false  # o dano em curso não alimenta roubo de vida (DoT Pure Blood)
+## Medidor de dano: nome que o dano em curso leva no registro (DoT, ataque automático, Limit Break...).
+## Vazio = vale a última habilidade que o herói usou (unit.dmg_src).
+var dmg_tag := ""
 var aim_t := 0.0  # marca do Tiro Perfurante na boss (Maga)
 var aim_node: Node3D
 var dream_stacks := 0  # Vulnerabilidade Onírica (Sleepwalker)
@@ -1531,6 +1534,7 @@ func select_hero(i: int) -> bool:
 	units[ctrl].set_controlled(false)
 	ctrl = at
 	units[at].set_controlled(true)
+	_fx_refresh()
 	return true
 
 
@@ -1637,6 +1641,7 @@ func set_ctrl(i: int) -> void:
 	ctrl = i
 	units[i].hold_pos = null
 	units[i].set_controlled(true)
+	_fx_refresh()
 	_burst(units[i].position, units[i].color, 1.6)
 
 
@@ -1922,6 +1927,31 @@ func _clamp_to_arena(u: Unit) -> void:
 
 
 ## DPS "ao vivo": média dos últimos ~4 segundos, pra reagir rápido sem ficar pulando.
+## Medidor de dano da luta inteira: soma o golpe na habilidade de onde ele veio. `hit` = foi um golpe
+## de verdade (o dano contínuo da IA e os DoTs somam dano sem contar golpe).
+func _meter_add(u: Unit, dmg: float, hit: bool) -> void:
+	var src := dmg_tag if dmg_tag != "" else (u.dmg_src if u.dmg_src != "" else "Ataque")
+	if not u.dmg_log.has(src):
+		u.dmg_log[src] = {"dmg": 0.0, "hits": 0}
+	u.dmg_log[src]["dmg"] += dmg
+	if hit:
+		u.dmg_log[src]["hits"] += 1
+
+
+## As linhas do medidor, do herói que mais bateu pro que menos. O DPS é dano total / tempo de luta
+## (a luta inteira, não os últimos segundos); "share" é a parte dele no dano da party (0..1).
+func meter_rows() -> Array:
+	var total := 0.0
+	for u in units:
+		total += u.dmg_total
+	var time := maxf(fight_time, 1.0)
+	var out: Array = []
+	for u in units:
+		out.append({"unit": u, "dmg": u.dmg_total, "dps": u.dmg_total / time, "share": (u.dmg_total / total) if total > 0.0 else 0.0})
+	out.sort_custom(func(a, b): return a["dmg"] > b["dmg"])
+	return out
+
+
 func _tick_dps(delta: float) -> void:
 	bucket_t += delta
 	for u in units:
@@ -2406,7 +2436,9 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	# Sem a carta: auto-ataque conservador, bem mais fraco que o jogador no controle.
 	if _in_range(u):
 		var rate: float = u.ai_dps
+		dmg_tag = "Ataque automático"
 		_damage_boss(u, rate * delta, false, false)
+		dmg_tag = ""
 		if u.key == "valsa":
 			_ai_waltz(u, delta)
 		if u.key == "nurse":
@@ -2415,7 +2447,7 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		u.dmg_acc += rate * delta * _dmg_mult()
 		u.dmg_timer += delta
 		if u.dmg_timer >= 1.2:
-			_popup(int(u.dmg_acc), Color(0.75, 0.75, 0.8), 30)
+			_by(u)._popup(int(u.dmg_acc), Color(0.75, 0.75, 0.8), 30)
 			u.dmg_acc = 0.0
 			u.dmg_timer = 0.0
 	elif text == "Atacando":
@@ -2431,7 +2463,7 @@ func _shield_fx(u: Unit) -> void:
 			fx.visible = false
 		return
 	if fx == null:
-		fx = Fx.inst(u, Fx.sphere(1.05), Fx.mat(Color(0.45, 0.9, 1.0, 0.22), 1.2, true), Vector3(0, 1.0, 0))
+		fx = _fx(u, u, Fx.sphere(1.05), Fx.mat(Color(0.45, 0.9, 1.0, 0.22), 1.2, true), Vector3(0, 1.0, 0))
 		fx.name = "ShieldFx"
 	fx.visible = true
 	# a bolha encolhe conforme o escudo é gasto
@@ -2715,7 +2747,7 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 		if u.cast_target != null:
 			# liga quem conjura a quem vai receber enquanto o cast corre
 			u.face(u.cast_target.position - u.position)
-			_beam(u.position, u.cast_target.position, Color(0.4, 1.0, 0.6, 0.7), cast + 0.15)
+			_by(u)._beam(u.position, u.cast_target.position, Color(0.4, 1.0, 0.6, 0.7), cast + 0.15)
 		elif sk.has("dmg") or u.key == "sleepwalker":
 			u.face(boss_pos - u.position)
 		# cast curto já gasta a recarga ao começar; cast longo só gasta se sair
@@ -2729,6 +2761,7 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 
 func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 	var sk: Dictionary = kit(u)[slot]
+	u.dmg_src = String(sk["name"])  # o dano que sair daqui pra frente entra no medidor com este nome
 	if u.key == "assassina":
 		# as adagas batem no ritmo de cada golpe
 		match slot:
@@ -2780,13 +2813,13 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			u.guard_t = AEGIS_TIME
 			u.regen_t = AEGIS_TIME
 			u.punch()
-			_burst(u.position, GOLD, 2.8)
+			_by(u)._burst(u.position, GOLD, 2.8)
 		"Muralha da Fé":
 			for o in units:
 				if o.alive:
 					o.wall_t = WALL_TIME
-					_burst(o.position, GOLD, 2.0)
-			_faith_cross()
+					_by(u)._burst(o.position, GOLD, 2.0)
+			_by(u)._faith_cross()
 			hud.flash(Color(GOLD.r, GOLD.g, GOLD.b, 0.3))
 			hud.toast("MURALHA DA FÉ", 1.6)
 		"Solo Consagrado":
@@ -2807,7 +2840,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			u.hp = u.max_hp
 			u.taste_t = TASTE_TIME * (TASTE_BIG if long_parry else 1.0)
 			u.taste_hit = false
-			_burst(u.position, BLOOD, 2.4)
+			_by(u)._burst(u.position, BLOOD, 2.4)
 		"Emergency Response":
 			# avança até encostar na boss (no máximo RUSH_DIST) e puxa ela pra si
 			var to_boss := boss_pos - u.position
@@ -2818,21 +2851,21 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			var rush_to := u.position + to_boss.normalized() * go
 			# rastro vermelho do avanço
 			for k in 3:
-				_beam(u.position + Vector3(0, k * 0.4 - 0.4, 0), rush_to + Vector3(0, k * 0.4 - 0.4, 0), Color(BLOOD.r * 1.6, BLOOD.g, BLOOD.b, 0.9 - k * 0.25), 0.4 + k * 0.12)
+				_by(u)._beam(u.position + Vector3(0, k * 0.4 - 0.4, 0), rush_to + Vector3(0, k * 0.4 - 0.4, 0), Color(BLOOD.r * 1.6, BLOOD.g, BLOOD.b, 0.9 - k * 0.25), 0.4 + k * 0.12)
 			u.syringe_stab(1.4, 0.12)
 			var tw := u.create_tween()
 			tw.tween_property(u, "position", rush_to, 0.12)
 			tw.tween_callback(func():
 				_clamp_to_arena(u)
 				# impacto físico na chegada: onda de energia no chão
-				_impact_ring(u.position + Vector3(0, 0.4, 0), BLOOD.lightened(0.2), 3.6)
-				_burst(u.position, Color(1, 1, 1), 1.8)
+				_by(u)._impact_ring(u.position + Vector3(0, 0.4, 0), BLOOD.lightened(0.2), 3.6)
+				_by(u)._burst(u.position, Color(1, 1, 1), 1.8)
 				shake_t = 0.18
 				shake_amp = 0.22
 				if u.alive and _in_range(u):
 					u.punch()
 					_damage_boss(u, RUSH_DMG, true, false))
-			_taunt_mark()
+			_by(u)._taunt_mark()
 			_add_stacks(u, RUSH_STACKS)
 			_provoke(u, by_ai)
 		"Blood Party":
@@ -2853,10 +2886,10 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			u.skill_cd[5] = 0.0
 			u.blood_party_start()
 			hud.flash(BLOOD, 0.4)
-			_burst(u.position, Color(1, 1, 1), 3.0)
-			_burst(u.position, BLOOD, 6.5)
+			_by(u)._burst(u.position, Color(1, 1, 1), 3.0)
+			_by(u)._burst(u.position, BLOOD, 6.5)
 			for k in 3:
-				_impact_ring(u.position + Vector3(0, 0.5 + k * 0.5, 0), BLOOD.lightened(k * 0.15), 3.0 + k * 1.4)
+				_by(u)._impact_ring(u.position + Vector3(0, 0.5 + k * 0.5, 0), BLOOD.lightened(k * 0.15), 3.0 + k * 1.4)
 			shake_t = 0.35
 			shake_amp = 0.4
 			hud.toast("BLOOD PARTY: RECUPERE A VIDA TODA", 2.0)
@@ -2867,8 +2900,8 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			st.shield_hp = st.max_hp * SHIELD_RATIO
 			st.shield_t = SHIELD_TIME
 			u.enmity += st.shield_hp * HEAL_ENMITY * 0.5
-			_beam(u.position, st.position, Color(0.45, 0.9, 1.0, 0.95), 0.3)
-			_burst(st.position, Color(0.45, 0.9, 1.0), 2.2)
+			_by(u)._beam(u.position, st.position, Color(0.45, 0.9, 1.0, 0.95), 0.3)
+			_by(u)._burst(st.position, Color(0.45, 0.9, 1.0), 2.2)
 		"Lareira Celestial":
 			_start_hearth(u)
 		"Necropsia":
@@ -2889,17 +2922,17 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_cannon(u)
 		"Marca do Zênite":
 			add_dot("zenite", "Marca do Zênite", FIRE, ZENITH_TIME, ZENITH_DPS, u)
-			_zenith_halo()
-			_burst(_bp(Vector3(0, 7.5, -12.5)), Color(1.0, 0.9, 0.45), 3.0)
+			_by(u)._zenith_halo()
+			_by(u)._burst(_bp(Vector3(0, 7.5, -12.5)), Color(1.0, 0.9, 0.45), 3.0)
 		"Lança Serafim":
 			_lance(u)
 		"Rasante Incandescente":
 			_swoop(u)
 		"Chuva de Brasas":
 			add_dot("chuva", "Chuva de Brasas", FIRE, RAIN_TIME, RAIN_DPS, u)
-			_rain_start()
+			_by(u)._rain_start()
 			for n in 8:
-				_burst(_bp(Vector3(randf_range(-3.0, 3.0), randf_range(1.0, 5.0), -11.5)), FIRE, 1.0)
+				_by(u)._burst(_bp(Vector3(randf_range(-3.0, 3.0), randf_range(1.0, 5.0), -11.5)), FIRE, 1.0)
 		"Juízo Solar":
 			_solar(u)
 		"Contagem Regressiva":
@@ -2938,7 +2971,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			u.frenzy_t = FRENZY_TIME
 			u.frenzy_dmg = 0.0
 			u.skill_cd[0] = 0.0
-			_burst(u.position, Color(0.75, 0.2, 1.0), 4.0)
+			_by(u)._burst(u.position, Color(0.75, 0.2, 1.0), 4.0)
 			hud.toast("FRENESI DA FERA", 1.4)
 		"Bora Biscoitar":
 			_provoke(u, by_ai)
@@ -2947,22 +2980,22 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			if ht != null and not ht.alive:
 				# o alvo está caído: é o caminho do reviver de cada healer
 				if sk["name"] == "Asa da Fênix":
-					_beam(u.position, ht.position, Color(1.0, 0.75, 0.3, 0.95), 0.4)
+					_by(u)._beam(u.position, ht.position, Color(1.0, 0.75, 0.3, 0.95), 0.4)
 					_raise(ht, REVIVE_HP, FLAME)
 					return
 				if sk["name"] == "Sutura":
 					# prepara o corpo: ele vira o Paciente. Falta a Estabilização com os 3 Vestígios.
 					u.patient = ht
 					u.patient_t = PATIENT_TIME
-					_beam(u.position, ht.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.4)
-					_impact_ring(ht.position + Vector3(0, 0.3, 0), CHEM, 2.0)
+					_by(u)._beam(u.position, ht.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.4)
+					_by(u)._impact_ring(ht.position + Vector3(0, 0.3, 0), CHEM, 2.0)
 					if u.controlled:
 						hud.toast("CORPO PREPARADO: Estabilização com %d Vestígios reanima" % REANIMATE_COST, 2.2)
 					return
 				if sk["name"] == "Estabilização" and u.patient == ht and u.vestiges >= REANIMATE_COST:
 					u.vestiges -= REANIMATE_COST
 					u.patient_t = PATIENT_TIME
-					_beam(u.position, ht.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.4)
+					_by(u)._beam(u.position, ht.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.4)
 					_raise(ht, REANIMATE_HP, CHEM)
 					if u.controlled:
 						hud.toast("REANIMAÇÃO", 1.4)
@@ -2974,7 +3007,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			var amount := HEAL_AI if by_ai else HEAL_PLAYER
 			if sk["name"] == "Asa da Fênix":
 				amount = PHOENIX_HEAL
-				_burst(ht.position + Vector3(0, 1.0, 0), Color(1.0, 0.6, 0.2), 3.2)
+				_by(u)._burst(ht.position + Vector3(0, 1.0, 0), Color(1.0, 0.6, 0.2), 3.2)
 			elif sk["name"] == "Sutura":
 				if not by_ai:
 					amount = SUTURE_HEAL
@@ -2983,15 +3016,15 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				u.patient_t = PATIENT_TIME
 			elif sk["name"] == "Estabilização":
 				amount = STABILIZE_HEAL * (1.5 if ht.hp / ht.max_hp < STABILIZE_LOW else 1.0)
-				_burst(ht.position + Vector3(0, 1.0, 0), CHEM, 3.2)
+				_by(u)._burst(ht.position + Vector3(0, 1.0, 0), CHEM, 3.2)
 			# socorreu na mão alguém com pouca vida: conta pra maestria do Instinto
 			if not by_ai and ht.hp / ht.max_hp < Knowledge.LOW_HP:
 				_master("heal")
 			ht.hp = minf(ht.max_hp, ht.hp + amount)
 			u.enmity += amount * HEAL_ENMITY
-			_beam(u.position, ht.position, Color(0.5, 1.0, 0.65, 0.95), 0.3)
-			_burst(ht.position, Color(0.4, 1.0, 0.6), 1.8)
-			_popup(int(amount), Color(0.5, 1.0, 0.65), 64, ht.position + Vector3(0, 2.6, 0), "+")
+			_by(u)._beam(u.position, ht.position, Color(0.5, 1.0, 0.65, 0.95), 0.3)
+			_by(u)._burst(ht.position, Color(0.4, 1.0, 0.6), 1.8)
+			_by(u)._popup(int(amount), Color(0.5, 1.0, 0.65), 64, ht.position + Vector3(0, 2.6, 0), "+")
 		_:
 			# habilidades de dano (incluindo o ataque básico)
 			if not _in_range(u):
@@ -3009,7 +3042,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			else:
 				_attack_fx(u, big)
 			if sk.has("cast") and sk["cast"] >= LOCKED_CAST and slot != 0:
-				_burst(_bp(Vector3(0, 4, -11.5)), u.color.lightened(0.3), 6.0)
+				_by(u)._burst(_bp(Vector3(0, 4, -11.5)), u.color.lightened(0.3), 6.0)
 			var amount: float = sk["dmg"]
 			if slot == BIG_SLOT.get(u.key, -1) and Knowledge.has(u.hero, "burst"):
 				amount *= 1.3 if u.key == "assassina" else 1.15
@@ -3020,7 +3053,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				elif u.patient != null and u.patient.alive and u.patient_t > 0.0 and u.patient.hp < u.patient.max_hp:
 					u.patient.hp = minf(u.patient.max_hp, u.patient.hp + PATIENT_HEAL)
 					u.enmity += PATIENT_HEAL * HEAL_ENMITY
-					_popup(int(PATIENT_HEAL), Color(0.5, 1.0, 0.85), 36, u.patient.position + Vector3(0, 2.6, 0), "+")
+					_by(u)._popup(int(PATIENT_HEAL), Color(0.5, 1.0, 0.85), 36, u.patient.position + Vector3(0, 2.6, 0), "+")
 			if sk["name"] == "Disparo Rúnico":
 				big = false
 				if u.pierce_next:
@@ -3029,7 +3062,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					amount *= PIERCE_MULT
 					amount += _use_aim(u)  # com a boss marcada pelo Tiro Perfurante: estoura a marca
 					big = true
-					_beam(u.position, _bp(Vector3(0, 2.0, -13.0)), Color(1, 1, 1, 0.9), 0.25)
+					_by(u)._beam(u.position, _bp(Vector3(0, 2.0, -13.0)), Color(1, 1, 1, 0.9), 0.25)
 				if u.dash_next:
 					u.dash_next = false
 					_knock_back(u, 3.0)
@@ -3055,12 +3088,12 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					if u.side_left <= 0:
 						u.side_need = -u.side_need
 						u.side_left = SIDE_HITS
-						_burst(_side_pos(u.side_need), SIDE_COL, 2.4)
+						_by(u)._burst(_side_pos(u.side_need), SIDE_COL, 2.4)
 			if sk["name"] == "Tiro Perfurante":
 				_aim_mark(u)
 			if sk["name"] == "Baque do Escudo":
 				# golpe de escudo: mais pesado na tela. (Interromper fica pra quando existir cast interrompível.)
-				_burst(boss_pos + Vector3(0, 1.2, 2.0), Color(1.0, 0.95, 0.8), 2.6)
+				_by(u)._burst(boss_pos + Vector3(0, 1.2, 2.0), Color(1.0, 0.95, 0.8), 2.6)
 				boss.hit_flash()
 			if sk["name"] == "Syringe Poke":
 				# o roubo é em cima da vida ATUAL da boss: vai rendendo menos conforme a luta anda
@@ -3071,7 +3104,7 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				if _bath_use(u, slot):
 					# fortalecido pelo Bloodbath: estocadas em rajada por alguns segundos
 					u.poke_rush_t = POKE_RUSH_TIME
-					_burst(u.position + Vector3(0, 1.0, 0), BLOOD, 2.6)
+					_by(u)._burst(u.position + Vector3(0, 1.0, 0), BLOOD, 2.6)
 					if u.controlled:
 						hud.toast("ESTOCADAS EM RAJADA", 1.0)
 				if u.poke_rush_t > 0.0:
@@ -3112,7 +3145,7 @@ func _side_pos(side: int) -> Vector3:
 ## Sombra da personagem que fica pra trás e some (Garras, Dança, Frenesi).
 func _afterimage(u: Unit, offset: Vector3, col: Color) -> void:
 	var m := Fx.mat(Color(col.r, col.g, col.b, 0.55), 1.5, true)
-	var mi := Fx.inst(fx_root, Fx.capsule(0.38, 1.3), m, u.position + offset + Vector3(0, 0.7, 0))
+	var mi := _fx(u, fx_root, Fx.capsule(0.38, 1.3), m, u.position + offset + Vector3(0, 0.7, 0))
 	var tw := mi.create_tween()
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.32)
 	tw.tween_callback(mi.queue_free)
@@ -3131,7 +3164,7 @@ func _dash_cut(u: Unit, dmg: float) -> void:
 	u.face(to - from)
 	u.dash_fx()
 	u.invuln = maxf(u.invuln, 0.2)
-	_beam(from, to, SIDE_COL, 0.5)
+	_by(u)._beam(from, to, SIDE_COL, 0.5)
 	_afterimage(u, Vector3.ZERO, SIDE_COL)
 	var tw := u.create_tween()
 	tw.tween_property(u, "position", to, 0.1)
@@ -3160,7 +3193,7 @@ func _raw_hit(u: Unit, dmg: float, size := 84) -> void:
 	u.dmg_bucket += dmg
 	u.enmity += dmg
 	boss.hit_flash()
-	_popup(int(round(dmg)), Color(1.0, 0.45, 1.0), size)
+	_by(u)._popup(int(round(dmg)), Color(1.0, 0.45, 1.0), size)
 	if boss_hp <= 0.0:
 		if Knowledge.practice:
 			boss_hp = boss_max
@@ -3216,33 +3249,33 @@ func _mercy_hit(u: Unit, part := 0) -> void:
 	_attack_fx(u, true)
 	var at := boss_pos + Vector3(0, 1.6, 1.6)
 	var col := Color(0.75, 0.2, 1.0) if strong else Color(1.0, 0.95, 0.9)
-	_burst(at, Color(1, 1, 1), 3.0)
-	_burst(at, col, 4.2 if strong else 3.0)
+	_by(u)._burst(at, Color(1, 1, 1), 3.0)
+	_by(u)._burst(at, col, 4.2 if strong else 3.0)
 	# o corte: duas lâminas de luz cruzadas no ponto do golpe
 	for k in 2:
 		var slash := BoxMesh.new()
 		slash.size = Vector3(0.16, 5.2 if strong else 3.8, 0.08)
 		var sm := Fx.mat(Color(col.r * 2.2, col.g * 2.2, col.b * 2.2, 0.95), 0.0, true)
-		var mi := Fx.inst(fx_root, slash, sm, at + Vector3(0, 1.0, 0.2))
+		var mi := _fx(u, fx_root, slash, sm, at + Vector3(0, 1.0, 0.2))
 		mi.rotation.z = (0.75 if k == 0 else -0.75)
 		mi.scale = Vector3(1.0, 0.1, 1.0)
 		var tw := mi.create_tween().set_parallel(true)
 		tw.tween_property(mi, "scale", Vector3.ONE, 0.08)
 		tw.tween_property(sm, "albedo_color:a", 0.0, 0.3).set_delay(0.08)
 		tw.chain().tween_callback(mi.queue_free)
-	_impact_ring(at, col, 4.5 if strong else 3.2)
+	_by(u)._impact_ring(at, col, 4.5 if strong else 3.2)
 	# o chão racha embaixo dela e uma coluna de luz sobe do golpe
-	_impact_ring(u.position + Vector3(0, 0.2, 0), col, 3.4)
+	_by(u)._impact_ring(u.position + Vector3(0, 0.2, 0), col, 3.4)
 	var pc := Color(col.r * 1.6, col.g * 1.6, col.b * 1.6, 0.8)
 	var pm := Fx.mat(pc, 0.0, true)
-	var pillar := Fx.inst(fx_root, Fx.cyl(0.9, 1.2, 14.0), pm, at + Vector3(0, 5.0, 0))
+	var pillar := _fx(u, fx_root, Fx.cyl(0.9, 1.2, 14.0), pm, at + Vector3(0, 5.0, 0))
 	var tpl := pillar.create_tween().set_parallel(true)
 	tpl.tween_property(pillar, "scale", Vector3(0.05, 1.1, 0.05), 0.45).set_ease(Tween.EASE_IN)
 	tpl.tween_property(pm, "albedo_color:a", 0.0, 0.45)
 	tpl.chain().tween_callback(pillar.queue_free)
 	for n in 10:
 		var a := n * TAU / 10.0
-		var sp := Fx.inst(fx_root, Fx.sphere(0.12), Fx.mat(Color(col.r * 1.6, col.g * 1.6, col.b * 1.6), 0.0, true), at)
+		var sp := _fx(u, fx_root, Fx.sphere(0.12), Fx.mat(Color(col.r * 1.6, col.g * 1.6, col.b * 1.6), 0.0, true), at)
 		var ts := sp.create_tween().set_parallel(true)
 		ts.tween_property(sp, "position", at + Vector3(cos(a), sin(a), 0.2) * randf_range(2.0, 4.0), 0.4).set_ease(Tween.EASE_OUT)
 		ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.4)
@@ -3253,7 +3286,7 @@ func _mercy_hit(u: Unit, part := 0) -> void:
 		if missing >= 0.5 or wounded:
 			hud.toast("EXECUÇÃO  +%d%%" % roundi((total / base - 1.0) * 100.0), 1.0)
 	if strong:
-		_impact_ring(at, Color(1, 1, 1), 6.5)
+		_by(u)._impact_ring(at, Color(1, 1, 1), 6.5)
 		hud.flash(Color(0.75, 0.2, 1.0), 0.2)
 		shake_t = 0.35
 		shake_amp = 0.45
@@ -3271,17 +3304,17 @@ func _mercy_slam(u: Unit, strong: bool) -> void:
 	var at := u.position + Vector3(0, 0.15, 0)
 	u.punch()
 	_attack_fx(u, false)
-	_burst(at, Color(1, 1, 1), 2.2)
-	_burst(at, col, 3.0)
-	_impact_ring(at, col, 3.0)
-	_impact_ring(at, Color(1, 1, 1), 1.8)
+	_by(u)._burst(at, Color(1, 1, 1), 2.2)
+	_by(u)._burst(at, col, 3.0)
+	_by(u)._impact_ring(at, col, 3.0)
+	_by(u)._impact_ring(at, Color(1, 1, 1), 1.8)
 	# rachaduras: riscos de luz que abrem do ponto da cravada
 	for n in 7:
 		var a := n * TAU / 7.0 + randf() * 0.4
 		var crack := BoxMesh.new()
 		crack.size = Vector3(0.1, 0.04, randf_range(1.6, 3.0))
 		var cm := Fx.mat(Color(col.r * 2.4, col.g * 2.4, col.b * 2.4, 0.95), 0.0, true)
-		var mi := Fx.inst(fx_root, crack, cm, at + Vector3(cos(a), 0, sin(a)) * crack.size.z * 0.5)
+		var mi := _fx(u, fx_root, crack, cm, at + Vector3(cos(a), 0, sin(a)) * crack.size.z * 0.5)
 		mi.rotation.y = PI / 2.0 - a
 		var tw := mi.create_tween()
 		tw.tween_property(cm, "albedo_color:a", 0.0, 0.45).set_delay(0.08)
@@ -3318,7 +3351,7 @@ func _mercy_leap(u: Unit) -> void:
 	var t_up := (MERCY_WINDOW - MERCY_LAND) * 0.58
 	var t_down := MERCY_WINDOW - MERCY_LAND - t_up
 	u.face(fwd)
-	_burst(from, col, 2.0)
+	_by(u)._burst(from, col, 2.0)
 	if u.controlled:
 		hud.edge_glow(col, 0.45)
 		if strong:
@@ -3329,8 +3362,8 @@ func _mercy_leap(u: Unit) -> void:
 	fx_root.add_child(knife)
 	var blade := BoxMesh.new()
 	blade.size = Vector3(0.12, 0.12, 0.95)
-	Fx.inst(knife, blade, Fx.mat(Color(2.6, 2.6, 2.8), 0.0, true), Vector3.ZERO)
-	Fx.inst(knife, Fx.sphere(0.2), Fx.mat(hot, 0.0, true), Vector3(0, 0, 0.5))
+	_fx(u, knife, blade, Fx.mat(Color(2.6, 2.6, 2.8), 0.0, true), Vector3.ZERO)
+	_fx(u, knife, Fx.sphere(0.2), Fx.mat(hot, 0.0, true), Vector3(0, 0, 0.5))
 	var hand := from + Vector3(0, 1.1, 0)
 	var stuck := to + fwd * 0.9 + Vector3(0, 0.25, 0)
 	knife.position = hand
@@ -3338,7 +3371,7 @@ func _mercy_leap(u: Unit) -> void:
 	var wire := BoxMesh.new()
 	wire.size = Vector3(0.05, 0.05, 1.0)
 	var wm := Fx.mat(Color(hot.r, hot.g, hot.b, 0.9), 0.0, true)
-	var line := Fx.inst(fx_root, wire, wm, hand)
+	var line := _fx(u, fx_root, wire, wm, hand)
 	var stretch := func():
 		if not is_instance_valid(line) or not is_instance_valid(knife) or not is_instance_valid(u):
 			return
@@ -3355,8 +3388,8 @@ func _mercy_leap(u: Unit) -> void:
 		knife.position = hand.lerp(stuck, t)
 		stretch.call(), 0.0, 1.0, t_throw).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tk.tween_callback(func():
-		_burst(stuck, col, 1.4)
-		_impact_ring(stuck, col, 1.2))
+		_by(u)._burst(stuck, col, 1.4)
+		_by(u)._impact_ring(stuck, col, 1.2))
 	# em Frenesi: a serra, um disco de lâminas que gira com ela a animação inteira
 	var saw: Node3D = null
 	if strong:
@@ -3366,9 +3399,9 @@ func _mercy_leap(u: Unit) -> void:
 		for k in 4:
 			var tooth := BoxMesh.new()
 			tooth.size = Vector3(0.1, 3.4, 0.34)
-			var tm := Fx.inst(saw, tooth, Fx.mat(Color(2.6, 1.2, 3.0, 0.9), 0.0, true), Vector3.ZERO)
+			var tm := _fx(u, saw, tooth, Fx.mat(Color(2.6, 1.2, 3.0, 0.9), 0.0, true), Vector3.ZERO)
 			tm.rotation.x = k * PI / 4.0
-		var rim := Fx.inst(saw, Fx.torus(1.55, 1.75), Fx.mat(Color(2.0, 0.5, 2.6, 0.75), 0.0, true), Vector3.ZERO)
+		var rim := _fx(u, saw, Fx.torus(1.55, 1.75), Fx.mat(Color(2.0, 0.5, 2.6, 0.75), 0.0, true), Vector3.ZERO)
 		rim.rotation.z = PI / 2.0
 		u.dagger_anim("spin", MERCY_WINDOW)
 	# 2 e 3. o corpo: rasante puxado pela adaga, cravada, pulo seco e mergulho
@@ -3416,7 +3449,7 @@ func _mercy_leap(u: Unit) -> void:
 			if is_instance_valid(u) and u.alive and u.lock_t > 0.0:
 				_afterimage(u, Vector3(0, u.visual.position.y, 0), col)
 				if strong:
-					_impact_ring(u.position + Vector3(0, 1.0 + u.visual.position.y, 0), col, 1.8))
+					_by(u)._impact_ring(u.position + Vector3(0, 1.0 + u.visual.position.y, 0), col, 1.8))
 
 
 ## Última Dança: a habilidade bônus do fim do Frenesi. Ela some num borrão; uma tempestade de cortes
@@ -3452,7 +3485,7 @@ func _last_dance(u: Unit) -> void:
 				return
 			# anéis que fecham em cima dela
 			var gm := Fx.mat(Color(purple.r * 2.2, purple.g * 2.2, purple.b * 2.2, 0.0), 0.0, true)
-			var gather := Fx.inst(fx_root, Fx.torus(0.9, 1.0), gm, u.position + Vector3(0, 0.25, 0))
+			var gather := _fx(u, fx_root, Fx.torus(0.9, 1.0), gm, u.position + Vector3(0, 0.25, 0))
 			gather.scale = Vector3.ONE * (4.2 - k * 0.5)
 			var tg := gather.create_tween().set_parallel(true)
 			tg.tween_property(gather, "scale", Vector3.ONE * 0.3, FINISH_WINDUP / 3.0).set_ease(Tween.EASE_IN)
@@ -3466,10 +3499,10 @@ func _last_dance(u: Unit) -> void:
 	if ended or not u.alive:
 		return
 	# ... e VAI
-	_burst(u.position, purple, 3.2)
-	_burst(u.position, Color(1, 1, 1), 2.0)
-	_impact_ring(u.position + Vector3(0, 0.2, 0), purple, 4.5)
-	_beam(u.position + Vector3(0, 1.0, 0), center, Color(1, 1, 1, 0.9), 0.18)
+	_by(u)._burst(u.position, purple, 3.2)
+	_by(u)._burst(u.position, Color(1, 1, 1), 2.0)
+	_by(u)._impact_ring(u.position + Vector3(0, 0.2, 0), purple, 4.5)
+	_by(u)._beam(u.position + Vector3(0, 1.0, 0), center, Color(1, 1, 1, 0.9), 0.18)
 	_afterimage(u, Vector3.ZERO, purple)
 	shake_t = 0.2
 	shake_amp = 0.35
@@ -3489,7 +3522,7 @@ func _last_dance(u: Unit) -> void:
 			var slash := BoxMesh.new()
 			slash.size = Vector3(0.24, 30.0 + randf() * 10.0, 0.08)
 			var sm := Fx.mat(Color(col.r * 3.4, col.g * 3.4, col.b * 3.4, 0.95), 0.0, true)
-			var mi := Fx.inst(fx_root, slash, sm, center + Vector3(randf_range(-1.2, 1.2), randf_range(-2.6, 2.6), 0.6))
+			var mi := _fx(u, fx_root, slash, sm, center + Vector3(randf_range(-1.2, 1.2), randf_range(-2.6, 2.6), 0.6))
 			mi.rotation.z = a + PI / 2.0
 			mi.scale = Vector3(1.0, 0.05, 1.0)
 			var tw := mi.create_tween().set_parallel(true)
@@ -3500,21 +3533,21 @@ func _last_dance(u: Unit) -> void:
 			var core := BoxMesh.new()
 			core.size = Vector3(0.06, slash.size.y, 0.1)
 			var core_m := Fx.mat(Color(4.0, 4.0, 4.0, 1.0), 0.0, true)
-			var ci := Fx.inst(fx_root, core, core_m, mi.position + Vector3(0, 0, 0.05))
+			var ci := _fx(u, fx_root, core, core_m, mi.position + Vector3(0, 0, 0.05))
 			ci.rotation.z = mi.rotation.z
 			var tc := ci.create_tween()
 			tc.tween_property(core_m, "albedo_color:a", 0.0, 0.5).set_delay(0.12)
 			tc.tween_callback(ci.queue_free)
-			_burst(mi.position, col, 2.2)
+			_by(u)._burst(mi.position, col, 2.2)
 			# a tela vai ficando branca a cada corte, até estourar no fim
 			hud.flash(Color(1, 1, 1), 0.1 + 0.5 * (n + 1.0) / FINISH_HITS)
 			# a silhueta dela passando
-			var ghost := Fx.inst(fx_root, Fx.capsule(0.38, 1.3), Fx.mat(Color(col.r, col.g, col.b, 0.7), 0.0, true), mi.position + dir * 13.0)
+			var ghost := _fx(u, fx_root, Fx.capsule(0.38, 1.3), Fx.mat(Color(col.r, col.g, col.b, 0.7), 0.0, true), mi.position + dir * 13.0)
 			var tg := ghost.create_tween().set_parallel(true)
 			tg.tween_property(ghost, "position", mi.position - dir * 13.0, 0.1)
 			tg.tween_property(ghost, "scale", Vector3.ONE * 0.3, 0.2)
 			tg.chain().tween_callback(ghost.queue_free)
-			_impact_ring(center + dir * randf_range(-1.5, 1.5), col, 1.6)
+			_by(u)._impact_ring(center + dir * randf_range(-1.5, 1.5), col, 1.6)
 			shake_t = 0.12
 			shake_amp = 0.22
 			boss.hit_flash()
@@ -3527,7 +3560,7 @@ func _last_dance(u: Unit) -> void:
 		u.face(boss_pos - u.position)
 		u.visual.position.y = 6.5
 		u.dagger_anim("raise", FINISH_TIME - storm - 0.4)
-		_burst(u.position + Vector3(0, 6.5, 0), Color(1, 1, 1), 2.6)
+		_by(u)._burst(u.position + Vector3(0, 6.5, 0), Color(1, 1, 1), 2.6)
 		u.visual.create_tween().tween_property(u.visual, "position:y", 0.0, FINISH_TIME - storm - 0.3).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN))
 	# o X gigante
 	get_tree().create_timer(FINISH_TIME - 0.08, false).timeout.connect(func():
@@ -3542,27 +3575,27 @@ func _last_dance(u: Unit) -> void:
 				big.size = Vector3(0.9 - layer * 0.5, 17.0, 0.1)
 				var lc: Color = [purple, Color(1, 1, 1)][layer]
 				var bm := Fx.mat(Color(lc.r * 2.4, lc.g * 2.4, lc.b * 2.4, 0.95), 0.0, true)
-				var mi := Fx.inst(fx_root, big, bm, center + Vector3(0, 0, 0.8 + layer * 0.05))
+				var mi := _fx(u, fx_root, big, bm, center + Vector3(0, 0, 0.8 + layer * 0.05))
 				mi.rotation.z = 0.78 if k == 0 else -0.78
 				mi.scale = Vector3(1.0, 0.05, 1.0)
 				var tw := mi.create_tween().set_parallel(true)
 				tw.tween_property(mi, "scale", Vector3.ONE, 0.07)
 				tw.tween_property(bm, "albedo_color:a", 0.0, 0.6).set_delay(0.15)
 				tw.chain().tween_callback(mi.queue_free)
-		_burst(center, Color(1, 1, 1), 10.0)
-		_burst(center, purple, 14.0)
+		_by(u)._burst(center, Color(1, 1, 1), 10.0)
+		_by(u)._burst(center, purple, 14.0)
 		for k in 6:
-			_impact_ring(center, [Color(1, 1, 1), purple, pink, green][k % 4], 4.0 + k * 2.4)
-		_impact_ring(u.position + Vector3(0, 0.2, 0), purple, 7.0)
+			_by(u)._impact_ring(center, [Color(1, 1, 1), purple, pink, green][k % 4], 4.0 + k * 2.4)
+		_by(u)._impact_ring(u.position + Vector3(0, 0.2, 0), purple, 7.0)
 		var pm := Fx.mat(Color(purple.r * 2.0, purple.g * 2.0, purple.b * 2.0, 0.85), 0.0, true)
-		var pillar := Fx.inst(fx_root, Fx.cyl(2.0, 2.6, 22.0), pm, center + Vector3(0, 6.0, 0))
+		var pillar := _fx(u, fx_root, Fx.cyl(2.0, 2.6, 22.0), pm, center + Vector3(0, 6.0, 0))
 		var tp := pillar.create_tween().set_parallel(true)
 		tp.tween_property(pillar, "scale", Vector3(0.05, 1.1, 0.05), 0.7).set_ease(Tween.EASE_IN)
 		tp.tween_property(pm, "albedo_color:a", 0.0, 0.7)
 		tp.chain().tween_callback(pillar.queue_free)
 		for n in 30:
 			var a := n * TAU / 30.0
-			var sp := Fx.inst(fx_root, Fx.sphere(0.18), Fx.mat([purple, pink, green][n % 3], 0.0, true), center)
+			var sp := _fx(u, fx_root, Fx.sphere(0.18), Fx.mat([purple, pink, green][n % 3], 0.0, true), center)
 			var ts := sp.create_tween().set_parallel(true)
 			ts.tween_property(sp, "position", center + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 10.0), 0.8).set_ease(Tween.EASE_OUT)
 			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.8)
@@ -3583,7 +3616,7 @@ func _last_dance(u: Unit) -> void:
 			var scar := BoxMesh.new()
 			scar.size = Vector3(0.07, 19.0, 0.06)
 			var scm := Fx.mat(Color(4.0, 4.0, 4.0, 1.0), 0.0, true)
-			var si := Fx.inst(fx_root, scar, scm, center + Vector3(0, 0, 0.9))
+			var si := _fx(u, fx_root, scar, scm, center + Vector3(0, 0, 0.9))
 			si.rotation.z = 0.78 if k == 0 else -0.78
 			var tsc := si.create_tween()
 			tsc.tween_interval(FINISH_ECHO_T)
@@ -3603,18 +3636,18 @@ func _last_dance(u: Unit) -> void:
 			for n in 9:
 				var p := center + dir * (n - 4) * 2.0 + Vector3(0, 0, 0.9)
 				get_tree().create_timer(n * 0.018, false).timeout.connect(func():
-					_burst(p, [Color(1, 1, 1), purple, pink][n % 3], 3.4)
-					_impact_ring(p, purple, 2.4))
-		_burst(center, Color(1, 1, 1), 16.0)
-		_burst(center, pink, 20.0)
+					_by(u)._burst(p, [Color(1, 1, 1), purple, pink][n % 3], 3.4)
+					_by(u)._impact_ring(p, purple, 2.4))
+		_by(u)._burst(center, Color(1, 1, 1), 16.0)
+		_by(u)._burst(center, pink, 20.0)
 		for k in 8:
-			_impact_ring(center, [Color(1, 1, 1), purple, pink, green][k % 4], 5.0 + k * 3.0)
-		_impact_ring(boss_pos + Vector3(0, 0.2, 0), purple, 12.0)
+			_by(u)._impact_ring(center, [Color(1, 1, 1), purple, pink, green][k % 4], 5.0 + k * 3.0)
+		_by(u)._impact_ring(boss_pos + Vector3(0, 0.2, 0), purple, 12.0)
 		# a boss "abre" em quatro: quatro lascas de luz voando do centro
 		for k in 4:
 			var a := PI / 4.0 + k * PI / 2.0 + PI / 4.0
 			var shard_m := Fx.mat(Color(purple.r * 2.6, purple.g * 2.6, purple.b * 2.6, 0.85), 0.0, true)
-			var shard := Fx.inst(fx_root, Fx.cyl(0.0, 2.2, 5.0), shard_m, center)
+			var shard := _fx(u, fx_root, Fx.cyl(0.0, 2.2, 5.0), shard_m, center)
 			shard.rotation.z = a - PI / 2.0
 			var tsh := shard.create_tween().set_parallel(true)
 			tsh.tween_property(shard, "position", center + Vector3(cos(a), sin(a), 0) * 7.0, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
@@ -3622,7 +3655,7 @@ func _last_dance(u: Unit) -> void:
 			tsh.chain().tween_callback(shard.queue_free)
 		for n in 44:
 			var a := randf() * TAU
-			var sp := Fx.inst(fx_root, Fx.sphere(0.2), Fx.mat([Color(3, 3, 3), purple, pink, green][n % 4], 0.0, true), center)
+			var sp := _fx(u, fx_root, Fx.sphere(0.2), Fx.mat([Color(3, 3, 3), purple, pink, green][n % 4], 0.0, true), center)
 			var ts := sp.create_tween().set_parallel(true)
 			ts.tween_property(sp, "position", center + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(5.0, 14.0), 0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
 			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.9)
@@ -3647,7 +3680,7 @@ func _wound(u: Unit) -> void:
 		var cut := BoxMesh.new()
 		cut.size = Vector3(0.12, 2.6, 0.06)
 		var cm := Fx.mat(Color(2.0, 0.25, 0.5, 0.95), 0.0, true)
-		var mi := Fx.inst(fx_root, cut, cm, at + Vector3((k - 1) * 0.6, 0, 0))
+		var mi := _fx(u, fx_root, cut, cm, at + Vector3((k - 1) * 0.6, 0, 0))
 		mi.rotation.z = -0.5
 		var tw := mi.create_tween()
 		tw.tween_interval(k * 0.06)
@@ -3668,7 +3701,7 @@ func _hurricane(u: Unit, col: Color) -> void:
 		var rad := 1.3 + k * 0.42
 		var c: Color = [col, Color(1.0, 0.3, 0.7), Color(1, 1, 1)][k % 3]
 		var rm := Fx.mat(Color(c.r * 1.3, c.g * 1.3, c.b * 1.3, 0.55), 0.0, true)
-		var ring := Fx.inst(root, Fx.torus(rad * 0.93, rad), rm, Vector3(0, h * 0.2, 0))
+		var ring := _fx(u, root, Fx.torus(rad * 0.93, rad), rm, Vector3(0, h * 0.2, 0))
 		ring.scale = Vector3.ONE * 0.2
 		ring.rotation.x = randf_range(-0.14, 0.14)
 		var tr := ring.create_tween().set_parallel(true)
@@ -3680,7 +3713,7 @@ func _hurricane(u: Unit, col: Color) -> void:
 			var a := s * TAU / 3.0 + k
 			var blade := BoxMesh.new()
 			blade.size = Vector3(0.9, 0.06, 0.2)
-			var bi := Fx.inst(ring, blade, Fx.mat(Color(1.6, 1.6, 1.8, 0.9), 0.0, true), Vector3(cos(a), 0, sin(a)) * rad)
+			var bi := _fx(u, ring, blade, Fx.mat(Color(1.6, 1.6, 1.8, 0.9), 0.0, true), Vector3(cos(a), 0, sin(a)) * rad)
 			bi.rotation.y = -a + PI / 2.0
 	var tw := root.create_tween()
 	tw.tween_property(root, "rotation:y", -TAU * 4.0, time).set_ease(Tween.EASE_OUT)
@@ -3689,7 +3722,7 @@ func _hurricane(u: Unit, col: Color) -> void:
 		get_tree().create_timer(n * time / 8.0, false).timeout.connect(func():
 			if is_instance_valid(u) and u.alive:
 				if n % 3 == 0:
-					_impact_ring(u.position + Vector3(0, 0.2, 0), col, 3.0 + n * 0.4)
+					_by(u)._impact_ring(u.position + Vector3(0, 0.2, 0), col, 3.0 + n * 0.4)
 				_afterimage(u, Vector3(cos(n * 2.4), 0, sin(n * 2.4)) * 2.0, col))
 	if u.controlled:
 		hud.edge_glow(col, 0.7)
@@ -3720,10 +3753,10 @@ func _crimson_dance(u: Unit, dmg: float) -> void:
 	for s in [-1.0, 1.0]:
 		var blade := BoxMesh.new()
 		blade.size = Vector3(1.9, 0.08, 0.32)
-		Fx.inst(rig, blade, Fx.mat(Color(2.4, 2.4, 2.6), 0.0, true), Vector3(s * 1.5, s * 0.25, 0))
+		_fx(u, rig, blade, Fx.mat(Color(2.4, 2.4, 2.6), 0.0, true), Vector3(s * 1.5, s * 0.25, 0))
 		var trail := BoxMesh.new()
 		trail.size = Vector3(2.4, 0.04, 0.9)
-		Fx.inst(rig, trail, Fx.mat(Color(col.r * 2.0, col.g * 2.0, col.b * 2.0, 0.6), 0.0, true), Vector3(s * 1.5, s * 0.25, s * 0.5))
+		_fx(u, rig, trail, Fx.mat(Color(col.r * 2.0, col.g * 2.0, col.b * 2.0, 0.6), 0.0, true), Vector3(s * 1.5, s * 0.25, s * 0.5))
 	var tr := rig.create_tween()
 	tr.tween_property(rig, "rotation:y", -TAU * 2.5, DANCE_SPIN)
 	tr.parallel().tween_property(rig, "scale", Vector3.ONE * 1.35, DANCE_SPIN)
@@ -3731,7 +3764,7 @@ func _crimson_dance(u: Unit, dmg: float) -> void:
 	# anéis de corte no chão e silhuetas em volta
 	for k in 3:
 		var ring_m := Fx.mat(Color(col.r * 2.0, col.g * 2.0, col.b * 2.0, 0.9), 0.0, true)
-		var ring := Fx.inst(fx_root, Fx.torus(0.85, 1.0), ring_m, u.position + Vector3(0, 0.6 + k * 0.5, 0))
+		var ring := _fx(u, fx_root, Fx.torus(0.85, 1.0), ring_m, u.position + Vector3(0, 0.6 + k * 0.5, 0))
 		ring.scale = Vector3.ONE * 0.4
 		var tg := ring.create_tween().set_parallel(true)
 		tg.tween_property(ring, "scale", Vector3.ONE * (3.4 + k * 0.5), DANCE_SPIN).set_delay(k * 0.07).set_ease(Tween.EASE_OUT)
@@ -3742,7 +3775,7 @@ func _crimson_dance(u: Unit, dmg: float) -> void:
 		get_tree().create_timer(n * DANCE_SPIN / 6.0, false).timeout.connect(func():
 			if is_instance_valid(u) and u.alive:
 				_afterimage(u, Vector3(cos(a), 0, sin(a)) * 1.5, col))
-	_burst(u.position, col, 3.8)
+	_by(u)._burst(u.position, col, 3.8)
 	shake_t = 0.2
 	shake_amp = 0.2
 	if _in_range(u):
@@ -3791,7 +3824,7 @@ func _tick_bullets(u: Unit, delta: float) -> void:
 		u.bullet_t = 0.0
 		u.bullets.append(randi() % BULLETS.size())
 		if u.controlled:
-			_burst(u.position + Vector3(0, 2.2, 0), BULLETS[u.bullets[u.bullets.size() - 1]]["col"], 0.9)
+			_by(u)._burst(u.position + Vector3(0, 2.2, 0), BULLETS[u.bullets[u.bullets.size() - 1]]["col"], 0.9)
 
 
 ## Bala saindo da pistola até a boss: uma cabeça brilhante esticada na direção do tiro, um rastro
@@ -3804,27 +3837,28 @@ func _shot_fx(u: Unit, col: Color, big: bool, size := 1.0) -> void:
 	var to := _bp(Vector3(randf_range(-0.8, 0.8), randf_range(2.5, 4.0), -11.0))
 	# clarão na boca da arma
 	var muzzle_m := Fx.mat(Color(col.r, col.g, col.b, 0.9).lightened(0.4), 8.0, true)
-	var muzzle := Fx.inst(fx_root, Fx.sphere(0.3 * size), muzzle_m, from)
+	var muzzle := _fx(u, fx_root, Fx.sphere(0.3 * size), muzzle_m, from)
 	var tm := muzzle.create_tween().set_parallel(true)
 	tm.tween_property(muzzle, "scale", Vector3.ONE * 0.2, 0.12)
 	tm.tween_property(muzzle_m, "albedo_color:a", 0.0, 0.12)
 	tm.chain().tween_callback(muzzle.queue_free)
 	# a bala: cápsula esticada, virada pro alvo
-	var head := Fx.inst(fx_root, Fx.capsule(0.13 * size, 0.9 * size), Fx.mat(col.lightened(0.25), 7.0, true), from)
+	var head := _fx(u, fx_root, Fx.capsule(0.13 * size, 0.9 * size), Fx.mat(col.lightened(0.25), 7.0, true), from)
 	head.look_at(to, Vector3.UP)
 	head.rotate_object_local(Vector3.RIGHT, PI / 2.0)
 	var tw := head.create_tween()
 	tw.tween_property(head, "position", to, 0.09)
 	tw.tween_callback(head.queue_free)
-	tw.tween_callback(_impact_ring.bind(to, col, 1.4 * size))
-	tw.tween_callback(_burst.bind(to, col, 1.3 * size))
-	_beam(u.position + Vector3(0, 0.25, 0), to - Vector3(0, 1.0, 0), Color(col.r, col.g, col.b, 0.75), 0.22)
+	tw.tween_callback(_by_call.bind(u, &"_impact_ring", [to, col, 1.4 * size]))
+	tw.tween_callback(_by_call.bind(u, &"_burst", [to, col, 1.3 * size]))
+	_by(u)._beam(u.position + Vector3(0, 0.25, 0), to - Vector3(0, 1.0, 0), Color(col.r, col.g, col.b, 0.75), 0.22)
 
 
 ## Anel que abre de frente pra arena no ponto do impacto.
 func _impact_ring(at: Vector3, col: Color, radius: float) -> void:
+	var by := _take_by()
 	var m := Fx.mat(Color(col.r, col.g, col.b, 0.95).lightened(0.3), 6.0, true)
-	var ring := Fx.inst(fx_root, Fx.torus(0.8, 1.0), m, at)
+	var ring := _fx(by, fx_root, Fx.torus(0.8, 1.0), m, at)
 	ring.rotation.x = PI / 2.0
 	ring.scale = Vector3.ONE * 0.2
 	var tw := ring.create_tween().set_parallel(true)
@@ -3843,7 +3877,7 @@ func _maga_basic_fx(u: Unit, slot: int) -> void:
 	var hit := _bp(Vector3(0, 3.2, -11.0))
 	var through := from + (hit - from).normalized() * (from.distance_to(hit) + 9.0)
 	var lance_m := Fx.mat(Color(0.8, 0.98, 1.0), 9.0, true)
-	var lance := Fx.inst(fx_root, Fx.capsule(0.2, 3.4), lance_m, from)
+	var lance := _fx(u, fx_root, Fx.capsule(0.2, 3.4), lance_m, from)
 	lance.look_at(through, Vector3.UP)
 	lance.rotate_object_local(Vector3.RIGHT, PI / 2.0)
 	var tw := lance.create_tween()
@@ -3853,11 +3887,11 @@ func _maga_basic_fx(u: Unit, slot: int) -> void:
 	var a := from - Vector3(0, 1.0, 0)
 	var bb := through - Vector3(0, 1.0, 0)
 	for k in 2:
-		_beam(a + Vector3(0, k * 0.05, 0), bb, Color(0.6, 0.95, 1.0, 0.95 - k * 0.3), 0.3 + k * 0.2)
+		_by(u)._beam(a + Vector3(0, k * 0.05, 0), bb, Color(0.6, 0.95, 1.0, 0.95 - k * 0.3), 0.3 + k * 0.2)
 	get_tree().create_timer(0.07, false).timeout.connect(func():
-		_impact_ring(hit, AIM_COL, 3.2)
-		_impact_ring(hit + Vector3(0, 0, -1.5), Color(1, 1, 1), 2.2)
-		_burst(hit, AIM_COL, 2.6)
+		_by(u)._impact_ring(hit, AIM_COL, 3.2)
+		_by(u)._impact_ring(hit + Vector3(0, 0, -1.5), Color(1, 1, 1), 2.2)
+		_by(u)._burst(hit, AIM_COL, 2.6)
 		boss.hit_flash())
 
 
@@ -3874,15 +3908,15 @@ func _aim_mark(u: Unit) -> void:
 	aim_node.position = _bp(Vector3(0, 5.2, -11.0))
 	fx_root.add_child(aim_node)
 	for spec in [[2.3, 2.5], [1.5, 1.62]]:
-		var ring := Fx.inst(aim_node, Fx.torus(spec[0], spec[1]), Fx.mat(AIM_COL, 6.0, true))
+		var ring := _fx(u, aim_node, Fx.torus(spec[0], spec[1]), Fx.mat(AIM_COL, 6.0, true))
 		ring.rotation.x = PI / 2.0
 	for n in 4:
 		# os quatro traços da mira
 		var tick := BoxMesh.new()
 		tick.size = Vector3(0.14, 1.1, 0.08)
-		var t := Fx.inst(aim_node, tick, Fx.mat(Color(1, 1, 1), 7.0, true), Vector3(0, 2.4, 0).rotated(Vector3(0, 0, 1), n * PI / 2.0))
+		var t := _fx(u, aim_node, tick, Fx.mat(Color(1, 1, 1), 7.0, true), Vector3(0, 2.4, 0).rotated(Vector3(0, 0, 1), n * PI / 2.0))
 		t.rotation.z = n * PI / 2.0
-	Fx.inst(aim_node, Fx.sphere(0.2), Fx.mat(Color(1, 1, 1), 8.0, true))
+	_fx(u, aim_node, Fx.sphere(0.2), Fx.mat(Color(1, 1, 1), 8.0, true))
 	# entra grande e fecha na boss
 	aim_node.scale = Vector3.ONE * 2.4
 	aim_node.create_tween().tween_property(aim_node, "scale", Vector3.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -3917,21 +3951,21 @@ func _use_aim(u: Unit) -> float:
 	var at := _bp(Vector3(0, 5.2, -11.0))
 	_aim_clear()
 	# ruptura arcana: a mira se parte em estilhaços e um clarão
-	_impact_ring(at, Color(1, 1, 1), 5.0)
-	_impact_ring(at, AIM_COL, 3.4)
-	_burst(at, AIM_COL, 4.2)
+	_by(u)._impact_ring(at, Color(1, 1, 1), 5.0)
+	_by(u)._impact_ring(at, AIM_COL, 3.4)
+	_by(u)._burst(at, AIM_COL, 4.2)
 	for n in 8:
 		var a := n * TAU / 8.0
 		var shard := BoxMesh.new()
 		shard.size = Vector3(0.12, 0.9, 0.12)
-		var mi := Fx.inst(fx_root, shard, Fx.mat(Color(1, 1, 1), 8.0, true), at)
+		var mi := _fx(u, fx_root, shard, Fx.mat(Color(1, 1, 1), 8.0, true), at)
 		mi.rotation.z = a
 		var tw := mi.create_tween().set_parallel(true)
 		tw.tween_property(mi, "position", at + Vector3(-sin(a), cos(a), 0) * 3.4, 0.28).set_ease(Tween.EASE_OUT)
 		tw.tween_property(mi, "scale", Vector3.ONE * 0.1, 0.28)
 		tw.chain().tween_callback(mi.queue_free)
 	boss.hit_flash()
-	_popup(int(AIM_BONUS), AIM_COL, 54, at + Vector3(0, 1.8, 0), "RUPTURA +")
+	_by(u)._popup(int(AIM_BONUS), AIM_COL, 54, at + Vector3(0, 1.8, 0), "RUPTURA +")
 	if u.controlled:
 		hud.toast("RUPTURA ARCANA", 0.8)
 	return AIM_BONUS
@@ -3962,10 +3996,10 @@ func _rainbow(u: Unit) -> void:
 		1: u.ward_t = BULLET_BUFF
 		2:
 			u.hp = minf(u.max_hp, u.hp + 20.0)
-			_popup(20, Color(0.5, 1.0, 0.65), 48, u.position + Vector3(0, 2.6, 0), "+")
+			_by(u)._popup(20, Color(0.5, 1.0, 0.65), 48, u.position + Vector3(0, 2.6, 0), "+")
 		3: add_dot("veneno", "Bala Venenosa", col, 8.0, 5.0, u)
 		4: u.dash_next = true
-	_burst(u.position + Vector3(0, 1.0, 0), col, 1.3)
+	_by(u)._burst(u.position + Vector3(0, 1.0, 0), col, 1.3)
 
 
 ## Ricochete Prismático. Normal: um tiro que bate na boss e ricocheteia uma vez nela mesma (não volta).
@@ -3976,7 +4010,7 @@ func _ricochet(u: Unit) -> void:
 	u.kick(1.2)
 	if fairy_t > 0.0:
 		# com a Fada Astral em campo, a bala fica ricocheteando entre a boss e ela, de qualquer distância
-		_rico_leg(u.position + Vector3(0, 1.25, 0), _bp(Vector3(0, 3.0, -11.5)))
+		_by(u)._rico_leg(u.position + Vector3(0, 1.25, 0), _bp(Vector3(0, 3.0, -11.5)))
 		u.ricochet_t = RICO_TIME
 		u.ricochet_tick = 0.16
 		u.ricochet_out = true
@@ -3987,7 +4021,7 @@ func _ricochet(u: Unit) -> void:
 	u.set_meta("rico_fairy", false)
 	if u.salvo_t <= 0.0 or u.position.distance_to(boss_pos) > MELEE_RANGE:
 		var hit := _bp(Vector3(randf_range(-0.6, 0.6), 2.6, -11.0))
-		_rico_leg(u.position + Vector3(0, 1.25, 0), hit)
+		_by(u)._rico_leg(u.position + Vector3(0, 1.25, 0), hit)
 		get_tree().create_timer(0.16, false).timeout.connect(_rico_leg.bind(hit, hit + Vector3(2.4, 2.2, 0.5)))
 		_damage_boss(u, RICO_DMG * 2.5, true, false)
 		return
@@ -4000,15 +4034,16 @@ func _ricochet(u: Unit) -> void:
 
 ## Um trecho do ricochete: prisma brilhante viajando de `from` a `to`, com rastro e faísca na batida.
 func _rico_leg(from: Vector3, to: Vector3) -> void:
+	var by := _take_by()
 	var col: Color = RAINBOW[randi() % RAINBOW.size()].lightened(0.35)
-	var prism := Fx.inst(fx_root, Fx.sphere(0.22), Fx.mat(Color(1, 1, 1), 8.0, true), from)
+	var prism := _fx(by, fx_root, Fx.sphere(0.22), Fx.mat(Color(1, 1, 1), 8.0, true), from)
 	prism.scale = Vector3(0.8, 0.8, 1.6)
 	var tw := prism.create_tween()
 	tw.tween_property(prism, "position", to, 0.15)
 	tw.tween_callback(prism.queue_free)
-	tw.tween_callback(_impact_ring.bind(to, col, 1.5))
-	tw.tween_callback(_burst.bind(to, col, 1.1))
-	_beam(from - Vector3(0, 1.0, 0), to - Vector3(0, 1.0, 0), Color(col.r, col.g, col.b, 0.9), 0.3)
+	tw.tween_callback(_by_call.bind(by, &"_impact_ring", [to, col, 1.5]))
+	tw.tween_callback(_by_call.bind(by, &"_burst", [to, col, 1.1]))
+	_by(by)._beam(from - Vector3(0, 1.0, 0), to - Vector3(0, 1.0, 0), Color(col.r, col.g, col.b, 0.9), 0.3)
 
 
 func _tick_ricochet(u: Unit, delta: float) -> void:
@@ -4025,10 +4060,10 @@ func _tick_ricochet(u: Unit, delta: float) -> void:
 			u.ricochet_t = 0.0  # a fada foi embora: acabou o vai e volta
 			return
 		if u.ricochet_out:
-			_rico_leg(_bp(FAIRY_AT), boss_at)
+			_by(u)._rico_leg(_bp(FAIRY_AT), boss_at)
 			_damage_boss(u, RICO_DMG, true, false)
 		else:
-			_rico_leg(boss_at, _bp(FAIRY_AT))
+			_by(u)._rico_leg(boss_at, _bp(FAIRY_AT))
 			_fairy_heal()
 		u.ricochet_out = not u.ricochet_out
 		return
@@ -4037,10 +4072,10 @@ func _tick_ricochet(u: Unit, delta: float) -> void:
 		return
 	var me := u.position + Vector3(0, 1.2, 0)
 	if u.ricochet_out:
-		_rico_leg(me, boss_at)
+		_by(u)._rico_leg(me, boss_at)
 		_damage_boss(u, RICO_DMG, true, false)
 	else:
-		_rico_leg(boss_at, me)
+		_by(u)._rico_leg(boss_at, me)
 		var room := u.max_hp - u.hp
 		u.hp = minf(u.max_hp, u.hp + RICO_HEAL)
 		if room < RICO_HEAL:
@@ -4073,7 +4108,7 @@ func _salvo(u: Unit) -> void:
 	u.salvo_t = SHIELD_TIME
 	# o escudo aparecendo: uma bolha que fecha em volta dela
 	var bub_m := Fx.mat(Color(0.45, 0.9, 1.0, 0.45), 4.0, true)
-	var bub := Fx.inst(u, Fx.sphere(1.0), bub_m, Vector3(0, 1.0, 0))
+	var bub := _fx(u, u, Fx.sphere(1.0), bub_m, Vector3(0, 1.0, 0))
 	bub.scale = Vector3.ONE * 2.6
 	var tb := bub.create_tween().set_parallel(true)
 	tb.tween_property(bub, "scale", Vector3.ONE * 1.25, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -4097,8 +4132,8 @@ func _fairy_spawn(u: Unit) -> void:
 	fairy_node = Node3D.new()
 	fx_root.add_child(fairy_node)
 	fairy_node.position = u.position + Vector3(0, 1.6, 0)
-	Fx.inst(fairy_node, Fx.sphere(0.26), Fx.mat(Color(1, 1, 1), 7.0, true))
-	Fx.inst(fairy_node, Fx.sphere(0.42), Fx.mat(Color(FAIRY_COL.r, FAIRY_COL.g, FAIRY_COL.b, 0.45), 4.0, true))
+	_fx(u, fairy_node, Fx.sphere(0.26), Fx.mat(Color(1, 1, 1), 7.0, true))
+	_fx(u, fairy_node, Fx.sphere(0.42), Fx.mat(Color(FAIRY_COL.r, FAIRY_COL.g, FAIRY_COL.b, 0.45), 4.0, true))
 	for s in [-1.0, 1.0]:
 		# asinhas: batem em _tick_fairy
 		var wing := BoxMesh.new()
@@ -4106,17 +4141,17 @@ func _fairy_spawn(u: Unit) -> void:
 		var pivot := Node3D.new()
 		pivot.name = "WingL" if s < 0.0 else "WingR"
 		fairy_node.add_child(pivot)
-		Fx.inst(pivot, wing, Fx.mat(Color(0.7, 0.95, 1.0, 0.75), 4.0, true), Vector3(s * 0.38, 0.14, 0.05))
+		_fx(u, pivot, wing, Fx.mat(Color(0.7, 0.95, 1.0, 0.75), 4.0, true), Vector3(s * 0.38, 0.14, 0.05))
 	# varinha com uma estrela na ponta
 	var wand := Node3D.new()
 	wand.name = "Wand"
 	wand.position = Vector3(-0.3, -0.05, -0.15)
 	wand.rotation.z = 0.6
 	fairy_node.add_child(wand)
-	Fx.inst(wand, Fx.cyl(0.025, 0.025, 0.5), Fx.mat(Color(1.0, 0.95, 0.6), 3.0, true), Vector3(0, 0.25, 0))
-	Fx.inst(wand, Fx.sphere(0.09), Fx.mat(Color(1.0, 0.9, 0.35), 8.0, true), Vector3(0, 0.52, 0))
+	_fx(u, wand, Fx.cyl(0.025, 0.025, 0.5), Fx.mat(Color(1.0, 0.95, 0.6), 3.0, true), Vector3(0, 0.25, 0))
+	_fx(u, wand, Fx.sphere(0.09), Fx.mat(Color(1.0, 0.9, 0.35), 8.0, true), Vector3(0, 0.52, 0))
 	fairy_node.create_tween().tween_property(fairy_node, "position", _bp(FAIRY_AT), 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_burst(u.position + Vector3(0, 1.6, 0), FAIRY_COL, 2.4)
+	_by(u)._burst(u.position + Vector3(0, 1.6, 0), FAIRY_COL, 2.4)
 
 
 func _tick_fairy(delta: float) -> void:
@@ -4141,11 +4176,11 @@ func _tick_fairy(delta: float) -> void:
 		# o tiro da varinha (só o desenho: o dano é o DoT)
 		var from: Vector3 = fairy_node.position + Vector3(-0.5, 0.3, -0.1)
 		var to := _bp(Vector3(randf_range(-0.8, 0.8), randf_range(4.5, 7.5), -11.4))
-		var bolt := Fx.inst(fx_root, Fx.sphere(0.11), Fx.mat(Color(1.0, 0.9, 0.5), 8.0, true), from)
+		var bolt := _fx(fairy_owner, fx_root, Fx.sphere(0.11), Fx.mat(Color(1.0, 0.9, 0.5), 8.0, true), from)
 		var tw := bolt.create_tween()
 		tw.tween_property(bolt, "position", to, 0.16)
 		tw.tween_callback(bolt.queue_free)
-		tw.tween_callback(_impact_ring.bind(to, FAIRY_COL, 0.8))
+		tw.tween_callback(_by_call.bind(fairy_owner, &"_impact_ring", [to, FAIRY_COL, 0.8]))
 		var wand: Node3D = fairy_node.get_node("Wand")
 		wand.rotation.z = 1.3
 		wand.create_tween().tween_property(wand, "rotation:z", 0.6, 0.25)
@@ -4155,7 +4190,7 @@ func _fairy_clear() -> void:
 	fairy_t = 0.0
 	remove_dot("fada")
 	if fairy_node != null and is_instance_valid(fairy_node):
-		_burst(fairy_node.position, FAIRY_COL, 1.6)
+		_by(fairy_owner)._burst(fairy_node.position, FAIRY_COL, 1.6)
 		fairy_node.queue_free()
 	fairy_node = null
 	fairy_owner = null
@@ -4164,8 +4199,8 @@ func _fairy_clear() -> void:
 ## A fada foi atingida por uma bala do Ricochete: ela entrega a cura pra party toda, em área.
 ## FAIRY_HEAL da vida máxima de cada um; o que passar da vida cheia vira escudo.
 func _fairy_heal() -> void:
-	_burst(_bp(FAIRY_AT), Color(0.6, 1.0, 0.75), 2.6)
-	_impact_ring(_bp(FAIRY_AT), Color(0.6, 1.0, 0.75), 2.2)
+	_by(fairy_owner)._burst(_bp(FAIRY_AT), Color(0.6, 1.0, 0.75), 2.6)
+	_by(fairy_owner)._impact_ring(_bp(FAIRY_AT), Color(0.6, 1.0, 0.75), 2.2)
 	for o in units:
 		if not o.alive:
 			continue
@@ -4175,8 +4210,8 @@ func _fairy_heal() -> void:
 		if room < amount:
 			o.shield_hp += amount - room
 			o.shield_t = maxf(o.shield_t, SHIELD_TIME)
-		_beam(_bp(FAIRY_AT) - Vector3(0, 1.0, 0), o.position, Color(0.6, 1.0, 0.75, 0.6), 0.3)
-		_popup(int(round(amount)), Color(0.5, 1.0, 0.65), 34, o.position + Vector3(0, 2.6, 0), "+")
+		_by(fairy_owner)._beam(_bp(FAIRY_AT) - Vector3(0, 1.0, 0), o.position, Color(0.6, 1.0, 0.75, 0.6), 0.3)
+		_by(fairy_owner)._popup(int(round(amount)), Color(0.5, 1.0, 0.65), 34, o.position + Vector3(0, 2.6, 0), "+")
 
 
 # ---- Canhão Estelar
@@ -4195,20 +4230,20 @@ func _cannon_charge(u: Unit, time: float) -> void:
 	u.set_meta("cannon", rig)
 	var super_shot := u.bullets.size() == BULLET_MAX
 	var metal := Fx.mat(Color(0.85, 0.88, 1.0, 0.92), 1.2)
-	var barrel := Fx.inst(rig, Fx.cyl(0.62, 0.48, 3.4), metal, Vector3(0, 0, -1.9))
+	var barrel := _fx(u, rig, Fx.cyl(0.62, 0.48, 3.4), metal, Vector3(0, 0, -1.9))
 	barrel.rotation.x = PI / 2.0
 	barrel.scale = Vector3(0.05, 0.05, 0.05)
 	barrel.create_tween().tween_property(barrel, "scale", Vector3.ONE * (1.25 if super_shot else 1.0), time * 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	for n in 3:
 		var col: Color = RAINBOW[(n * 2) % RAINBOW.size()] if super_shot else u.color.lightened(0.3)
-		var ring := Fx.inst(rig, Fx.torus(0.78, 0.95), Fx.mat(col, 6.0, true), Vector3(0, 0, -0.9 - n * 1.1))
+		var ring := _fx(u, rig, Fx.torus(0.78, 0.95), Fx.mat(col, 6.0, true), Vector3(0, 0, -0.9 - n * 1.1))
 		ring.rotation.x = PI / 2.0
 		ring.scale = Vector3.ZERO
 		var tr := ring.create_tween()
 		tr.tween_interval(time * (0.25 + n * 0.18))
 		tr.tween_property(ring, "scale", Vector3.ONE * (1.3 if super_shot else 1.0), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	var charge_m := Fx.mat(Color(1.0, 0.95, 0.7, 0.9), 9.0, true)
-	var charge := Fx.inst(rig, Fx.sphere(0.5), charge_m, Vector3(0, 0, -3.8))
+	var charge := _fx(u, rig, Fx.sphere(0.5), charge_m, Vector3(0, 0, -3.8))
 	charge.scale = Vector3.ONE * 0.1
 	charge.create_tween().tween_property(charge, "scale", Vector3.ONE * (2.4 if super_shot else 1.5), time).set_ease(Tween.EASE_IN)
 	if super_shot:
@@ -4218,7 +4253,7 @@ func _cannon_charge(u: Unit, time: float) -> void:
 		rig.add_child(orbit)
 		for n in u.bullets.size():
 			var a := n * TAU / u.bullets.size()
-			Fx.inst(orbit, Fx.sphere(0.2), Fx.mat(BULLETS[u.bullets[n]]["col"], 7.0, true), Vector3(cos(a), sin(a), 0) * 1.5)
+			_fx(u, orbit, Fx.sphere(0.2), Fx.mat(BULLETS[u.bullets[n]]["col"], 7.0, true), Vector3(cos(a), sin(a), 0) * 1.5)
 		orbit.create_tween().tween_property(orbit, "rotation:z", TAU * 2.0, time).set_ease(Tween.EASE_IN)
 		orbit.create_tween().tween_property(orbit, "scale", Vector3.ONE * 0.35, time).set_ease(Tween.EASE_IN)
 		if u.controlled:
@@ -4260,10 +4295,10 @@ func _cannon(u: Unit) -> void:
 	var from := u.position + Vector3(0, 1.7, 0)
 	var hit := _bp(Vector3(0, 4.0, -11.5))
 	# feixe grosso, branco com a cor dela em volta
-	_cannon_beam(from, hit, [Color(1, 1, 1), u.color.lightened(0.3)], 0.55, 0.45)
-	_impact_ring(hit, u.color.lightened(0.4), 6.0 + loaded * 0.5)
-	_impact_ring(hit, Color(1, 1, 1), 4.0)
-	_burst(hit, u.color.lightened(0.4), 6.0 + loaded)
+	_by(u)._cannon_beam(from, hit, [Color(1, 1, 1), u.color.lightened(0.3)], 0.55, 0.45)
+	_by(u)._impact_ring(hit, u.color.lightened(0.4), 6.0 + loaded * 0.5)
+	_by(u)._impact_ring(hit, Color(1, 1, 1), 4.0)
+	_by(u)._burst(hit, u.color.lightened(0.4), 6.0 + loaded)
 	hud.flash(Color(1.0, 0.9, 0.6), 0.28)
 	shake_t = 0.35
 	shake_amp = 0.35
@@ -4280,11 +4315,12 @@ func _cannon(u: Unit) -> void:
 
 ## Feixe do canhão: cilindros concêntricos do ponto de saída até o alvo, que afinam e apagam.
 func _cannon_beam(from: Vector3, to: Vector3, cols: Array, radius: float, time: float) -> void:
+	var by := _take_by()
 	var length := from.distance_to(to)
 	for k in cols.size():
 		var c: Color = cols[k]
 		var m := Fx.mat(Color(c.r, c.g, c.b, 0.95 - k * 0.3), 9.0 - k * 3.0, true)
-		var beam := Fx.inst(fx_root, Fx.cyl(radius * (1.0 + k * 0.7), radius * (1.0 + k * 0.7), length), m, (from + to) * 0.5)
+		var beam := _fx(by, fx_root, Fx.cyl(radius * (1.0 + k * 0.7), radius * (1.0 + k * 0.7), length), m, (from + to) * 0.5)
 		beam.look_at(to, Vector3.UP)
 		beam.rotate_object_local(Vector3.RIGHT, PI / 2.0)
 		var tw := beam.create_tween().set_parallel(true)
@@ -4313,18 +4349,18 @@ func _cannon_super(u: Unit, total: float, rig: Node3D) -> void:
 	beam.look_at(hit, Vector3.UP)
 	# miolo branco
 	var core_m := Fx.mat(Color(1, 1, 1, 0.98), 12.0, true)
-	var core := Fx.inst(beam, Fx.cyl(0.55, 0.55, length), core_m, Vector3(0, 0, -length * 0.5))
+	var core := _fx(u, beam, Fx.cyl(0.55, 0.55, length), core_m, Vector3(0, 0, -length * 0.5))
 	core.rotation.x = PI / 2.0
 	# sete feixes do arco-íris em volta, girando
 	var spin := Node3D.new()
 	beam.add_child(spin)
 	for n in RAINBOW.size():
 		var a := n * TAU / RAINBOW.size()
-		var strand := Fx.inst(spin, Fx.cyl(0.34, 0.34, length), Fx.mat(RAINBOW[n], 8.0, true), Vector3(cos(a) * 0.95, sin(a) * 0.95, -length * 0.5))
+		var strand := _fx(u, spin, Fx.cyl(0.34, 0.34, length), Fx.mat(RAINBOW[n], 8.0, true), Vector3(cos(a) * 0.95, sin(a) * 0.95, -length * 0.5))
 		strand.rotation.x = PI / 2.0
 	spin.create_tween().tween_property(spin, "rotation:z", TAU * 3.0, CANNON_SUPER_TIME)
 	# bainha escura em volta: o espaço "rasgado" pelo disparo
-	var tear := Fx.inst(beam, Fx.cyl(1.9, 1.9, length), Fx.mat(Color(0.12, 0.0, 0.25, 0.45), 0.0, true), Vector3(0, 0, -length * 0.5))
+	var tear := _fx(u, beam, Fx.cyl(1.9, 1.9, length), Fx.mat(Color(0.12, 0.0, 0.25, 0.45), 0.0, true), Vector3(0, 0, -length * 0.5))
 	tear.rotation.x = PI / 2.0
 	# o feixe abre, pulsa e fecha
 	beam.scale = Vector3(0.1, 0.1, 1.0)
@@ -4344,8 +4380,8 @@ func _cannon_super(u: Unit, total: float, rig: Node3D) -> void:
 			return
 		# fecho: explosão arco-íris e o recuo que ela vinha segurando
 		for n in RAINBOW.size():
-			_impact_ring(hit, RAINBOW[n], 4.0 + n * 1.3)
-		_burst(hit, Color(1, 1, 1), 12.0)
+			_by(u)._impact_ring(hit, RAINBOW[n], 4.0 + n * 1.3)
+		_by(u)._burst(hit, Color(1, 1, 1), 12.0)
 		hud.flash(Color(1, 1, 1), 0.4)
 		shake_t = 0.5
 		shake_amp = 0.6
@@ -4368,7 +4404,7 @@ func _cannon_super_tick(u: Unit, amount: float, n: int, from: Vector3, hit: Vect
 	var col: Color = RAINBOW[n % RAINBOW.size()]
 	# anel de choque que nasce na boca do canhão e corre até a boss, crescendo
 	var m := Fx.mat(Color(col.r, col.g, col.b, 0.95).lightened(0.2), 7.0, true)
-	var ring := Fx.inst(fx_root, Fx.torus(0.85, 1.0), m, from)
+	var ring := _fx(u, fx_root, Fx.torus(0.85, 1.0), m, from)
 	ring.look_at(hit, Vector3.UP)
 	ring.rotate_object_local(Vector3.RIGHT, PI / 2.0)
 	ring.scale = Vector3.ONE * 1.4
@@ -4377,13 +4413,13 @@ func _cannon_super_tick(u: Unit, amount: float, n: int, from: Vector3, hit: Vect
 	tw.tween_property(ring, "scale", Vector3.ONE * 4.2, 0.3)
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.3).set_delay(0.12)
 	tw.chain().tween_callback(ring.queue_free)
-	_impact_ring(hit, col, 5.0)
-	_burst(hit + Vector3(randf_range(-2.5, 2.5), randf_range(-1.5, 2.5), 0), col, 3.4)
+	_by(u)._impact_ring(hit, col, 5.0)
+	_by(u)._burst(hit + Vector3(randf_range(-2.5, 2.5), randf_range(-1.5, 2.5), 0), col, 3.4)
 	# estilhaços de luz saindo do feixe
 	for k in 3:
 		var along := from.lerp(hit, randf_range(0.15, 0.9))
 		var out := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0).normalized() * randf_range(1.6, 3.2)
-		var sp := Fx.inst(fx_root, Fx.sphere(0.14), Fx.mat(RAINBOW[(n + k) % RAINBOW.size()], 8.0, true), along)
+		var sp := _fx(u, fx_root, Fx.sphere(0.14), Fx.mat(RAINBOW[(n + k) % RAINBOW.size()], 8.0, true), along)
 		var ts := sp.create_tween().set_parallel(true)
 		ts.tween_property(sp, "position", along + out, 0.35).set_ease(Tween.EASE_OUT)
 		ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.35)
@@ -4411,12 +4447,12 @@ func _ember_fx(u: Unit) -> void:
 	var star := Node3D.new()
 	fx_root.add_child(star)
 	star.position = from
-	Fx.inst(star, Fx.sphere(0.16), Fx.mat(Color(1, 1, 1), 9.0, true))
+	_fx(u, star, Fx.sphere(0.16), Fx.mat(Color(1, 1, 1), 9.0, true))
 	for k in 3:
 		# três lâminas cruzadas: o brilho de estrela
 		var spike := BoxMesh.new()
 		spike.size = Vector3(0.07, 0.62, 0.07)
-		var s := Fx.inst(star, spike, Fx.mat(FIRE, 7.0, true))
+		var s := _fx(u, star, spike, Fx.mat(FIRE, 7.0, true))
 		s.rotation = Vector3(k * PI / 3.0, 0, k * PI / 3.0)
 	var tw := star.create_tween()
 	tw.tween_property(star, "position", to, 0.1)
@@ -4425,18 +4461,18 @@ func _ember_fx(u: Unit) -> void:
 	tw.tween_callback(func():
 		# flash branco curto no impacto
 		var m := Fx.mat(Color(1, 1, 1, 0.95), 10.0, true)
-		var fl := Fx.inst(fx_root, Fx.sphere(0.5), m, to)
+		var fl := _fx(u, fx_root, Fx.sphere(0.5), m, to)
 		var tf := fl.create_tween().set_parallel(true)
 		tf.tween_property(fl, "scale", Vector3.ONE * 1.8, 0.12)
 		tf.tween_property(m, "albedo_color:a", 0.0, 0.12)
 		tf.chain().tween_callback(fl.queue_free)
-		_impact_ring(to, FIRE_CYAN, 1.1))
-	_beam(u.position + Vector3(0, 0.3, 0), to - Vector3(0, 1.0, 0), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.8), 0.25)
+		_by(u)._impact_ring(to, FIRE_CYAN, 1.1))
+	_by(u)._beam(u.position + Vector3(0, 0.3, 0), to - Vector3(0, 1.0, 0), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.8), 0.25)
 	# partículas ciano soltas pelo caminho
 	for k in 3:
 		var at := from.lerp(to, 0.25 + k * 0.25)
 		var pm := Fx.mat(FIRE_CYAN, 6.0, true)
-		var p := Fx.inst(fx_root, Fx.sphere(0.07), pm, at)
+		var p := _fx(u, fx_root, Fx.sphere(0.07), pm, at)
 		var tp := p.create_tween().set_parallel(true)
 		tp.tween_property(p, "position", at + Vector3(randf_range(-0.4, 0.4), randf_range(0.2, 0.7), 0), 0.35)
 		tp.tween_property(p, "scale", Vector3.ONE * 0.1, 0.35)
@@ -4449,6 +4485,7 @@ func _ember_fx(u: Unit) -> void:
 ## _tick_zenith deixa tudo mais luminoso conforme a marca envelhece: dá pra ver quando está no fim,
 ## que é a hora da Lança Serafim.
 func _zenith_halo() -> void:
+	var by := _take_by()
 	_zenith_clear()
 	zenith_node = Node3D.new()
 	# na altura da cabeça da boss e um pouco à frente: acima disso a barra de vida dela esconde
@@ -4457,11 +4494,11 @@ func _zenith_halo() -> void:
 	fx_root.add_child(zenith_node)
 	zenith_mats = []
 	var halo_m := Fx.mat(FIRE, 3.0, true)
-	Fx.inst(zenith_node, Fx.torus(1.9, 2.2), halo_m)
+	_fx(by, zenith_node, Fx.torus(1.9, 2.2), halo_m)
 	zenith_mats.append(halo_m)
 	var circle_m := Fx.mat(Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.6), 2.0, true)
-	Fx.inst(zenith_node, Fx.torus(2.9, 2.98), circle_m)
-	Fx.inst(zenith_node, Fx.torus(1.2, 1.26), circle_m)
+	_fx(by, zenith_node, Fx.torus(2.9, 2.98), circle_m)
+	_fx(by, zenith_node, Fx.torus(1.2, 1.26), circle_m)
 	zenith_mats.append(circle_m)
 	var sym_m := Fx.mat(FIRE_MINT, 3.0, true)
 	for n in 6:
@@ -4474,14 +4511,14 @@ func _zenith_halo() -> void:
 		for size in [Vector3(0.1, 0.02, 0.5), Vector3(0.34, 0.02, 0.1)]:
 			var bm := BoxMesh.new()
 			bm.size = size
-			Fx.inst(holder, bm, sym_m)
+			_fx(by, holder, bm, sym_m)
 	zenith_mats.append(sym_m)
-	var core := Fx.inst(zenith_node, Fx.sphere(0.4), Fx.mat(Color(2.2, 2.2, 2.2, 0.9), 0.0, true))
+	var core := _fx(by, zenith_node, Fx.sphere(0.4), Fx.mat(Color(2.2, 2.2, 2.2, 0.9), 0.0, true))
 	core.name = "Core"
 	core.visible = false
 	zenith_node.scale = Vector3.ONE * 0.2
 	zenith_node.create_tween().tween_property(zenith_node, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_burst(_bp(Vector3(0, 10.4, -11.6)), FIRE, 3.0)
+	_by(by)._burst(_bp(Vector3(0, 10.4, -11.6)), FIRE, 3.0)
 
 
 func _tick_zenith(delta: float) -> void:
@@ -4521,16 +4558,17 @@ func _zenith_clear() -> void:
 
 ## Modelo da lança celestial: ponta branca luminosa, haste verde-marinho e duas asinhas. Aponta pra baixo.
 func _lance_model() -> Node3D:
+	var by := _take_by()
 	var lance := Node3D.new()
-	var shaft := Fx.inst(lance, Fx.cyl(0.16, 0.16, 6.5), Fx.mat(FIRE, 5.0, true), Vector3(0, 1.6, 0))
+	var shaft := _fx(by, lance, Fx.cyl(0.16, 0.16, 6.5), Fx.mat(FIRE, 5.0, true), Vector3(0, 1.6, 0))
 	shaft.name = "Shaft"
-	Fx.inst(lance, Fx.cyl(0.55, 0.0, 2.6), Fx.mat(Color(1, 1, 1), 10.0, true), Vector3(0, -2.9, 0))
-	Fx.inst(lance, Fx.torus(0.34, 0.5), Fx.mat(FIRE_MINT, 6.0, true), Vector3(0, -1.5, 0))
+	_fx(by, lance, Fx.cyl(0.55, 0.0, 2.6), Fx.mat(Color(1, 1, 1), 10.0, true), Vector3(0, -2.9, 0))
+	_fx(by, lance, Fx.torus(0.34, 0.5), Fx.mat(FIRE_MINT, 6.0, true), Vector3(0, -1.5, 0))
 	for s in [-1.0, 1.0]:
 		for k in 2:
 			var wing := BoxMesh.new()
 			wing.size = Vector3(1.5 - k * 0.5, 0.3, 0.06)
-			var w := Fx.inst(lance, wing, Fx.mat(FIRE_MINT.lerp(Color(1, 1, 1), 0.3), 6.0, true), Vector3(s * (0.85 - k * 0.2), -0.6 + k * 0.5, 0))
+			var w := _fx(by, lance, wing, Fx.mat(FIRE_MINT.lerp(Color(1, 1, 1), 0.3), 6.0, true), Vector3(s * (0.85 - k * 0.2), -0.6 + k * 0.5, 0))
 			w.rotation.z = s * (0.55 + k * 0.2)
 	return lance
 
@@ -4559,12 +4597,12 @@ func _lance_charge(u: Unit, time: float) -> void:
 	circle.position = Vector3(0, 12.2, 0)
 	circle.rotation.x = 0.35
 	rig.add_child(circle)
-	Fx.inst(circle, Fx.torus(2.6, 2.75), Fx.mat(FIRE_CYAN, 5.0, true))
-	Fx.inst(circle, Fx.torus(1.5, 1.58), Fx.mat(FIRE_MINT, 5.0, true))
+	_fx(u, circle, Fx.torus(2.6, 2.75), Fx.mat(FIRE_CYAN, 5.0, true))
+	_fx(u, circle, Fx.torus(1.5, 1.58), Fx.mat(FIRE_MINT, 5.0, true))
 	circle.scale = Vector3.ONE * 0.1
 	circle.create_tween().tween_property(circle, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	circle.create_tween().tween_property(circle, "rotation:y", TAU, time)
-	var lance := _lance_model()
+	var lance: Node3D = _by(u)._lance_model()
 	lance.name = "Lance"
 	lance.position = Vector3(0, 11.0, 1.4)
 	lance.scale = Vector3(0.1, 0.1, 0.1)
@@ -4580,7 +4618,7 @@ func _lance_charge(u: Unit, time: float) -> void:
 		for n in count:
 			var a := n * TAU / count
 			var col: Color = [FIRE, FIRE_CYAN, FIRE_MINT, Color(1, 1, 1)][n % (3 if grade == 1 else 4)]
-			var tongue := Fx.inst(flames, Fx.capsule(0.16, 1.5 + (n % 3) * 0.5), Fx.mat(Color(col.r * 2.2, col.g * 2.2, col.b * 2.2, 0.9), 0.0, true),
+			var tongue := _fx(u, flames, Fx.capsule(0.16, 1.5 + (n % 3) * 0.5), Fx.mat(Color(col.r * 2.2, col.g * 2.2, col.b * 2.2, 0.9), 0.0, true),
 				Vector3(cos(a) * 1.3, -2.5 + (n % 4) * 1.5, sin(a) * 1.3))
 			tongue.rotation.z = cos(a) * 0.35
 			tongue.rotation.x = sin(a) * 0.35
@@ -4591,21 +4629,21 @@ func _lance_charge(u: Unit, time: float) -> void:
 	if grade == 2:
 		# perfeito: anéis de luz descendo pela lança e um clarão no céu
 		for n in 3:
-			var ring := Fx.inst(rig, Fx.torus(1.5, 1.7), Fx.mat(Color(2.5, 2.5, 2.5, 0.9), 0.0, true), lance.position + Vector3(0, 5.0, 0))
+			var ring := _fx(u, rig, Fx.torus(1.5, 1.7), Fx.mat(Color(2.5, 2.5, 2.5, 0.9), 0.0, true), lance.position + Vector3(0, 5.0, 0))
 			ring.scale = Vector3.ONE * 0.2
 			var tr := ring.create_tween()
 			tr.tween_interval(n * time * 0.28)
 			tr.tween_property(ring, "scale", Vector3.ONE * 1.6, 0.2)
 			tr.parallel().tween_property(ring, "position:y", lance.position.y - 3.0, time * 0.5)
 			tr.tween_callback(ring.queue_free)
-		_burst(_bp(Vector3(0, 11.0, -10.6)), Color(1, 1, 1), 4.0)
+		_by(u)._burst(_bp(Vector3(0, 11.0, -10.6)), Color(1, 1, 1), 4.0)
 		if u.controlled:
 			hud.toast("LANÇA PERFEITA!", 1.2)
 			hud.flash(FIRE_MINT, 0.12)
 	elif grade == 1 and u.controlled:
 		hud.toast("BOA LANÇA", 0.9)
 	# fagulhas subindo da mão dele até o céu
-	_beam(u.position + Vector3(0, 1.2, 0), _bp(Vector3(0, 10.0, -10.6)), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.5), time)
+	_by(u)._beam(u.position + Vector3(0, 1.2, 0), _bp(Vector3(0, 10.0, -10.6)), Color(FIRE_CYAN.r, FIRE_CYAN.g, FIRE_CYAN.b, 0.5), time)
 
 
 func _lance_drop(u: Unit) -> void:
@@ -4652,27 +4690,27 @@ func _lance_hit(u: Unit, amount: float, marked: bool, grade := 0) -> void:
 		for k in 2:
 			var pc: Color = [FIRE, Color(1, 1, 1)][k]
 			var pm := Fx.mat(Color(pc.r * 2.4, pc.g * 2.4, pc.b * 2.4, 0.85), 0.0, true)
-			var pillar := Fx.inst(fx_root, Fx.cyl(1.6 - k * 0.9, 1.9 - k * 1.0, 16.0), pm, at + Vector3(0, 5.0, 0))
+			var pillar := _fx(u, fx_root, Fx.cyl(1.6 - k * 0.9, 1.9 - k * 1.0, 16.0), pm, at + Vector3(0, 5.0, 0))
 			var tp := pillar.create_tween().set_parallel(true)
 			tp.tween_property(pillar, "scale", Vector3(0.05, 1.15, 0.05), 0.55).set_ease(Tween.EASE_IN)
 			tp.tween_property(pm, "albedo_color:a", 0.0, 0.55)
 			tp.chain().tween_callback(pillar.queue_free)
 		for k in 4:
-			_impact_ring(at, [Color(1, 1, 1), FIRE_MINT, FIRE, FIRE_CYAN][k], 6.0 + k * 2.0)
+			_by(u)._impact_ring(at, [Color(1, 1, 1), FIRE_MINT, FIRE, FIRE_CYAN][k], 6.0 + k * 2.0)
 		hud.toast("PERFEITO!", 0.9)
 	elif grade == 1:
-		_impact_ring(at, FIRE_MINT, 5.5)
+		_by(u)._impact_ring(at, FIRE_MINT, 5.5)
 	if marked:
 		# explosão branca com fogo verde-marinho em volta
-		_burst(at, Color(1, 1, 1), 6.0)
-		_burst(at, FIRE, 4.6)
+		_by(u)._burst(at, Color(1, 1, 1), 6.0)
+		_by(u)._burst(at, FIRE, 4.6)
 		for k in 3:
-			_impact_ring(at, [Color(1, 1, 1), FIRE, FIRE_CYAN][k], 3.0 + k * 1.6)
+			_by(u)._impact_ring(at, [Color(1, 1, 1), FIRE, FIRE_CYAN][k], 3.0 + k * 1.6)
 		hud.flash(FIRE_MINT, 0.18)
 		shake_t = 0.25
 		shake_amp = 0.25 + 0.25 * clampf((amount - LANCE_MIN) / (LANCE_MAX - LANCE_MIN), 0.0, 1.0)
 	else:
-		_burst(at, Color(0.6, 0.7, 0.7), 1.6)
+		_by(u)._burst(at, Color(0.6, 0.7, 0.7), 1.6)
 	boss.hit_flash()
 	if is_instance_valid(u):
 		_damage_boss(u, amount, true, amount > 60.0)
@@ -4697,14 +4735,14 @@ func _swoop(u: Unit) -> void:
 	u.dash_fx()
 	u.invuln = maxf(u.invuln, 0.35)
 	for k in 3:
-		_beam(from + Vector3(0, k * 0.35 - 0.3, 0), to + Vector3(0, k * 0.35 - 0.3, 0), [FIRE, FIRE_CYAN, FIRE_MINT][k], 0.5 + k * 0.15)
-	_burst(from, Color(1, 1, 1), 2.0)
-	_burst(from, FIRE, 3.2)
+		_by(u)._beam(from + Vector3(0, k * 0.35 - 0.3, 0), to + Vector3(0, k * 0.35 - 0.3, 0), [FIRE, FIRE_CYAN, FIRE_MINT][k], 0.5 + k * 0.15)
+	_by(u)._burst(from, Color(1, 1, 1), 2.0)
+	_by(u)._burst(from, FIRE, 3.2)
 	var tw := u.create_tween()
 	tw.tween_property(u, "position", to, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tw.tween_callback(func():
-		_burst(to, Color(1, 1, 1), 1.8)
-		_burst(to, FIRE_CYAN, 2.8)
+		_by(u)._burst(to, Color(1, 1, 1), 1.8)
+		_by(u)._burst(to, FIRE_CYAN, 2.8)
 		u.wings_open(false, 0.3))
 	# penas de luz que se soltam das asas
 	for k in 7:
@@ -4712,7 +4750,7 @@ func _swoop(u: Unit) -> void:
 		var feather := BoxMesh.new()
 		feather.size = Vector3(0.3, 0.05, 0.1)
 		var fm := Fx.mat(FIRE_MINT, 6.0, true)
-		var p := Fx.inst(fx_root, feather, fm, at)
+		var p := _fx(u, fx_root, feather, fm, at)
 		p.rotation = Vector3(randf() * TAU, randf() * TAU, 0)
 		var tp := p.create_tween().set_parallel(true)
 		tp.tween_property(p, "position", at + Vector3(0, -0.9, 0), 0.6).set_delay(k * 0.02)
@@ -4727,6 +4765,7 @@ func _swoop(u: Unit) -> void:
 ## Um círculo mágico abre no céu em cima da boss e brasas verdes caem pelos 15 s do DoT, cada uma num
 ## ponto diferente da área, com uma pequena explosão no chão (_tick_rain). Só visual: o dano é o DoT.
 func _rain_start() -> void:
+	var by := _take_by()
 	rain_t = RAIN_TIME
 	rain_tick = 0.0
 	if rain_node != null and is_instance_valid(rain_node):
@@ -4735,20 +4774,21 @@ func _rain_start() -> void:
 	rain_node.position = _bp(Vector3(0, 10.6, -10.5))
 	rain_node.rotation.x = 0.3
 	fx_root.add_child(rain_node)
-	Fx.inst(rain_node, Fx.torus(4.6, 4.8), Fx.mat(FIRE, 5.0, true))
-	Fx.inst(rain_node, Fx.torus(3.2, 3.3), Fx.mat(FIRE_CYAN, 4.0, true))
-	Fx.inst(rain_node, Fx.disc(4.6, 0.02), Fx.mat(Color(FIRE.r, FIRE.g, FIRE.b, 0.18), 2.0, true))
+	_fx(by, rain_node, Fx.torus(4.6, 4.8), Fx.mat(FIRE, 5.0, true))
+	_fx(by, rain_node, Fx.torus(3.2, 3.3), Fx.mat(FIRE_CYAN, 4.0, true))
+	_fx(by, rain_node, Fx.disc(4.6, 0.02), Fx.mat(Color(FIRE.r, FIRE.g, FIRE.b, 0.18), 2.0, true))
 	for n in 8:
 		var a := n * TAU / 8.0
 		var bm := BoxMesh.new()
 		bm.size = Vector3(0.12, 0.03, 1.2)
-		var ray := Fx.inst(rain_node, bm, Fx.mat(FIRE_MINT, 4.0, true), Vector3(cos(a), 0, sin(a)) * 3.9)
+		var ray := _fx(by, rain_node, bm, Fx.mat(FIRE_MINT, 4.0, true), Vector3(cos(a), 0, sin(a)) * 3.9)
 		ray.rotation.y = -a + PI / 2.0
 	rain_node.scale = Vector3.ONE * 0.1
 	rain_node.create_tween().tween_property(rain_node, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _tick_rain(delta: float) -> void:
+	var by: Unit = get_dot("chuva").get("owner")
 	if rain_t <= 0.0:
 		return
 	rain_t -= delta
@@ -4766,16 +4806,18 @@ func _tick_rain(delta: float) -> void:
 	rain_tick -= delta
 	while rain_tick <= 0.0:
 		rain_tick += RAIN_EVERY * randf_range(0.6, 1.5)
+		if _quiet(by) and randf() > FX_QUIET_COUNT:
+			continue
 		# cada brasa cai num ponto sorteado da área, com tamanho e velocidade próprios
 		var a := randf() * TAU
 		var r := sqrt(randf()) * 4.4
 		var ground := Vector3(cos(a) * r, 0.1, -10.5 + sin(a) * r)
 		var col: Color = [FIRE, FIRE_CYAN, FIRE_MINT][randi() % 3]
-		var ember := Fx.inst(fx_root, Fx.capsule(0.09, 0.55 + randf() * 0.4), Fx.mat(col, 7.0, true), ground + Vector3(randf_range(-0.6, 0.6), 10.4, 0))
+		var ember := _fx(by, fx_root, Fx.capsule(0.09, 0.55 + randf() * 0.4), Fx.mat(col, 7.0, true), ground + Vector3(randf_range(-0.6, 0.6), 10.4, 0))
 		var tw := ember.create_tween()
 		tw.tween_property(ember, "position", ground, randf_range(0.32, 0.5)).set_ease(Tween.EASE_IN)
 		tw.tween_callback(ember.queue_free)
-		tw.tween_callback(_burst.bind(ground, col, randf_range(0.7, 1.2)))
+		tw.tween_callback(_by_call.bind(by, &"_burst", [ground, col, randf_range(0.7, 1.2)]))
 
 
 # ---- Juízo Solar
@@ -4795,17 +4837,17 @@ func _solar(u: Unit) -> void:
 	up.tween_interval(SOLAR_FLOAT)
 	up.tween_property(u.visual, "position:y", 0.0, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	up.tween_callback(u.wings_open.bind(false, 0.3))
-	_burst(u.position, FIRE, 3.0)
+	_by(u)._burst(u.position, FIRE, 3.0)
 	# o sol: uma estrela pequena. Núcleo branco, camadas de fogo verde-marinho e anéis orbitando.
 	var sun := Node3D.new()
 	fx_root.add_child(sun)
 	sun.position = u.position + Vector3(0, SOLAR_HEIGHT + 5.2, 0.5)
-	Fx.inst(sun, Fx.sphere(0.8), Fx.mat(Color(1, 1, 1), 12.0, true))
-	Fx.inst(sun, Fx.sphere(1.15), Fx.mat(Color(FIRE_MINT.r, FIRE_MINT.g, FIRE_MINT.b, 0.55), 6.0, true))
-	Fx.inst(sun, Fx.sphere(1.55), Fx.mat(Color(FIRE.r, FIRE.g, FIRE.b, 0.3), 4.0, true))
+	_fx(u, sun, Fx.sphere(0.8), Fx.mat(Color(1, 1, 1), 12.0, true))
+	_fx(u, sun, Fx.sphere(1.15), Fx.mat(Color(FIRE_MINT.r, FIRE_MINT.g, FIRE_MINT.b, 0.55), 6.0, true))
+	_fx(u, sun, Fx.sphere(1.55), Fx.mat(Color(FIRE.r, FIRE.g, FIRE.b, 0.3), 4.0, true))
 	var rings: Array = []
 	for k in 3:
-		var ring := Fx.inst(sun, Fx.torus(1.9 + k * 0.25, 2.0 + k * 0.25), Fx.mat([FIRE_CYAN, FIRE, FIRE_MINT][k], 6.0, true))
+		var ring := _fx(u, sun, Fx.torus(1.9 + k * 0.25, 2.0 + k * 0.25), Fx.mat([FIRE_CYAN, FIRE, FIRE_MINT][k], 6.0, true))
 		ring.rotation = Vector3(0.6 + k * 0.9, 0, k * 1.1)
 		rings.append(ring)
 		ring.create_tween().set_loops().tween_property(ring, "rotation:y", TAU, 1.1 + k * 0.4).as_relative()
@@ -4823,14 +4865,14 @@ func _solar_hit(u: Unit, marked: bool, hit: Vector3) -> void:
 	if ended:
 		return
 	# grande explosão celestial: clarão branco, fogo verde-marinho, ondas de choque e partículas
-	_burst(hit, Color(1, 1, 1), 13.0)
-	_burst(hit, FIRE, 10.0)
+	_by(u)._burst(hit, Color(1, 1, 1), 13.0)
+	_by(u)._burst(hit, FIRE, 10.0)
 	for k in 5:
-		_impact_ring(hit, [Color(1, 1, 1), FIRE, FIRE_CYAN, FIRE_MINT, FIRE][k], 4.0 + k * 2.2)
+		_by(u)._impact_ring(hit, [Color(1, 1, 1), FIRE, FIRE_CYAN, FIRE_MINT, FIRE][k], 4.0 + k * 2.2)
 	for n in 18:
 		var a := n * TAU / 18.0
 		var pm := Fx.mat([FIRE, FIRE_CYAN, FIRE_MINT][n % 3], 8.0, true)
-		var p := Fx.inst(fx_root, Fx.sphere(0.2), pm, hit)
+		var p := _fx(u, fx_root, Fx.sphere(0.2), pm, hit)
 		var tp := p.create_tween().set_parallel(true)
 		tp.tween_property(p, "position", hit + Vector3(cos(a), sin(a) * 0.7, 0.3) * randf_range(5.0, 9.0), 0.7).set_ease(Tween.EASE_OUT)
 		tp.tween_property(p, "scale", Vector3.ONE * 0.1, 0.7)
@@ -4877,7 +4919,7 @@ func _combo_hit(u: Unit, slot: int, full: float) -> float:
 	elif slot == u.chain:
 		u.chain = 2 if slot == 1 else 0  # fortalecido: dano cheio e passa a vez
 		if slot == 2:
-			_burst(boss_pos + Vector3(0, 1.6, 1.8), STAR, 3.4)
+			_by(u)._burst(boss_pos + Vector3(0, 1.6, 1.8), STAR, 3.4)
 	else:
 		amount = WEAK_HIT  # fora de ordem: dano mínimo e a sequência se perde
 		u.chain = 0
@@ -4898,7 +4940,7 @@ func _countdown(u: Unit) -> void:
 	u.count_t = COUNT_TIME
 	for n in 3:
 		u.skill_cd[n] = minf(u.skill_cd[n], COUNT_GCD)
-	_burst(u.position, STAR, 4.0)
+	_by(u)._burst(u.position, STAR, 4.0)
 	hud.toast("CONTAGEM REGRESSIVA", 1.2)
 
 
@@ -4913,12 +4955,12 @@ func _superstar(u: Unit) -> void:
 	# microfone na mão direita, com um brilho que cresce durante o preparo
 	var mic := Node3D.new()
 	u.gloves[1].add_child(mic)
-	Fx.inst(mic, Fx.cyl(0.05, 0.05, 0.34), Fx.mat(Color(0.2, 0.2, 0.3)), Vector3(0, 0.3, 0))
-	Fx.inst(mic, Fx.sphere(0.13), Fx.mat(Color(1.0, 0.9, 0.35), 4.0, true), Vector3(0, 0.52, 0))
+	_fx(u, mic, Fx.cyl(0.05, 0.05, 0.34), Fx.mat(Color(0.2, 0.2, 0.3)), Vector3(0, 0.3, 0))
+	_fx(u, mic, Fx.sphere(0.13), Fx.mat(Color(1.0, 0.9, 0.35), 4.0, true), Vector3(0, 0.52, 0))
 	var glow_m := Fx.mat(Color(STAR.r, STAR.g, STAR.b, 0.5), 5.0, true)
-	var glow := Fx.inst(mic, Fx.sphere(0.2), glow_m, Vector3(0, 0.52, 0))
+	var glow := _fx(u, mic, Fx.sphere(0.2), glow_m, Vector3(0, 0.52, 0))
 	glow.create_tween().tween_property(glow, "scale", Vector3.ONE * 3.2, SUPERSTAR_WIND)
-	_burst(u.position + Vector3(0, 1.6, 0), Color(1.0, 0.9, 0.35), 1.6)
+	_by(u)._burst(u.position + Vector3(0, 1.6, 0), Color(1.0, 0.9, 0.35), 1.6)
 	for n in SUPERSTAR_SHOTS:
 		var at := SUPERSTAR_WIND + SUPERSTAR_FIRE * n / maxf(1.0, SUPERSTAR_SHOTS - 1.0)
 		get_tree().create_timer(at, false).timeout.connect(_superstar_shot.bind(u, n))
@@ -4937,12 +4979,12 @@ func _superstar_shot(u: Unit, n: int) -> void:
 	var from := u.position + Vector3(0, 1.8, 0)
 	var to := _bp(Vector3(randf_range(-2.2, 2.2), randf_range(2.5, 6.0), -11.0))
 	var m := Fx.mat([STAR, Color(1.0, 0.9, 0.35), Color(0.45, 0.8, 1.0)][n % 3].lightened(0.2), 8.0, true)
-	var star := Fx.inst(fx_root, Fx.sphere(0.55), m, from)
+	var star := _fx(u, fx_root, Fx.sphere(0.55), m, from)
 	var tw := star.create_tween()
 	tw.tween_property(star, "position", to, 0.14)
 	tw.parallel().tween_property(star, "scale", Vector3.ONE * 1.6, 0.14)
 	tw.tween_callback(star.queue_free)
-	tw.tween_callback(_burst.bind(to, STAR.lightened(0.2), 3.6))
+	tw.tween_callback(_by_call.bind(u, &"_burst", [to, STAR.lightened(0.2), 3.6]))
 	_damage_boss(u, SUPERSTAR_DMG / SUPERSTAR_SHOTS, true, n == SUPERSTAR_SHOTS - 1)
 
 
@@ -4958,7 +5000,7 @@ func _knockout_jump(u: Unit) -> void:
 	u.channel_t = 0.0
 	if u.controlled:
 		hud.toast("NOCAUTE FINAL", 1.4)
-	_burst(u.position, STAR, 3.0)
+	_by(u)._burst(u.position, STAR, 3.0)
 	# o corpo vai até o ponto de queda enquanto o boneco sobe, paira e desce
 	var land := u.position + to_boss.normalized() * go if go > 0.1 else u.position
 	u.create_tween().tween_property(u, "position", land, KNOCKOUT_AIR * 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
@@ -4970,7 +5012,7 @@ func _knockout_jump(u: Unit) -> void:
 	tw.parallel().tween_property(u.visual, "scale", Vector3(1.25, 1.25, 1.25), KNOCKOUT_AIR * 0.44)
 	tw.tween_property(u.visual, "position:y", 0.0, KNOCKOUT_AIR * 0.2).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
 	var glove_m := Fx.mat(Color(STAR.r, STAR.g, STAR.b, 0.85), 8.0, true)
-	var glove := Fx.inst(u, Fx.sphere(0.5), glove_m, Vector3(0, 2.6, 0))
+	var glove := _fx(u, u, Fx.sphere(0.5), glove_m, Vector3(0, 2.6, 0))
 	var tg := glove.create_tween()
 	tg.tween_property(glove, "position:y", KNOCKOUT_HEIGHT + 3.0, KNOCKOUT_AIR * 0.36).set_ease(Tween.EASE_OUT)
 	tg.parallel().tween_property(glove, "scale", Vector3.ONE * 4.2, KNOCKOUT_AIR * 0.8)
@@ -4978,7 +5020,7 @@ func _knockout_jump(u: Unit) -> void:
 	tg.tween_callback(glove.queue_free)
 	# marca no chão de onde a onda de choque vai pegar
 	var mark_m := Fx.mat(Color(STAR.r, STAR.g, STAR.b, 0.22), 2.5, true)
-	var mark := Fx.inst(fx_root, Fx.torus(KNOCKOUT_R - 0.22, KNOCKOUT_R), mark_m, land + Vector3(0, 0.06, 0))
+	var mark := _fx(u, fx_root, Fx.torus(KNOCKOUT_R - 0.22, KNOCKOUT_R), mark_m, land + Vector3(0, 0.06, 0))
 	mark.create_tween().tween_callback(mark.queue_free).set_delay(KNOCKOUT_AIR)
 
 
@@ -4993,7 +5035,7 @@ func _knockout_land(u: Unit) -> void:
 	var hot := STAR.lightened(0.45)
 	# clarão no ponto de impacto
 	var flash_m := Fx.mat(Color(1.0, 0.95, 1.0, 0.9), 5.0, true)
-	var fl := Fx.inst(fx_root, Fx.sphere(1.0), flash_m, at + Vector3(0, 0.6, 0))
+	var fl := _fx(u, fx_root, Fx.sphere(1.0), flash_m, at + Vector3(0, 0.6, 0))
 	fl.scale = Vector3.ONE * 0.6
 	var tf := fl.create_tween().set_parallel(true)
 	tf.tween_property(fl, "scale", Vector3(KNOCKOUT_R * 0.75, KNOCKOUT_R * 0.5, KNOCKOUT_R * 0.75), 0.3).set_ease(Tween.EASE_OUT)
@@ -5001,14 +5043,14 @@ func _knockout_land(u: Unit) -> void:
 	tf.chain().tween_callback(fl.queue_free)
 	# chão aceso por um instante, na área exata do dano
 	var disc_m := Fx.mat(Color(hot.r, hot.g, hot.b, 0.45), 1.6, true)
-	var disc := Fx.inst(fx_root, Fx.disc(KNOCKOUT_R, 0.03), disc_m, at + Vector3(0, 0.05, 0))
+	var disc := _fx(u, fx_root, Fx.disc(KNOCKOUT_R, 0.03), disc_m, at + Vector3(0, 0.05, 0))
 	var td := disc.create_tween()
 	td.tween_property(disc_m, "albedo_color:a", 0.0, 0.55)
 	td.tween_callback(disc.queue_free)
 	# onda de choque: três anéis saindo até a borda da área
 	for n in 3:
 		var ring_m := Fx.mat(Color(hot.r, hot.g, hot.b, 0.95), 6.0 - n * 1.5, true)
-		var ring := Fx.inst(fx_root, Fx.torus(0.78, 1.0), ring_m, at + Vector3(0, 0.12 + n * 0.04, 0))
+		var ring := _fx(u, fx_root, Fx.torus(0.78, 1.0), ring_m, at + Vector3(0, 0.12 + n * 0.04, 0))
 		ring.scale = Vector3(0.3, 1.0 + (2 - n) * 1.2, 0.3)
 		var tr := ring.create_tween().set_parallel(true)
 		tr.tween_property(ring, "scale", Vector3(KNOCKOUT_R, 0.5, KNOCKOUT_R), 0.42 + n * 0.1).set_delay(n * 0.07).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
@@ -5016,7 +5058,7 @@ func _knockout_land(u: Unit) -> void:
 		tr.chain().tween_callback(ring.queue_free)
 	# coluna de luz
 	var col_m := Fx.mat(Color(1.0, 0.9, 1.0, 0.8), 4.0, true)
-	var pillar := Fx.inst(fx_root, Fx.cyl(1.6, 1.6, 26.0), col_m, at + Vector3(0, 13.0, 0))
+	var pillar := _fx(u, fx_root, Fx.cyl(1.6, 1.6, 26.0), col_m, at + Vector3(0, 13.0, 0))
 	var tp := pillar.create_tween().set_parallel(true)
 	tp.tween_property(pillar, "scale", Vector3(0.05, 1.0, 0.05), 0.5).set_ease(Tween.EASE_IN)
 	tp.tween_property(col_m, "albedo_color:a", 0.0, 0.5)
@@ -5026,7 +5068,7 @@ func _knockout_land(u: Unit) -> void:
 		var a := n * TAU / 16.0 + randf_range(-0.15, 0.15)
 		var dir := Vector3(cos(a), 0, sin(a))
 		var star_m := Fx.mat([STAR, Color(1.0, 0.9, 0.35), Color(0.45, 0.8, 1.0)][n % 3], 8.0, true)
-		var star := Fx.inst(fx_root, Fx.sphere(0.22 + randf() * 0.14), star_m, at + Vector3(0, 0.5, 0))
+		var star := _fx(u, fx_root, Fx.sphere(0.22 + randf() * 0.14), star_m, at + Vector3(0, 0.5, 0))
 		var far := at + dir * randf_range(KNOCKOUT_R * 0.7, KNOCKOUT_R * 1.15)
 		var ts := star.create_tween().set_parallel(true)
 		ts.tween_property(star, "position:x", far.x, 0.6).set_ease(Tween.EASE_OUT)
@@ -5040,7 +5082,7 @@ func _knockout_land(u: Unit) -> void:
 	# dano: a boss leva se o ponto de ataque dela está dentro da onda
 	if at.distance_to(boss_pos) <= KNOCKOUT_R:
 		_damage_boss(u, KNOCKOUT_DMG, true, true)
-		_burst(_bp(Vector3(0, 4.5, -11.5)), hot, 8.0)
+		_by(u)._burst(_bp(Vector3(0, 4.5, -11.5)), hot, 8.0)
 
 
 # ---------------------------------------------------------------- Valsa
@@ -5074,8 +5116,11 @@ func valsa_bonus(o: Unit) -> float:
 
 ## Voluta dourada (a espiral da arte dela): abre girando e some. De pé, virada pra câmera, ou deitada no chão.
 func _swirl(at: Vector3, col: Color, size: float, time := 0.5, lying := false) -> void:
+	var by := _take_by()
+	if _quiet(by):
+		size *= FX_QUIET_SIZE
 	var m := Fx.flat(Color(col.r * 1.5, col.g * 1.5, col.b * 1.5, 0.95))
-	var mi := Fx.inst(fx_root, Fx.spiral_mesh(), m, at)
+	var mi := _fx(by, fx_root, Fx.spiral_mesh(), m, at)
 	if lying:
 		mi.rotation.x = -PI / 2.0
 	mi.rotation.z = randf() * TAU
@@ -5094,9 +5139,12 @@ func _petal_mat(gold: float) -> StandardMaterial3D:
 
 ## Pétalas: `n` saem de `at` em arco até `spread` de distância, girando, e somem. `gold` = fração dourada.
 func _petals(at: Vector3, n: int, spread: float, up := 1.6, time := 0.8, gold := 0.4) -> void:
+	var by := _take_by()
+	if _quiet(by):
+		n = ceili(n * FX_QUIET_COUNT)
 	for k in n:
 		var m := _petal_mat(gold)
-		var mi := Fx.inst(fx_root, Fx.petal_mesh(), m, at)
+		var mi := _fx(by, fx_root, Fx.petal_mesh(), m, at)
 		var a := randf() * TAU
 		var far := at + Vector3(cos(a), 0, sin(a)) * randf_range(spread * 0.35, spread)
 		var t := time * randf_range(0.75, 1.15)
@@ -5114,11 +5162,14 @@ func _petals(at: Vector3, n: int, spread: float, up := 1.6, time := 0.8, gold :=
 
 ## Uma pétala caindo devagar do alto, balançando, em algum ponto do círculo.
 func _petal_fall(center: Vector3, radius: float, gold := 0.35) -> void:
+	var by := _take_by()
+	if _quiet(by) and randf() > FX_QUIET_COUNT:
+		return
 	var a := randf() * TAU
 	var d := sqrt(randf()) * radius
 	var p := Vector3(center.x + cos(a) * d, randf_range(3.4, 5.0), center.z + sin(a) * d)
 	var m := _petal_mat(gold)
-	var mi := Fx.inst(fx_root, Fx.petal_mesh(), m, p)
+	var mi := _fx(by, fx_root, Fx.petal_mesh(), m, p)
 	mi.scale = Vector3.ONE * randf_range(1.0, 1.8)
 	var t := randf_range(1.0, 1.5)
 	var tw := mi.create_tween().set_parallel(true)
@@ -5131,8 +5182,9 @@ func _petal_fall(center: Vector3, radius: float, gold := 0.35) -> void:
 
 ## Anel no chão que abre de r0 até r1 e some (a barra da saia passando).
 func _ring_floor(at: Vector3, col: Color, r0: float, r1: float, time := 0.4) -> void:
+	var by := _take_by()
 	var m := Fx.mat(Color(col.r, col.g, col.b, 0.9), 4.0, true)
-	var ring := Fx.inst(fx_root, Fx.torus(0.93, 1.0), m, Vector3(at.x, 0.09, at.z))
+	var ring := _fx(by, fx_root, Fx.torus(0.93, 1.0), m, Vector3(at.x, 0.09, at.z))
 	ring.scale = Vector3(r0, 0.6, r0)
 	var tw := ring.create_tween().set_parallel(true)
 	tw.tween_property(ring, "scale", Vector3(r1, 0.4, r1), time).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
@@ -5142,6 +5194,7 @@ func _ring_floor(at: Vector3, col: Color, r0: float, r1: float, time := 0.4) -> 
 
 ## Nota de caixinha de música: o compasso da Valsa se ouve. `semis` = semitons acima do Dó.
 func _chime(semis: int, volume_db := -9.0) -> void:
+	var by := _take_by()
 	if autoplay:
 		return
 	var key := "chime_%d" % semis
@@ -5161,19 +5214,20 @@ func _chime(semis: int, volume_db := -9.0) -> void:
 		wav.mix_rate = rate
 		wav.data = data
 		_tones[key] = wav
-	_sfx(_tones[key], volume_db)
+	_by(by)._sfx(_tones[key], volume_db)
 
 
 ## Várias notas em sequência (arpejo), uma a cada `gap` segundos.
 func _chimes(notes: Array, gap := 0.08, volume_db := -9.0) -> void:
+	var by := _take_by()
 	if autoplay:
 		return
 	for n in notes.size():
 		var note: int = notes[n]
 		if n == 0:
-			_chime(note, volume_db)
+			_by(by)._chime(note, volume_db)
 		else:
-			get_tree().create_timer(n * gap, false).timeout.connect(_chime.bind(note, volume_db))
+			get_tree().create_timer(n * gap, false).timeout.connect(_by_call.bind(by, &"_chime", [note, volume_db]))
 
 
 ## "1", "2", "3!" em cima dela: o compasso, pra quem está jogando de Valsa.
@@ -5181,7 +5235,7 @@ func _count_pop(u: Unit, step: int) -> void:
 	var giro := step == 2
 	var txt: String = ["1", "2", "3!"][step]
 	var dx: float = [-0.75, 0.75, 0.0][step]
-	var l := Fx.label(fx_root, txt, u.position + Vector3(dx, 2.6, 0.0), 78 if giro else 46)
+	var l := _fxl(u, fx_root, txt, u.position + Vector3(dx, 2.6, 0.0), 78 if giro else 46)
 	l.modulate = ROSE_GOLD if giro else LILAC.lightened(0.45)
 	l.outline_size = 14
 	l.outline_modulate = Color(0.07, 0.08, 0.16)
@@ -5194,11 +5248,11 @@ func _count_pop(u: Unit, step: int) -> void:
 ## O golpe dela "sai": uma fita dourada da mão até a boss.
 func _ribbon(u: Unit, to: Vector3, big := false) -> void:
 	var m := Fx.mat(Color(1.0, 0.86, 0.45), 7.0, true)
-	var mi := Fx.inst(fx_root, Fx.sphere(0.3 if big else 0.18), m, u.position + Vector3(0, 1.3, 0))
+	var mi := _fx(u, fx_root, Fx.sphere(0.3 if big else 0.18), m, u.position + Vector3(0, 1.3, 0))
 	var tw := mi.create_tween()
 	tw.tween_property(mi, "position", to, 0.09)
 	tw.tween_callback(mi.queue_free)
-	_beam(u.position + Vector3(0, 0.3, 0), to - Vector3(0, 1.0, 0), Color(1.0, 0.82, 0.4, 0.8 if big else 0.55), 0.22 if big else 0.14)
+	_by(u)._beam(u.position + Vector3(0, 0.3, 0), to - Vector3(0, 1.0, 0), Color(1.0, 0.82, 0.4, 0.8 if big else 0.55), 0.22 if big else 0.14)
 
 
 ## Onde o golpe dela acerta a boss.
@@ -5214,8 +5268,8 @@ func _embalo_add(u: Unit, n: int) -> void:
 	for k in range(was, u.embalo):
 		u.rose_pop(k)
 	if u.embalo == EMBALO_MAX and was < EMBALO_MAX:
-		_swirl(u.position + Vector3(0, 2.8, 0), ROSE_GOLD, 1.5, 0.7)
-		_ring_floor(u.position, ROSE_GOLD, 1.0, skirt_r(u), 0.6)
+		_by(u)._swirl(u.position + Vector3(0, 2.8, 0), ROSE_GOLD, 1.5, 0.7)
+		_by(u)._ring_floor(u.position, ROSE_GOLD, 1.0, skirt_r(u), 0.6)
 		if u.controlled:
 			hud.toast("SAIA ABERTA: EMBALO MÁXIMO", 1.2)
 
@@ -5230,29 +5284,29 @@ func _waltz_hit(u: Unit, full: float) -> float:
 	var hit := _waltz_at()
 	if step == 2:
 		return _giro(u, hit)
-	_chime(0 if step == 0 else 4)
+	_by(u)._chime(0 if step == 0 else 4)
 	u.waltz_anim("step")
 	_ribbon(u, hit)
-	_swirl(hit, ROSE_GOLD, 0.9, 0.4)
-	_petals(hit, 4, 1.2, 0.8, 0.6, 0.6)
-	_petals(u.position + Vector3(0, 0.5, 0), 3, 1.3, 0.7, 0.6, 0.15)
+	_by(u)._swirl(hit, ROSE_GOLD, 0.9, 0.4)
+	_by(u)._petals(hit, 4, 1.2, 0.8, 0.6, 0.6)
+	_by(u)._petals(u.position + Vector3(0, 0.5, 0), 3, 1.3, 0.7, 0.6, 0.15)
 	return full
 
 
 ## O Giro: ela dá a volta inteira, a saia abre até a borda do bônus, o Embalo sobe e o Par acompanha.
 func _giro(u: Unit, hit: Vector3) -> float:
 	var amount: float = WALTZ_GIRO + WALTZ_GIRO_PER * u.embalo
-	_chimes([7, 12], 0.06)
+	_by(u)._chimes([7, 12], 0.06)
 	u.waltz_anim("giro", 0.36)
 	var r := skirt_r(u)
-	_ring_floor(u.position, LILAC.lightened(0.3), 0.6, r, 0.45)
-	_ring_floor(u.position, ROSE_GOLD, 0.4, r * 0.7, 0.36)
-	_petals(u.position + Vector3(0, 0.7, 0), 12, r * 0.8, 1.6, 0.9)
+	_by(u)._ring_floor(u.position, LILAC.lightened(0.3), 0.6, r, 0.45)
+	_by(u)._ring_floor(u.position, ROSE_GOLD, 0.4, r * 0.7, 0.36)
+	_by(u)._petals(u.position + Vector3(0, 0.7, 0), 12, r * 0.8, 1.6, 0.9)
 	_ribbon(u, hit, true)
-	_swirl(hit, ROSE_GOLD, 2.0, 0.55)
-	_swirl(hit + Vector3(0.5, 0.4, 0.1), Color(1, 1, 1), 1.1, 0.45)
-	_petals(hit, 10, 2.4, 1.2, 0.8, 0.7)
-	_burst(hit, ROSE_GOLD, 2.2)
+	_by(u)._swirl(hit, ROSE_GOLD, 2.0, 0.55)
+	_by(u)._swirl(hit + Vector3(0.5, 0.4, 0.1), Color(1, 1, 1), 1.1, 0.45)
+	_by(u)._petals(hit, 10, 2.4, 1.2, 0.8, 0.7)
+	_by(u)._burst(hit, ROSE_GOLD, 2.2)
 	shake_t = maxf(shake_t, 0.12)
 	shake_amp = maxf(shake_amp, 0.12)
 	_embalo_add(u, 1)
@@ -5270,7 +5324,7 @@ func _duet_echo(u: Unit) -> void:
 
 ## Uma voluta sai dela, chega no aliado, e ele acerta a boss junto. O dano é DELE (aparece no DPS dele).
 func _duet_strike(u: Unit, o: Unit, amount: float, big: bool) -> void:
-	var orb := Fx.inst(fx_root, Fx.spiral_mesh(), Fx.flat(Color(1.5, 1.2, 0.45, 0.95)), u.position + Vector3(0, 1.4, 0))
+	var orb := _fx(u, fx_root, Fx.spiral_mesh(), Fx.flat(Color(1.5, 1.2, 0.45, 0.95)), u.position + Vector3(0, 1.4, 0))
 	orb.scale = Vector3.ONE * 0.45
 	var tw := orb.create_tween()
 	tw.tween_property(orb, "position", o.position + Vector3(0, 1.4, 0), 0.12)
@@ -5280,16 +5334,18 @@ func _duet_strike(u: Unit, o: Unit, amount: float, big: bool) -> void:
 		if ended or not is_instance_valid(o) or not o.alive:
 			return
 		o.punch()
-		_swirl(o.position + Vector3(0, 2.3, 0), ROSE_GOLD, 1.1 if big else 0.7, 0.4)
+		_by(u)._swirl(o.position + Vector3(0, 2.3, 0), ROSE_GOLD, 1.1 if big else 0.7, 0.4)
 		var hit := _bp(Vector3(randf_range(-1.4, 1.4), randf_range(2.0, 4.2), -11.0))
-		var shot := Fx.inst(fx_root, Fx.sphere(0.36 if big else 0.26), Fx.mat(o.color.lightened(0.45), 7.0, true), o.position + Vector3(0, 1.2, 0))
+		var shot := _fx(u, fx_root, Fx.sphere(0.36 if big else 0.26), Fx.mat(o.color.lightened(0.45), 7.0, true), o.position + Vector3(0, 1.2, 0))
 		var ts := shot.create_tween()
 		ts.tween_property(shot, "position", hit, 0.1)
 		ts.tween_callback(shot.queue_free)
 		ts.tween_callback(func():
-			_swirl(hit, o.color.lightened(0.5), 1.9 if big else 1.3, 0.45)
-			_petals(hit, 5, 1.6, 0.9, 0.7, 0.8))
-		_damage_boss(o, amount, true, big))
+			_by(u)._swirl(hit, o.color.lightened(0.5), 1.9 if big else 1.3, 0.45)
+			_by(u)._petals(hit, 5, 1.6, 0.9, 0.7, 0.8))
+		dmg_tag = "Dueto (Valsa)"
+		_damage_boss(o, amount, true, big)
+		dmg_tag = "")
 
 
 ## Quem é o Par: o escolhido no card; sem escolha, o Par de agora; sem Par, quem o jogador controla
@@ -5315,7 +5371,7 @@ func _dance_heal(u: Unit, amount: float, size := 40) -> void:
 			continue
 		o.hp = minf(o.max_hp, o.hp + amount)
 		u.enmity += amount * HEAL_ENMITY
-		_popup(int(amount), Color(0.75, 1.0, 0.7), size, o.position + Vector3(0, 2.6, 0), "+")
+		_by(u)._popup(int(amount), Color(0.75, 1.0, 0.7), size, o.position + Vector3(0, 2.6, 0), "+")
 
 
 ## Passo a Dois: ela estende a mão pro Par. Os dois acertam a boss juntos, ele é curado, vira o Par
@@ -5334,20 +5390,20 @@ func _duet(u: Unit) -> void:
 	get_tree().create_timer(0.34, false).timeout.connect(func():
 		if is_instance_valid(u) and u.alive:
 			u.face(boss_pos - u.position))
-	_chimes([4, 9, 12], 0.07)
+	_by(u)._chimes([4, 9, 12], 0.07)
 	# o fio acende de ponta a ponta
-	_beam(u.position + Vector3(0, 0.25, 0), o.position + Vector3(0, 0.25, 0), Color(1.0, 0.85, 0.4, 0.9), 0.35)
-	_swirl(o.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.5, 0.6, true)
-	_swirl(u.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.5, 0.6, true)
-	_petals(o.position + Vector3(0, 1.0, 0), 8, 1.5)
+	_by(u)._beam(u.position + Vector3(0, 0.25, 0), o.position + Vector3(0, 0.25, 0), Color(1.0, 0.85, 0.4, 0.9), 0.35)
+	_by(u)._swirl(o.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.5, 0.6, true)
+	_by(u)._swirl(u.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.5, 0.6, true)
+	_by(u)._petals(o.position + Vector3(0, 1.0, 0), 8, 1.5)
 	if o.hp < o.max_hp:
 		o.hp = minf(o.max_hp, o.hp + DUET_HEAL)
 		u.enmity += DUET_HEAL * HEAL_ENMITY
-		_popup(int(DUET_HEAL), Color(0.75, 1.0, 0.7), 52, o.position + Vector3(0, 2.6, 0), "+")
+		_by(u)._popup(int(DUET_HEAL), Color(0.75, 1.0, 0.7), 52, o.position + Vector3(0, 2.6, 0), "+")
 	if _in_range(u):
 		var hit := _waltz_at()
 		_ribbon(u, hit, true)
-		_swirl(hit, ROSE_GOLD, 1.6, 0.5)
+		_by(u)._swirl(hit, ROSE_GOLD, 1.6, 0.5)
 		_damage_boss(u, DUET_DMG, true, true)
 	_duet_strike(u, o, DUET_DMG, true)
 	u.waltz_step = 2  # o próximo Passo de Valsa já é o Giro (o botão brilha)
@@ -5361,21 +5417,21 @@ func _twirl(u: Unit) -> void:
 	u.twirl_t = TWIRL_TIME
 	u.twirl_hit = false
 	u.waltz_anim("pirueta", TWIRL_TIME)
-	_chimes([7, 9, 12, 16], 0.09)
+	_by(u)._chimes([7, 9, 12, 16], 0.09)
 	var r := skirt_r(u)
 	var cols := [LILAC.lightened(0.3), ROSE_GOLD, Color(1, 1, 1)]
 	for k in 3:
 		get_tree().create_timer(k * 0.16, false).timeout.connect(func():
 			if is_instance_valid(u) and u.alive:
-				_ring_floor(u.position, cols[k], 0.5, r * (0.6 + k * 0.2), 0.42)
-				_swirl(u.position + Vector3(0, 0.5 + k * 0.9, 0), cols[(k + 1) % 3], 1.5 - k * 0.25, 0.5, true)
-				_petals(u.position + Vector3(0, 0.8 + k * 0.4, 0), 7, r * 0.8, 2.0, 0.9))
+				_by(u)._ring_floor(u.position, cols[k], 0.5, r * (0.6 + k * 0.2), 0.42)
+				_by(u)._swirl(u.position + Vector3(0, 0.5 + k * 0.9, 0), cols[(k + 1) % 3], 1.5 - k * 0.25, 0.5, true)
+				_by(u)._petals(u.position + Vector3(0, 0.8 + k * 0.4, 0), 7, r * 0.8, 2.0, 0.9))
 	if _in_range(u):
 		var hit := _waltz_at()
 		_ribbon(u, hit, true)
-		_swirl(hit, ROSE_GOLD, 2.3, 0.6)
-		_swirl(hit, LILAC.lightened(0.4), 1.4, 0.5)
-		_petals(hit, 12, 2.6, 1.3, 0.8, 0.7)
+		_by(u)._swirl(hit, ROSE_GOLD, 2.3, 0.6)
+		_by(u)._swirl(hit, LILAC.lightened(0.4), 1.4, 0.5)
+		_by(u)._petals(hit, 12, 2.6, 1.3, 0.8, 0.7)
 		_damage_boss(u, TWIRL_DMG, true, true)
 	_embalo_add(u, 1)
 	_duet_echo(u)
@@ -5384,15 +5440,15 @@ func _twirl(u: Unit) -> void:
 ## BRAVO!: um golpe chegou no meio da Pirueta e passou direto. A plateia joga rosas, o Embalo sobe e
 ## a recarga da Pirueta cai. Vale uma vez por Pirueta (os outros golpes do mesmo giro só são desviados).
 func _bravo(u: Unit) -> void:
-	_petals(u.position + Vector3(0, 1.2, 0), 8, 1.6)
-	_swirl(u.position + Vector3(0, 1.3, 0), Color(1, 1, 1), 1.3, 0.35)
+	_by(u)._petals(u.position + Vector3(0, 1.2, 0), 8, 1.6)
+	_by(u)._swirl(u.position + Vector3(0, 1.3, 0), Color(1, 1, 1), 1.3, 0.35)
 	if u.twirl_hit:
 		return
 	u.twirl_hit = true
 	_embalo_add(u, TWIRL_BRAVO)
 	u.skill_cd[2] *= TWIRL_REFUND
-	_rose_rain(u.position)
-	_chimes([12, 16, 19], 0.06)
+	_by(u)._rose_rain(u.position)
+	_by(u)._chimes([12, 16, 19], 0.06)
 	if u.controlled:
 		hud.toast("BRAVO!", 0.9)
 		hud.flash(ROSE_GOLD, 0.25)
@@ -5400,10 +5456,11 @@ func _bravo(u: Unit) -> void:
 
 ## Rosas jogadas da plateia: caem em volta dela e ficam um instante no chão.
 func _rose_rain(at: Vector3) -> void:
+	var by := _take_by()
 	for k in 7:
 		var a := randf() * TAU
 		var land := Vector3(at.x + cos(a) * randf_range(0.8, 2.4), 0.08, at.z + sin(a) * randf_range(0.8, 2.4))
-		var rose := Fx.rose(fx_root, 0.17)
+		var rose := _fx_rose(by, fx_root, 0.17)
 		rose.position = land + Vector3(randf_range(-3.0, 3.0), 6.0, 5.0)
 		var t := randf_range(0.35, 0.6)
 		var tw := rose.create_tween()
@@ -5422,9 +5479,9 @@ func _petal_rain(u: Unit) -> void:
 	u.petal_t = PETAL_TIME
 	u.petal_tick = 1.0
 	u.waltz_anim("toss")
-	_chimes([0, 4, 7, 12], 0.07)
+	_by(u)._chimes([0, 4, 7, 12], 0.07)
 	var top := u.position + Vector3(0, 4.6, 0)
-	var bouquet := Fx.rose(fx_root, 0.3)
+	var bouquet := _fx_rose(u, fx_root, 0.3)
 	bouquet.position = u.position + Vector3(0, 2.2, 0)
 	var r := skirt_r(u)
 	var tw := bouquet.create_tween()
@@ -5432,9 +5489,9 @@ func _petal_rain(u: Unit) -> void:
 	tw.parallel().tween_property(bouquet, "rotation", Vector3(5.0, 3.0, 0), 0.3)
 	tw.tween_callback(bouquet.queue_free)
 	tw.tween_callback(func():
-		_burst(top, ROSE_GOLD, 2.6)
-		_swirl(top, ROSE_GOLD, 1.9, 0.6)
-		_petals(top, 28, r, 1.0, 1.4))
+		_by(u)._burst(top, ROSE_GOLD, 2.6)
+		_by(u)._swirl(top, ROSE_GOLD, 1.9, 0.6)
+		_by(u)._petals(top, 28, r, 1.0, 1.4))
 	_dance_heal(u, PETAL_BURST, 52)
 
 
@@ -5444,19 +5501,19 @@ func _crescendo(u: Unit) -> void:
 	u.embalo_t = EMBALO_HOLD
 	u.skill_cd[0] = minf(u.skill_cd[0], 0.2)
 	u.waltz_anim("crescendo")
-	_chimes([0, 4, 7, 12, 16, 19], 0.06)
+	_by(u)._chimes([0, 4, 7, 12, 16, 19], 0.06)
 	var r := skirt_r(u)
-	_ring_floor(u.position, ROSE_GOLD, 0.5, r, 0.6)
-	_ring_floor(u.position, Color(1, 1, 1), 0.3, r * 0.8, 0.5)
+	_by(u)._ring_floor(u.position, ROSE_GOLD, 0.5, r, 0.6)
+	_by(u)._ring_floor(u.position, Color(1, 1, 1), 0.3, r * 0.8, 0.5)
 	for k in 4:
 		get_tree().create_timer(0.1 + k * 0.09, false).timeout.connect(func():
 			if is_instance_valid(u) and u.alive:
-				_swirl(u.position + Vector3(0, 0.6 + k * 0.85, 0), ROSE_GOLD if k % 2 == 0 else Color(1, 1, 1), 2.1 - k * 0.3, 0.6, true))
-	_petals(u.position + Vector3(0, 1.0, 0), 18, r, 2.4, 1.1, 0.8)
+				_by(u)._swirl(u.position + Vector3(0, 0.6 + k * 0.85, 0), ROSE_GOLD if k % 2 == 0 else Color(1, 1, 1), 2.1 - k * 0.3, 0.6, true))
+	_by(u)._petals(u.position + Vector3(0, 1.0, 0), 18, r, 2.4, 1.1, 0.8)
 	for o in units:
 		if o != u and _in_dance(u, o):
-			_swirl(o.position + Vector3(0, 2.2, 0), ROSE_GOLD, 1.0, 0.6)
-			_ring_floor(o.position, ROSE_GOLD, 0.3, 1.3, 0.5)
+			_by(u)._swirl(o.position + Vector3(0, 2.2, 0), ROSE_GOLD, 1.0, 0.6)
+			_by(u)._ring_floor(o.position, ROSE_GOLD, 0.3, 1.3, 0.5)
 	if u.controlled:
 		hud.toast("CRESCENDO: BÔNUS DA SAIA EM DOBRO", 1.4)
 		hud.edge_glow(ROSE_GOLD, 0.8, 0.8)
@@ -5468,23 +5525,24 @@ func _grand_ball(u: Unit) -> void:
 	u.ball_t = BALL_TIME
 	_embalo_add(u, EMBALO_MAX)
 	u.waltz_anim("ball", 1.2)
-	_ball_build()
-	_chimes([0, 7, 4, 7, 12, 16, 12, 19], 0.11)
+	_by(u)._ball_build()
+	_by(u)._chimes([0, 7, 4, 7, 12, 16, 12, 19], 0.11)
 	hud.toast("GRANDE BAILE", 1.6)
 	hud.flash(LILAC.lightened(0.3), 0.3)
-	_ring_floor(u.position, ROSE_GOLD, 0.5, arena_r, 0.9)
-	_ring_floor(u.position, LILAC.lightened(0.3), 0.3, arena_r * 0.8, 0.7)
-	_petals(u.position + Vector3(0, 1.2, 0), 30, 5.0, 3.0, 1.3, 0.6)
+	_by(u)._ring_floor(u.position, ROSE_GOLD, 0.5, arena_r, 0.9)
+	_by(u)._ring_floor(u.position, LILAC.lightened(0.3), 0.3, arena_r * 0.8, 0.7)
+	_by(u)._petals(u.position + Vector3(0, 1.2, 0), 30, 5.0, 3.0, 1.3, 0.6)
 	for o in units:
 		if o.alive:
-			_swirl(o.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.7, 0.8, true)
-			_swirl(o.position + Vector3(0, 2.4, 0), Color(1, 1, 1), 0.9, 0.6)
+			_by(u)._swirl(o.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.7, 0.8, true)
+			_by(u)._swirl(o.position + Vector3(0, 2.4, 0), Color(1, 1, 1), 0.9, 0.6)
 	shake_t = maxf(shake_t, 0.25)
 	shake_amp = maxf(shake_amp, 0.2)
 
 
 ## O salão: a roseta da saia do tamanho da arena, o lustre descendo do alto e um foco de luz por herói.
 func _ball_build() -> void:
+	var by := _take_by()
 	if ball_node != null and is_instance_valid(ball_node):
 		ball_node.queue_free()
 	ball_node = Node3D.new()
@@ -5498,7 +5556,7 @@ func _ball_build() -> void:
 	mat.set_shader_parameter("gold", 0.35)
 	mat.set_shader_parameter("alpha", 0.0)
 	ball_mat = mat
-	var floor_mi := Fx.inst(ball_node, plane, mat, Vector3(0, 0.03, 0))
+	var floor_mi := _fx(by, ball_node, plane, mat, Vector3(0, 0.03, 0))
 	floor_mi.scale = Vector3(arena_r / 0.93, 1.0, arena_r / 0.93)
 	# fraco de propósito: os avisos vermelhos da boss precisam continuar mandando no chão
 	floor_mi.create_tween().tween_method(func(a: float): mat.set_shader_parameter("alpha", a), 0.0, 0.4, 0.5)
@@ -5507,21 +5565,21 @@ func _ball_build() -> void:
 	ball_lamp.scale = Vector3.ONE * 0.8
 	ball_node.add_child(ball_lamp)
 	var gold_m := Fx.mat(ROSE_GOLD, 3.0, true)
-	Fx.inst(ball_lamp, Fx.torus(2.2, 2.45), gold_m)
-	Fx.inst(ball_lamp, Fx.torus(1.0, 1.18), gold_m, Vector3(0, 0.8, 0))
-	Fx.inst(ball_lamp, Fx.cyl(0.07, 0.07, 6.0), gold_m, Vector3(0, 3.8, 0))
-	Fx.inst(ball_lamp, Fx.sphere(0.5), Fx.mat(Color(1.0, 0.95, 0.75), 6.0, true), Vector3(0, -0.5, 0))
+	_fx(by, ball_lamp, Fx.torus(2.2, 2.45), gold_m)
+	_fx(by, ball_lamp, Fx.torus(1.0, 1.18), gold_m, Vector3(0, 0.8, 0))
+	_fx(by, ball_lamp, Fx.cyl(0.07, 0.07, 6.0), gold_m, Vector3(0, 3.8, 0))
+	_fx(by, ball_lamp, Fx.sphere(0.5), Fx.mat(Color(1.0, 0.95, 0.75), 6.0, true), Vector3(0, -0.5, 0))
 	var candle_m := Fx.mat(Color(1.0, 0.95, 0.7), 8.0, true)
 	var drop_m := Fx.mat(Color(0.85, 0.75, 1.0), 5.0, true)
 	for k in 10:
 		var a := k * TAU / 10.0
-		Fx.inst(ball_lamp, Fx.sphere(0.2), candle_m, Vector3(cos(a) * 2.32, 0.3, sin(a) * 2.32))
-		var drop := Fx.inst(ball_lamp, Fx.sphere(0.11), drop_m, Vector3(cos(a) * 2.32, -0.5, sin(a) * 2.32))
+		_fx(by, ball_lamp, Fx.sphere(0.2), candle_m, Vector3(cos(a) * 2.32, 0.3, sin(a) * 2.32))
+		var drop := _fx(by, ball_lamp, Fx.sphere(0.11), drop_m, Vector3(cos(a) * 2.32, -0.5, sin(a) * 2.32))
 		drop.scale.y = 1.8
 	ball_lamp.create_tween().tween_property(ball_lamp, "position:y", 11.6, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	ball_spots.clear()
 	for o in units:
-		var cone := Fx.inst(ball_node, Fx.cyl(0.12, 1.25, 9.0), Fx.mat(Color(1.0, 0.92, 0.6, 0.1), 2.0, true), o.position + Vector3(0, 4.5, 0))
+		var cone := _fx(by, ball_node, Fx.cyl(0.12, 1.25, 9.0), Fx.mat(Color(1.0, 0.92, 0.6, 0.1), 2.0, true), o.position + Vector3(0, 4.5, 0))
 		cone.visible = o.alive
 		ball_spots.append(cone)
 
@@ -5542,13 +5600,13 @@ func _ball_clear() -> void:
 ## O último acorde: ela faz a reverência, a luz de todo mundo corre pra boss e uma rosa enorme desabrocha nela.
 func _ball_finale(u: Unit) -> void:
 	u.waltz_anim("bow", 0.5)
-	_chimes([12, 16, 19, 24], 0.05)
+	_by(u)._chimes([12, 16, 19, 24], 0.05)
 	var hit := _bp(Vector3(0, 3.6, -11.0))
 	for o in units:
 		if o.alive:
-			_beam(o.position + Vector3(0, 0.4, 0), hit - Vector3(0, 1.0, 0), Color(1.0, 0.86, 0.45, 0.85), 0.5)
-			_ring_floor(o.position, ROSE_GOLD, 0.3, 1.6, 0.5)
-	var bloom := Fx.rose(fx_root, 0.3)
+			_by(u)._beam(o.position + Vector3(0, 0.4, 0), hit - Vector3(0, 1.0, 0), Color(1.0, 0.86, 0.45, 0.85), 0.5)
+			_by(u)._ring_floor(o.position, ROSE_GOLD, 0.3, 1.6, 0.5)
+	var bloom := _fx_rose(u, fx_root, 0.3)
 	bloom.position = hit
 	bloom.rotation.x = PI / 2.0
 	var tb := bloom.create_tween()
@@ -5557,10 +5615,10 @@ func _ball_finale(u: Unit) -> void:
 	tb.tween_interval(0.25)
 	tb.tween_property(bloom, "scale", Vector3.ONE * 0.01, 0.2)
 	tb.tween_callback(bloom.queue_free)
-	_swirl(hit, ROSE_GOLD, 5.0, 0.9)
-	_swirl(hit, Color(1, 1, 1), 3.0, 0.7)
-	_petals(hit, 44, 5.5, 2.6, 1.4, 0.7)
-	_burst(hit, ROSE_GOLD, 7.0)
+	_by(u)._swirl(hit, ROSE_GOLD, 5.0, 0.9)
+	_by(u)._swirl(hit, Color(1, 1, 1), 3.0, 0.7)
+	_by(u)._petals(hit, 44, 5.5, 2.6, 1.4, 0.7)
+	_by(u)._burst(hit, ROSE_GOLD, 7.0)
 	hud.flash(ROSE_GOLD, 0.3)
 	hud.toast("ÚLTIMO ACORDE", 1.2)
 	shake_t = 0.4
@@ -5568,7 +5626,7 @@ func _ball_finale(u: Unit) -> void:
 	for o in units:
 		if o.alive and o.hp < o.max_hp:
 			o.hp = minf(o.max_hp, o.hp + BALL_END_HEAL)
-			_popup(int(BALL_END_HEAL), Color(0.75, 1.0, 0.7), 56, o.position + Vector3(0, 2.6, 0), "+")
+			_by(u)._popup(int(BALL_END_HEAL), Color(0.75, 1.0, 0.7), 56, o.position + Vector3(0, 2.6, 0), "+")
 	_ball_clear()
 	_damage_boss(u, BALL_END_DMG, true, true)
 
@@ -5583,11 +5641,11 @@ func _tick_valsa(u: Unit, delta: float) -> void:
 		if randf() < delta * 7.0:
 			var a := randf() * TAU
 			var d := randf() * skirt_r(u)
-			_swirl(u.position + Vector3(cos(a) * d, randf_range(0.3, 2.6), sin(a) * d), ROSE_GOLD, randf_range(0.35, 0.7), 0.5)
+			_by(u)._swirl(u.position + Vector3(cos(a) * d, randf_range(0.3, 2.6), sin(a) * d), ROSE_GOLD, randf_range(0.35, 0.7), 0.5)
 	if u.petal_t > 0.0:
 		u.petal_t = maxf(0.0, u.petal_t - delta)
 		if randf() < delta * 16.0:
-			_petal_fall(u.position, skirt_r(u))
+			_by(u)._petal_fall(u.position, skirt_r(u))
 		u.petal_tick -= delta
 		if u.petal_tick <= 0.0:
 			u.petal_tick += 1.0
@@ -5597,7 +5655,7 @@ func _tick_valsa(u: Unit, delta: float) -> void:
 		u.embalo = EMBALO_MAX
 		u.embalo_t = EMBALO_HOLD
 		if randf() < delta * 14.0:
-			_petal_fall(Vector3.ZERO, arena_r, 0.5)
+			_by(u)._petal_fall(Vector3.ZERO, arena_r, 0.5)
 		if u.ball_t <= 0.0:
 			u.ball_t = 0.0
 			_ball_finale(u)
@@ -5621,9 +5679,9 @@ func _ai_waltz(u: Unit, delta: float) -> void:
 	u.face(boss_pos - u.position)
 	u.waltz_anim("giro", 0.36)
 	var r := skirt_r(u)
-	_ring_floor(u.position, LILAC.lightened(0.3), 0.6, r, 0.45)
-	_petals(u.position + Vector3(0, 0.7, 0), 8, r * 0.8, 1.6, 0.9)
-	_swirl(_waltz_at(), ROSE_GOLD, 1.4, 0.5)
+	_by(u)._ring_floor(u.position, LILAC.lightened(0.3), 0.6, r, 0.45)
+	_by(u)._petals(u.position + Vector3(0, 0.7, 0), 8, r * 0.8, 1.6, 0.9)
+	_by(u)._swirl(_waltz_at(), ROSE_GOLD, 1.4, 0.5)
 	if u.embalo < AI_WALTZ_MAX:
 		_embalo_add(u, 1)
 	else:
@@ -5649,7 +5707,7 @@ func _tick_valsa_view(delta: float) -> void:
 			v.aura_mat.set_shader_parameter("spin", v.aura_spin)
 			v.aura_mat.set_shader_parameter("energy", float(v.embalo) / EMBALO_MAX)
 			v.aura_mat.set_shader_parameter("gold", 1.0 if v.crescendo_t > 0.0 else 0.0)
-			v.aura_mat.set_shader_parameter("alpha", (1.0 if v.controlled else 0.75) * (0.5 if v.ball_t > 0.0 else 1.0))
+			v.aura_mat.set_shader_parameter("alpha", (1.0 if v.controlled else FX_QUIET_DIM) * (0.5 if v.ball_t > 0.0 else 1.0))
 			any_ball = any_ball or v.ball_t > 0.0
 		_thread_view(v, on and v.partner != null and v.partner.alive)
 	if not any:
@@ -5693,8 +5751,8 @@ func _thread_view(v: Unit, on: bool) -> void:
 		var made_beads: Array = []
 		var bead_m := Fx.mat(Color(1.0, 0.84, 0.4), 6.0, true)
 		for k in 14:
-			made_beads.append(Fx.inst(made, Fx.sphere(0.07), bead_m))
-		th = {"root": made, "beads": made_beads, "rose": Fx.rose(made, 0.2)}
+			made_beads.append(_fx(v, made, Fx.sphere(0.07), bead_m))
+		th = {"root": made, "beads": made_beads, "rose": _fx_rose(v, made, 0.2)}
 		valsa_threads[v.idx] = th
 	var root: Node3D = th["root"]
 	root.visible = on
@@ -5791,9 +5849,9 @@ func _raise(o: Unit, hp_ratio: float, col: Color) -> void:
 	o.revive(hp_ratio)
 	o.weak_t = WEAK_TIME
 	_spawn_cards(o)
-	_burst(o.position, Color(1, 1, 1), 2.4)
-	_burst(o.position, col, 3.4)
-	_impact_ring(o.position + Vector3(0, 0.3, 0), col, 3.0)
+	_by(o)._burst(o.position, Color(1, 1, 1), 2.4)
+	_by(o)._burst(o.position, col, 3.4)
+	_by(o)._impact_ring(o.position + Vector3(0, 0.3, 0), col, 3.0)
 	hud.toast(o.unit_name + " voltou", 2.0)
 
 
@@ -5811,7 +5869,7 @@ func _necropsy(u: Unit) -> void:
 	var old := get_dot("decomp")
 	if not old.is_empty() and old["t"] <= VESTIGE_WINDOW and u.vestiges < VESTIGE_MAX:
 		u.vestiges += 1
-		_burst(u.position + Vector3(0, 2.2, 0), CHEM, 1.2)
+		_by(u)._burst(u.position + Vector3(0, 2.2, 0), CHEM, 1.2)
 		if u.controlled:
 			hud.toast("VESTÍGIO %d/%d" % [u.vestiges, VESTIGE_MAX], 0.9)
 	u.face(boss_pos - u.position)
@@ -5828,7 +5886,7 @@ func _hemostatic(u: Unit) -> void:
 	if ally == null:
 		if u.vestiges >= VESTIGE_MAX and not get_dot("decomp").is_empty():
 			add_dot("contam", "Contaminação", Color(0.75, 0.3, 0.9), CONTAM_TIME, 0.0, u)
-			_beam(u.position, _bp(Vector3(0, 3.0, -11.5)), Color(0.75, 0.3, 0.9, 0.95), 0.4)
+			_by(u)._beam(u.position, _bp(Vector3(0, 3.0, -11.5)), Color(0.75, 0.3, 0.9, 0.95), 0.4)
 			hud.toast("CONTAMINAÇÃO", 1.2)
 			return
 		ally = u
@@ -5837,8 +5895,8 @@ func _hemostatic(u: Unit) -> void:
 	ally.shield_hp = maxf(ally.shield_hp, ally.max_hp * HEMO_RATIO)
 	ally.shield_t = HEMO_TIME
 	u.enmity += ally.shield_hp * HEAL_ENMITY * 0.5
-	_beam(u.position, ally.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.3)
-	_burst(ally.position, CHEM, 2.0)
+	_by(u)._beam(u.position, ally.position, Color(CHEM.r, CHEM.g, CHEM.b, 0.95), 0.3)
+	_by(u)._burst(ally.position, CHEM, 2.0)
 
 
 ## Tanatopraxia: nuvem tóxica se a boss está com Contaminação; senão, nuvem que cura a party.
@@ -5846,7 +5904,7 @@ func _thanato(u: Unit) -> void:
 	if not get_dot("contam").is_empty():
 		remove_dot("contam")
 		u.vestiges = 0
-		_burst(_bp(Vector3(0, 3, -11.5)), Color(0.6, 0.85, 0.2), 7.0)
+		_by(u)._burst(_bp(Vector3(0, 3, -11.5)), Color(0.6, 0.85, 0.2), 7.0)
 		hud.flash(Color(0.6, 0.85, 0.2, 0.3))
 		hud.toast("NUVEM TÓXICA", 1.6)
 		_damage_boss(u, TOXIC_DMG, true, true)
@@ -5856,7 +5914,7 @@ func _thanato(u: Unit) -> void:
 	if u.vestiges >= VESTIGE_MAX:
 		u.vestiges = 0
 		boost = CLOUD_BOOST
-	_burst(u.position, CHEM, 7.0)
+	_by(u)._burst(u.position, CHEM, 7.0)
 	hud.toast("NUVEM CONSERVANTE" + (" +" if boost > 1.0 else ""), 1.4)
 	for o in units:
 		if not o.alive:
@@ -5867,8 +5925,8 @@ func _thanato(u: Unit) -> void:
 		o.mend_t = CLOUD_TIME
 		o.mend_rate = CLOUD_REGEN * boost
 		u.enmity += each * HEAL_ENMITY * 0.5
-		_burst(o.position, CHEM, 1.6)
-		_popup(int(each), Color(0.5, 1.0, 0.85), 52, o.position + Vector3(0, 2.6, 0), "+")
+		_by(u)._burst(o.position, CHEM, 1.6)
+		_by(u)._popup(int(each), Color(0.5, 1.0, 0.85), 52, o.position + Vector3(0, 2.6, 0), "+")
 
 
 # ---------------------------------------------------------------- Sleepwalker
@@ -5948,7 +6006,7 @@ func _sleep_skill(u: Unit, slot: int) -> void:
 				e["hit"] = true
 				amount += ECHO_BASE
 				gain += SW_ECHO_TORPOR
-				_burst(_bp(Vector3(0, 3.5, -11.5)), Color(1, 1, 1), 3.4)
+				_by(u)._burst(_bp(Vector3(0, 3.5, -11.5)), Color(1, 1, 1), 3.4)
 				if u.controlled:
 					hud.toast("FRESTA!", 0.6)
 				break
@@ -6011,7 +6069,7 @@ func _sw_toggle(u: Unit) -> void:
 		u.awake_cd[n] = u.skill_cd[n]
 		u.skill_cd[n] = 0.0
 	u.skill_cd[0] = u.bite_cd
-	_burst(u.position, DREAM, 3.0)
+	_by(u)._burst(u.position, DREAM, 3.0)
 	if u.controlled:
 		hud.toast("DORMINDO", 0.9)
 
@@ -6039,7 +6097,7 @@ func _sw_wake(u: Unit, lose: bool, clean := false) -> void:
 		u.torpor = maxf(0.0, u.torpor - SW_BITE_WAKE) if steps == 1 else 0.0
 	for n in 5:
 		u.skill_cd[n] = u.awake_cd[n]
-	_burst(u.position, Color(1, 1, 1), 2.0)
+	_by(u)._burst(u.position, Color(1, 1, 1), 2.0)
 
 
 ## Uma habilidade da sequência do Modo Dormindo. Fora de ordem não sai.
@@ -6094,6 +6152,7 @@ func _start_echoes() -> void:
 
 
 func _tick_echoes(delta: float) -> void:
+	var by := _unit_key("sleepwalker")
 	if echoes.is_empty():
 		echo_mark.visible = false
 		return
@@ -6104,10 +6163,10 @@ func _tick_echoes(delta: float) -> void:
 			if e["wait"] <= 0.45 and not e["warned"]:
 				# aviso: algo vai abrir (som de invocação)
 				e["warned"] = true
-				_sfx(_tone(520.0, 0.18, false), -8.0)
+				_by(by)._sfx(_tone(520.0, 0.18, false), -8.0)
 			if e["wait"] <= 0.0:
 				e["open"] = ECHO_OPEN
-				_sfx(_tone(160.0, 0.12, true), -2.0)  # o "PA!": é agora
+				_by(by)._sfx(_tone(160.0, 0.12, true), -2.0)  # o "PA!": é agora
 			continue
 		e["open"] -= delta
 		if e["open"] > 0.0 and not e["hit"]:
@@ -6175,22 +6234,23 @@ func _tick_sleep(u: Unit, delta: float) -> void:
 
 ## Lareira Celestial: fogueira espiritual no chão, onde a Soulflame está. Cura quem fica dentro.
 func _start_hearth(u: Unit) -> void:
-	var node := _hearth_node(Vector3(u.position.x, 0.05, u.position.z), false)
+	var node: Node3D = _by(u)._hearth_node(Vector3(u.position.x, 0.05, u.position.z), false)
 	hearths.append({"node": node, "owner": u, "t": HEARTH_TIME, "tick": 0.0, "strong": false, "r": HEARTH_R, "hps": HEARTH_HPS})
-	_burst(u.position, FLAME, HEARTH_R)
+	_by(u)._burst(u.position, FLAME, HEARTH_R)
 
 
 ## O desenho da fogueira. Forte (depois do Renascimento): área maior, anel duplo, o dobro de línguas
 ## de fogo, mais altas e com miolo branco.
 func _hearth_node(at: Vector3, strong: bool) -> Node3D:
+	var by := _take_by()
 	var node := Node3D.new()
 	fx_root.add_child(node)
 	node.position = at
 	var r := HEARTH_STRONG_R if strong else HEARTH_R
-	Fx.inst(node, Fx.disc(r), Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.22 if strong else 0.14), 0.0, true))
-	Fx.inst(node, Fx.torus(r - 0.1, r), Fx.mat(Color(FLAME.r * 0.9, FLAME.g * 0.9, FLAME.b * 0.9) if strong else FLAME.darkened(0.5), 3.0, true))
+	_fx(by, node, Fx.disc(r), Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.22 if strong else 0.14), 0.0, true))
+	_fx(by, node, Fx.torus(r - 0.1, r), Fx.mat(Color(FLAME.r * 0.9, FLAME.g * 0.9, FLAME.b * 0.9) if strong else FLAME.darkened(0.5), 3.0, true))
 	if strong:
-		Fx.inst(node, Fx.torus(r * 0.6 - 0.08, r * 0.6), Fx.mat(Color(1.0, 1.0, 0.8), 0.0, true), Vector3(0, 0.01, 0))
+		_fx(by, node, Fx.torus(r * 0.6 - 0.08, r * 0.6), Fx.mat(Color(1.0, 1.0, 0.8), 0.0, true), Vector3(0, 0.01, 0))
 	# a chama: línguas de fogo azul-esverdeado
 	var count := 7 if strong else 3
 	for n in count:
@@ -6201,10 +6261,10 @@ func _hearth_node(at: Vector3, strong: bool) -> Node3D:
 		var col := FLAME.lightened((n % 3) * 0.25).darkened(0.5)
 		if strong:
 			col = FLAME.lightened((n % 3) * 0.25).darkened(0.05)
-		var tongue := Fx.inst(node, Fx.cyl(0.02, (0.5 if strong else 0.34) - (n % 3) * 0.08, tall), Fx.mat(col, 4.0, true), off + Vector3(0, tall * 0.5, 0))
+		var tongue := _fx(by, node, Fx.cyl(0.02, (0.5 if strong else 0.34) - (n % 3) * 0.08, tall), Fx.mat(col, 4.0, true), off + Vector3(0, tall * 0.5, 0))
 		tongue.set_meta("flame", n)
 	if strong:
-		Fx.inst(node, Fx.sphere(0.5), Fx.mat(Color(1.2, 1.2, 1.0), 0.0, true), Vector3(0, 0.6, 0))
+		_fx(by, node, Fx.sphere(0.5), Fx.mat(Color(1.2, 1.2, 1.0), 0.0, true), Vector3(0, 0.6, 0))
 	return node
 
 
@@ -6212,14 +6272,14 @@ func _hearth_node(at: Vector3, strong: bool) -> Node3D:
 func _hearth_empower(h: Dictionary) -> void:
 	var at: Vector3 = h["node"].position
 	h["node"].queue_free()
-	h["node"] = _hearth_node(at, true)
+	h["node"] = _by((h["owner"] as Unit))._hearth_node(at, true)
 	h["strong"] = true
 	h["t"] = HEARTH_STRONG_TIME
 	h["r"] = HEARTH_STRONG_R
 	h["hps"] = HEARTH_STRONG_HPS
-	_burst(at, Color(1, 1, 1), 4.0)
-	_burst(at, FLAME, HEARTH_STRONG_R)
-	_impact_ring(at + Vector3(0, 0.3, 0), FLAME, HEARTH_STRONG_R)
+	_by((h["owner"] as Unit))._burst(at, Color(1, 1, 1), 4.0)
+	_by((h["owner"] as Unit))._burst(at, FLAME, HEARTH_STRONG_R)
+	_by((h["owner"] as Unit))._impact_ring(at + Vector3(0, 0.3, 0), FLAME, HEARTH_STRONG_R)
 	hud.toast("LAREIRA FORTALECIDA", 1.4)
 
 
@@ -6241,7 +6301,7 @@ func _tick_hearths(delta: float) -> void:
 					var a := randf() * TAU
 					var p: Vector3 = node.position + Vector3(cos(a), 0, sin(a)) * randf_range(0.5, float(h["r"]))
 					var em := Fx.mat(FLAME, 0.0, true)
-					var spark := Fx.inst(fx_root, Fx.sphere(0.09), em, p + Vector3(0, 0.2, 0))
+					var spark := _fx((h["owner"] as Unit), fx_root, Fx.sphere(0.09), em, p + Vector3(0, 0.2, 0))
 					var ts := spark.create_tween().set_parallel(true)
 					ts.tween_property(spark, "position:y", randf_range(2.0, 3.6), 0.9)
 					ts.tween_property(spark, "scale", Vector3.ONE * 0.1, 0.9)
@@ -6249,11 +6309,11 @@ func _tick_hearths(delta: float) -> void:
 			for o in units:
 				if o.alive and o.position.distance_to(node.position) <= float(h["r"]):
 					# fagulhas subindo em volta de quem está na fogueira
-					_burst(o.position + Vector3(0, 0.6, 0), FLAME, 1.6 if h["strong"] else 1.1)
+					_by((h["owner"] as Unit))._burst(o.position + Vector3(0, 0.6, 0), FLAME, 1.6 if h["strong"] else 1.1)
 					if o.hp < o.max_hp:
 						o.hp = minf(o.max_hp, o.hp + hps)
 						owner.enmity += hps * HEAL_ENMITY
-						_popup(int(hps), Color(0.5, 1.0, 0.85), 40, o.position + Vector3(0, 2.6, 0), "+")
+						_by((h["owner"] as Unit))._popup(int(hps), Color(0.5, 1.0, 0.85), 40, o.position + Vector3(0, 2.6, 0), "+")
 		if h["t"] <= 0.0:
 			node.queue_free()
 			hearths.erase(h)
@@ -6276,12 +6336,12 @@ func _rebirth(u: Unit) -> void:
 			o.revive(0.5)
 			o.weak_t = WEAK_TIME
 			_spawn_cards(o)
-			_burst(o.position, Color(1.0, 0.95, 0.6), 3.0)
+			_by(u)._burst(o.position, Color(1.0, 0.95, 0.6), 3.0)
 			hud.toast(o.unit_name + " voltou", 2.0)
 		else:
 			o.hp = minf(o.max_hp, o.hp + REBIRTH_HEAL)
-			_burst(o.position, FLAME, 1.8)
-			_popup(int(REBIRTH_HEAL), Color(0.5, 1.0, 0.85), 56, o.position + Vector3(0, 2.6, 0), "+")
+			_by(u)._burst(o.position, FLAME, 1.8)
+			_by(u)._popup(int(REBIRTH_HEAL), Color(0.5, 1.0, 0.85), 56, o.position + Vector3(0, 2.6, 0), "+")
 		u.enmity += REBIRTH_HEAL * HEAL_ENMITY * 0.5
 	_phoenix(u, from)
 
@@ -6295,17 +6355,17 @@ func _phoenix(u: Unit, from: Vector3) -> void:
 	fx_root.add_child(bird)
 	bird.position = from + Vector3(0, 0.6, 0)
 	# corpo, cabeça com crista, bico e cauda
-	Fx.inst(bird, Fx.sphere(0.9), Fx.mat(Color(gold.r * 1.3, gold.g * 1.3, gold.b * 1.3, 0.95), 0.0, true)).scale = Vector3(0.9, 0.9, 1.5)
-	Fx.inst(bird, Fx.sphere(0.5), Fx.mat(Color(1.4, 1.3, 1.0), 0.0, true), Vector3(0, 0.55, -1.2))
-	Fx.inst(bird, Fx.cyl(0.0, 0.16, 0.6), Fx.mat(Color(1.2, 0.9, 0.3), 0.0, true), Vector3(0, 0.5, -1.75)).rotation.x = -PI / 2.0
+	_fx(u, bird, Fx.sphere(0.9), Fx.mat(Color(gold.r * 1.3, gold.g * 1.3, gold.b * 1.3, 0.95), 0.0, true)).scale = Vector3(0.9, 0.9, 1.5)
+	_fx(u, bird, Fx.sphere(0.5), Fx.mat(Color(1.4, 1.3, 1.0), 0.0, true), Vector3(0, 0.55, -1.2))
+	_fx(u, bird, Fx.cyl(0.0, 0.16, 0.6), Fx.mat(Color(1.2, 0.9, 0.3), 0.0, true), Vector3(0, 0.5, -1.75)).rotation.x = -PI / 2.0
 	for n in 3:
-		var crest := Fx.inst(bird, Fx.cyl(0.0, 0.1, 0.8), Fx.mat(Color(FLAME.r * 1.2, FLAME.g * 1.2, FLAME.b * 1.2), 0.0, true), Vector3((n - 1) * 0.2, 1.1, -1.0))
+		var crest := _fx(u, bird, Fx.cyl(0.0, 0.1, 0.8), Fx.mat(Color(FLAME.r * 1.2, FLAME.g * 1.2, FLAME.b * 1.2), 0.0, true), Vector3((n - 1) * 0.2, 1.1, -1.0))
 		crest.rotation.x = 0.5
 		crest.rotation.z = (n - 1) * -0.4
 	for n in 5:
 		var tail := BoxMesh.new()
 		tail.size = Vector3(0.3, 0.06, 3.2 - absf(n - 2) * 0.5)
-		var tm := Fx.inst(bird, tail, Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.85).lerp(gold, 0.3 * (n % 2)), 0.0, true), Vector3((n - 2) * 0.32, -0.1, 2.4))
+		var tm := _fx(u, bird, tail, Fx.mat(Color(FLAME.r, FLAME.g, FLAME.b, 0.85).lerp(gold, 0.3 * (n % 2)), 0.0, true), Vector3((n - 2) * 0.32, -0.1, 2.4))
 		tm.rotation.y = (n - 2) * -0.14
 	# asas: cada uma um leque de penas de fogo, num pivô que bate
 	var wings: Array = []
@@ -6317,18 +6377,18 @@ func _phoenix(u: Unit, from: Vector3) -> void:
 			var feather := BoxMesh.new()
 			feather.size = Vector3(3.4 - k * 0.45, 0.07, 0.9)
 			var col := gold.lerp(FLAME, k / 4.0)
-			var fm := Fx.inst(pivot, feather, Fx.mat(Color(col.r * 1.1, col.g * 1.1, col.b * 1.1, 0.9), 0.0, true), Vector3(side * (1.7 - k * 0.2), 0, 0.2 + k * 0.55))
+			var fm := _fx(u, pivot, feather, Fx.mat(Color(col.r * 1.1, col.g * 1.1, col.b * 1.1, 0.9), 0.0, true), Vector3(side * (1.7 - k * 0.2), 0, 0.2 + k * 0.55))
 			fm.rotation.y = side * -k * 0.16
 		pivot.rotation.z = side * -1.3  # nasce com as asas fechadas pra cima
 		wings.append(pivot)
 	bird.scale = Vector3.ONE * 0.15
 	# 1. nascimento: sai do fogo, cresce e abre as asas
-	_burst(from, Color(1, 1, 1), 3.0)
-	_burst(from, gold, 5.0)
+	_by(u)._burst(from, Color(1, 1, 1), 3.0)
+	_by(u)._burst(from, gold, 5.0)
 	for k in 3:
-		_impact_ring(from + Vector3(0, 0.3, 0), [gold, FLAME, Color(1, 1, 1)][k], 2.5 + k * 1.5)
+		_by(u)._impact_ring(from + Vector3(0, 0.3, 0), [gold, FLAME, Color(1, 1, 1)][k], 2.5 + k * 1.5)
 	var pillar_m := Fx.mat(Color(gold.r, gold.g, gold.b, 0.6), 0.0, true)
-	var pillar := Fx.inst(fx_root, Fx.cyl(1.2, 1.8, 12.0), pillar_m, from + Vector3(0, 6.0, 0))
+	var pillar := _fx(u, fx_root, Fx.cyl(1.2, 1.8, 12.0), pillar_m, from + Vector3(0, 6.0, 0))
 	var tp := pillar.create_tween().set_parallel(true)
 	tp.tween_property(pillar, "scale", Vector3(0.05, 1.0, 0.05), REBIRTH_BIRTH).set_ease(Tween.EASE_IN)
 	tp.tween_property(pillar_m, "albedo_color:a", 0.0, REBIRTH_BIRTH)
@@ -6374,7 +6434,7 @@ func _phoenix(u: Unit, from: Vector3) -> void:
 				var fb := BoxMesh.new()
 				fb.size = Vector3(0.5, 0.04, 0.16)
 				var fm := Fx.mat(Color(gold.r, gold.g, gold.b, 0.95), 0.0, true)
-				var feather := Fx.inst(fx_root, fb, fm, bird.position + Vector3(randf_range(-2.5, 2.5), 0, randf_range(-0.6, 0.6)))
+				var feather := _fx(u, fx_root, fb, fm, bird.position + Vector3(randf_range(-2.5, 2.5), 0, randf_range(-0.6, 0.6)))
 				var tf := feather.create_tween().set_parallel(true)
 				tf.tween_property(feather, "position:y", 0.2, 0.9).set_ease(Tween.EASE_IN)
 				tf.tween_property(feather, "rotation", Vector3(TAU, TAU * 0.5, TAU), 0.9)
@@ -6384,47 +6444,49 @@ func _phoenix(u: Unit, from: Vector3) -> void:
 
 ## O grito da fênix: som, ondas de luz saindo dela, clarão, tremor, e as chamas nos aliados respondendo.
 func _phoenix_cry(at: Vector3, gold: Color) -> void:
-	_sfx(_tone(1568.0, 0.45, false), -5.0)
-	_sfx(_tone(2093.0, 0.35, false), -9.0)
+	var by := _take_by()
+	_by(by)._sfx(_tone(1568.0, 0.45, false), -5.0)
+	_by(by)._sfx(_tone(2093.0, 0.35, false), -9.0)
 	for k in 5:
 		var m := Fx.mat(Color([gold, FLAME, Color(1, 1, 1)][k % 3].r, [gold, FLAME, Color(1, 1, 1)][k % 3].g, [gold, FLAME, Color(1, 1, 1)][k % 3].b, 0.9), 0.0, true)
-		var ring := Fx.inst(fx_root, Fx.torus(0.9, 1.0), m, at)
+		var ring := _fx(by, fx_root, Fx.torus(0.9, 1.0), m, at)
 		ring.rotation.x = PI / 2.0
 		ring.scale = Vector3.ONE * 0.5
 		var tr := ring.create_tween().set_parallel(true)
 		tr.tween_property(ring, "scale", Vector3.ONE * (9.0 + k * 3.0), 0.7).set_delay(k * 0.08).set_ease(Tween.EASE_OUT)
 		tr.tween_property(m, "albedo_color:a", 0.0, 0.7).set_delay(k * 0.08)
 		tr.chain().tween_callback(ring.queue_free)
-	_impact_ring(Vector3(at.x, 0.3, at.z), gold, 12.0)
-	_burst(at, Color(1, 1, 1), 5.0)
+	_by(by)._impact_ring(Vector3(at.x, 0.3, at.z), gold, 12.0)
+	_by(by)._burst(at, Color(1, 1, 1), 5.0)
 	hud.flash(Color(1.0, 0.75, 0.3), 0.26)
 	hud.toast("O GRITO DA FÊNIX", 1.2)
 	shake_t = REBIRTH_CRY
 	shake_amp = 0.4
 	for o in units:
 		if o.alive:
-			_impact_ring(o.position + Vector3(0, 0.3, 0), FLAME, 1.8)
-			_beam(at - Vector3(0, 1.0, 0), o.position, Color(gold.r, gold.g, gold.b, 0.5), 0.5)
+			_by(by)._impact_ring(o.position + Vector3(0, 0.3, 0), FLAME, 1.8)
+			_by(by)._beam(at - Vector3(0, 1.0, 0), o.position, Color(gold.r, gold.g, gold.b, 0.5), 0.5)
 
 
 ## Um foco de fogo que a fênix deixa no chão: fica aceso REBIRTH_PATCH segundos e apaga devagar.
 func _fire_patch(at: Vector3, gold: Color) -> void:
+	var by := _take_by()
 	var node := Node3D.new()
 	fx_root.add_child(node)
 	node.position = at
 	var mats: Array = []
 	var ground_m := Fx.mat(Color(gold.r, gold.g * 0.8, gold.b * 0.5, 0.4), 0.0, true)
-	Fx.inst(node, Fx.disc(1.3, 0.03), ground_m, Vector3(0, 0.05, 0))
+	_fx(by, node, Fx.disc(1.3, 0.03), ground_m, Vector3(0, 0.05, 0))
 	mats.append(ground_m)
 	for n in 5:
 		var a := n * TAU / 5.0
 		var tall := 1.0 + (n % 3) * 0.5
 		var col := gold.lerp(FLAME, (n % 2) * 0.6)
 		var m := Fx.mat(Color(col.r, col.g, col.b, 0.9), 0.0, true)
-		var tongue := Fx.inst(node, Fx.cyl(0.02, 0.26, tall), m, Vector3(cos(a) * 0.5, tall * 0.5, sin(a) * 0.5))
+		var tongue := _fx(by, node, Fx.cyl(0.02, 0.26, tall), m, Vector3(cos(a) * 0.5, tall * 0.5, sin(a) * 0.5))
 		tongue.create_tween().set_loops().tween_property(tongue, "scale:y", 1.3, 0.25 + n * 0.05).set_trans(Tween.TRANS_SINE)
 		mats.append(m)
-	_burst(at, gold, 1.8)
+	_by(by)._burst(at, gold, 1.8)
 	node.scale = Vector3(0.2, 0.2, 0.2)
 	var tw := node.create_tween()
 	tw.tween_property(node, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -6439,13 +6501,13 @@ func _fire_patch(at: Vector3, gold: Color) -> void:
 func _phoenix_hit(u: Unit, hit: Vector3, gold: Color) -> void:
 	if ended:
 		return
-	_burst(hit, Color(1, 1, 1), 9.0)
-	_burst(hit, gold, 12.0)
+	_by(u)._burst(hit, Color(1, 1, 1), 9.0)
+	_by(u)._burst(hit, gold, 12.0)
 	for k in 5:
-		_impact_ring(hit, [Color(1, 1, 1), gold, FLAME][k % 3], 4.0 + k * 2.0)
+		_by(u)._impact_ring(hit, [Color(1, 1, 1), gold, FLAME][k % 3], 4.0 + k * 2.0)
 	for n in 20:
 		var a := n * TAU / 20.0
-		var sp := Fx.inst(fx_root, Fx.sphere(0.18), Fx.mat([gold, FLAME][n % 2], 0.0, true), hit)
+		var sp := _fx(u, fx_root, Fx.sphere(0.18), Fx.mat([gold, FLAME][n % 2], 0.0, true), hit)
 		var ts := sp.create_tween().set_parallel(true)
 		ts.tween_property(sp, "position", hit + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 8.0), 0.7).set_ease(Tween.EASE_OUT)
 		ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.7)
@@ -6495,9 +6557,11 @@ func _tick_dots(delta: float) -> void:
 		if d["acc"] >= 1.0 and d["dps"] > 0.0:
 			d["acc"] -= 1.0
 			plain_hit = d.get("plain", false)
+			dmg_tag = String(d.get("name", "Dano contínuo"))
 			_damage_boss(d["owner"], d["dps"], false, false)
+			dmg_tag = ""
 			plain_hit = false
-			_popup(int(d["dps"]), (d["col"] as Color).lightened(0.2), 30)
+			_by((d["owner"] as Unit))._popup(int(d["dps"]), (d["col"] as Color).lightened(0.2), 30)
 			if ended:
 				return
 		if d["t"] <= 0.0:
@@ -6510,7 +6574,7 @@ func _bleed(u: Unit, cost: float) -> void:
 	if not u.alive or u.party_t > 0.0 or u.immortal_t > 0.0:
 		return
 	u.hp -= cost
-	_popup(int(cost), BLOOD, 40, u.position + Vector3(0, 2.2, 0), "-")
+	_by(u)._popup(int(cost), BLOOD, 40, u.position + Vector3(0, 2.2, 0), "-")
 	if u.hp <= 0.0:
 		kill(u, "sangrou até morrer com os próprios golpes")
 
@@ -6529,11 +6593,11 @@ func _start_holy(u: Unit) -> void:
 	var node := Node3D.new()
 	fx_root.add_child(node)
 	node.position = Vector3(u.position.x, 0.05, u.position.z)
-	Fx.inst(node, Fx.disc(HOLY_R), Fx.mat(Color(GOLD.r, GOLD.g, GOLD.b, 0.16), 0.0, true))
-	Fx.inst(node, Fx.torus(HOLY_R - 0.12, HOLY_R), Fx.mat(GOLD, 3.0, true))
-	Fx.inst(node, Fx.torus(HOLY_R * 0.5 - 0.06, HOLY_R * 0.5), Fx.mat(GOLD, 2.0, true), Vector3(0, 0.01, 0))
+	_fx(u, node, Fx.disc(HOLY_R), Fx.mat(Color(GOLD.r, GOLD.g, GOLD.b, 0.16), 0.0, true))
+	_fx(u, node, Fx.torus(HOLY_R - 0.12, HOLY_R), Fx.mat(GOLD, 3.0, true))
+	_fx(u, node, Fx.torus(HOLY_R * 0.5 - 0.06, HOLY_R * 0.5), Fx.mat(GOLD, 2.0, true), Vector3(0, 0.01, 0))
 	holy.append({"node": node, "owner": u, "t": HOLY_TIME, "tick": 0.0})
-	_burst(u.position, GOLD, HOLY_R)
+	_by(u)._burst(u.position, GOLD, HOLY_R)
 
 
 func _tick_holy(delta: float) -> void:
@@ -6546,7 +6610,7 @@ func _tick_holy(delta: float) -> void:
 			h["tick"] = HOLY_TICK
 			var owner: Unit = h["owner"]
 			if owner.alive and node.position.distance_to(boss_pos) <= HOLY_R + 1.4:
-				_burst(boss_pos + Vector3(0, 0.6, 1.6), GOLD, 1.8)
+				_by((h["owner"] as Unit))._burst(boss_pos + Vector3(0, 0.6, 1.6), GOLD, 1.8)
 				_damage_boss(owner, HOLY_DMG, true, false)
 		if h["t"] <= 0.0:
 			node.queue_free()
@@ -6556,6 +6620,7 @@ func _tick_holy(delta: float) -> void:
 ## Muralha da Fé: uma cruz dourada gigante sobre o grupo por WALL_SHOW segundos, com um facho
 ## de luz descendo em cada herói.
 func _faith_cross() -> void:
+	var by := _take_by()
 	var center := Vector3.ZERO
 	var n := 0
 	for o in units:
@@ -6569,14 +6634,14 @@ func _faith_cross() -> void:
 	var m := Fx.mat(Color(GOLD.r, GOLD.g, GOLD.b, 0.85), 4.0, true)
 	var up := BoxMesh.new()
 	up.size = Vector3(1.1, 7.0, 0.5)
-	Fx.inst(node, up, m)
+	_fx(by, node, up, m)
 	var arm := BoxMesh.new()
 	arm.size = Vector3(4.4, 1.1, 0.5)
-	Fx.inst(node, arm, m, Vector3(0, 1.2, 0))
+	_fx(by, node, arm, m, Vector3(0, 1.2, 0))
 	var soft := Fx.mat(Color(GOLD.r, GOLD.g, GOLD.b, 0.28), 2.0, true)
 	for o in units:
 		if o.alive:
-			Fx.inst(node, Fx.cyl(0.9, 1.2, 7.0), soft, o.position - center + Vector3(0, 3.5, 0))
+			_fx(by, node, Fx.cyl(0.9, 1.2, 7.0), soft, o.position - center + Vector3(0, 3.5, 0))
 	node.scale = Vector3.ONE * 0.2
 	var tw := node.create_tween()
 	tw.tween_property(node, "scale", Vector3.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -6596,8 +6661,8 @@ func _provoke(u: Unit, by_ai: bool) -> void:
 	if not by_ai and u.tank and target != null and target != u:
 		_master("provoke")
 	u.enmity = maxf(u.enmity, top) + PROVOKE_BONUS
-	_burst(u.position, Color(1.0, 0.35, 0.6), 3.2)
-	_beam(u.position, _bp(Vector3(0, 5.0, -11.5)), Color(1.0, 0.35, 0.6, 0.95), 0.45)
+	_by(u)._burst(u.position, Color(1.0, 0.35, 0.6), 3.2)
+	_by(u)._beam(u.position, _bp(Vector3(0, 5.0, -11.5)), Color(1.0, 0.35, 0.6, 0.95), 0.45)
 	boss.rage()
 	# confirmação de que a boss foi provocada: uma etiqueta pequena ao lado dela
 	hud.provoke_tag(cam.unproject_position(_bp(Vector3(4.6, 8.4, -12.0))))
@@ -6612,7 +6677,7 @@ func _lifesteal(u: Unit, amount: float) -> void:
 		return
 	u.hp = minf(u.max_hp, u.hp + amount)
 	if amount >= 1.0:
-		_popup(int(amount), BLOOD.lightened(0.35), 48, u.position + Vector3(0, 2.6, 0), "+")
+		_by(u)._popup(int(amount), BLOOD.lightened(0.35), 48, u.position + Vector3(0, 2.6, 0), "+")
 
 
 ## Cura da própria Malpractice durante o Blood Party (roubo de vida e Extração): a única que entra.
@@ -6623,7 +6688,7 @@ func _party_heal(u: Unit, amount: float) -> void:
 	u.hp = minf(u.max_hp, u.hp + amount)
 	u.party_hp = u.hp
 	if u.hp - was >= 1.0:
-		_popup(int(u.hp - was), BLOOD.lightened(0.35), 44, u.position + Vector3(0, 2.6, 0), "+")
+		_by(u)._popup(int(u.hp - was), BLOOD.lightened(0.35), 44, u.position + Vector3(0, 2.6, 0), "+")
 		_blood_return(u, 2)
 
 
@@ -6632,7 +6697,7 @@ func _party_heal(u: Unit, amount: float) -> void:
 func _blood_return(u: Unit, count: int) -> void:
 	var from := boss_pos + Vector3(0, 2.2, 1.6)
 	for n in count:
-		var drop := Fx.inst(fx_root, Fx.sphere(0.11), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), from + Vector3(randf_range(-0.8, 0.8), randf_range(-0.6, 0.8), 0))
+		var drop := _fx(u, fx_root, Fx.sphere(0.11), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), from + Vector3(randf_range(-0.8, 0.8), randf_range(-0.6, 0.8), 0))
 		var tw := drop.create_tween()
 		tw.tween_interval(n * 0.05)
 		tw.tween_property(drop, "position", u.position + Vector3(0, 1.2, 0), 0.24).set_ease(Tween.EASE_IN)
@@ -6644,7 +6709,7 @@ func _blood_return(u: Unit, count: int) -> void:
 	for size in [Vector3(0.1, 0.34, 0.04), Vector3(0.34, 0.1, 0.04)]:
 		var bar := BoxMesh.new()
 		bar.size = size
-		Fx.inst(cross, bar, cm)
+		_fx(u, cross, bar, cm)
 	var tc := cross.create_tween().set_parallel(true)
 	tc.tween_property(cross, "position:y", cross.position.y + 1.0, 0.6)
 	tc.tween_property(cm, "albedo_color:a", 0.0, 0.6)
@@ -6655,8 +6720,8 @@ func _blood_return(u: Unit, count: int) -> void:
 func _poke_fx(u: Unit) -> void:
 	u.syringe_stab(1.1)
 	var at := boss_pos + Vector3(randf_range(-0.6, 0.6), 2.0, 1.7)
-	_impact_ring(at, BLOOD.lightened(0.2), 0.9)
-	_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.9), 0.28)
+	_by(u)._impact_ring(at, BLOOD.lightened(0.2), 0.9)
+	_by(u)._beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.9), 0.28)
 	u.set_fill(0.55, 0.08)
 	u.create_tween().tween_callback(u.set_fill.bind(0.35, 0.3)).set_delay(0.2)
 	_blood_return(u, 1)
@@ -6670,20 +6735,20 @@ func _consumed_fx(u: Unit) -> void:
 	var at := boss_pos + Vector3(0, 2.2, 1.7)
 	for n in 8:
 		# o sangue sendo sugado: gotas correndo da boss pra seringa
-		var drop := Fx.inst(fx_root, Fx.sphere(0.1), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-1.2, 1.2), randf_range(-0.8, 1.2), 0))
+		var drop := _fx(u, fx_root, Fx.sphere(0.1), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-1.2, 1.2), randf_range(-0.8, 1.2), 0))
 		var tw := drop.create_tween()
 		tw.tween_interval(n * 0.04)
 		tw.tween_property(drop, "position", u.position + Vector3(0.4, 1.1, -0.6), 0.2).set_ease(Tween.EASE_IN)
 		tw.tween_callback(drop.queue_free)
-	_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.95), 0.45)
+	_by(u)._beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.95), 0.45)
 	get_tree().create_timer(0.4, false).timeout.connect(func():
 		if not is_instance_valid(u) or not u.alive:
 			return
-		_burst(at, BLOOD, 3.2)
-		_impact_ring(at, BLOOD.lightened(0.2), 2.6)
+		_by(u)._burst(at, BLOOD, 3.2)
+		_by(u)._impact_ring(at, BLOOD.lightened(0.2), 2.6)
 		for n in 10:
 			var a := n * TAU / 10.0
-			var sp := Fx.inst(fx_root, Fx.sphere(0.09), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), at)
+			var sp := _fx(u, fx_root, Fx.sphere(0.09), Fx.mat(Color(1.8, 0.12, 0.25), 0.0, true), at)
 			var ts := sp.create_tween().set_parallel(true)
 			ts.tween_property(sp, "position", at + Vector3(cos(a), sin(a), 0.2) * randf_range(1.2, 2.4), 0.35).set_ease(Tween.EASE_OUT)
 			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.35)
@@ -6700,7 +6765,7 @@ func _consumed_fx(u: Unit) -> void:
 ## Blood Taste (parry): uma proteção vermelha com cruzes médicas em volta dela pela janela do parry.
 func _parry_guard(u: Unit) -> void:
 	var dome_m := Fx.mat(Color(BLOOD.r * 1.5, BLOOD.g, BLOOD.b, 0.3), 0.0, true)
-	var dome := Fx.inst(u, Fx.sphere(1.35), dome_m, Vector3(0, 1.0, 0))
+	var dome := _fx(u, u, Fx.sphere(1.35), dome_m, Vector3(0, 1.0, 0))
 	dome.scale = Vector3.ONE * 0.4
 	var cm := Fx.mat(Color(2.2, 2.2, 2.2, 0.95), 0.0, true)
 	for n in 4:
@@ -6712,7 +6777,7 @@ func _parry_guard(u: Unit) -> void:
 		for size in [Vector3(0.12, 0.42, 0.04), Vector3(0.42, 0.12, 0.04)]:
 			var bar := BoxMesh.new()
 			bar.size = size
-			Fx.inst(cross, bar, cm)
+			_fx(u, cross, bar, cm)
 	var tw := dome.create_tween()
 	tw.tween_property(dome, "scale", Vector3.ONE, 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(dome, "rotation:y", 1.6, TASTE_TIME)
@@ -6727,13 +6792,14 @@ func _parry_guard(u: Unit) -> void:
 
 ## Indicador de provocação em cima da boss (Emergency Response): uma seta vermelha apontando pra baixo.
 func _taunt_mark() -> void:
+	var by := _take_by()
 	var node := Node3D.new()
 	fx_root.add_child(node)
 	node.position = _bp(Vector3(0, 9.6, -10.8))
 	var m := Fx.mat(Color(2.0, 0.2, 0.35, 0.95), 0.0, true)
-	Fx.inst(node, Fx.cyl(0.0, 0.7, 1.1), m, Vector3(0, -0.2, 0)).rotation.x = PI
-	Fx.inst(node, Fx.cyl(0.24, 0.24, 0.9), m, Vector3(0, 0.75, 0))
-	Fx.inst(node, Fx.torus(0.95, 1.1), m, Vector3(0, -1.0, 0))
+	_fx(by, node, Fx.cyl(0.0, 0.7, 1.1), m, Vector3(0, -0.2, 0)).rotation.x = PI
+	_fx(by, node, Fx.cyl(0.24, 0.24, 0.9), m, Vector3(0, 0.75, 0))
+	_fx(by, node, Fx.torus(0.95, 1.1), m, Vector3(0, -1.0, 0))
 	var tw := node.create_tween()
 	for n in 4:
 		tw.tween_property(node, "position:y", 9.0, 0.16)
@@ -6763,14 +6829,14 @@ func _bloodbath(u: Unit) -> void:
 		if o.alive and o.position.distance_to(at) <= r:
 			o.bath_t = BATH_TIME
 			# o sangue escorre em cada um que foi coberto
-			_impact_ring(o.position + Vector3(0, 0.25, 0), BLOOD.lightened(0.2), 1.6)
-			_burst(o.position + Vector3(0, 1.4, 0), BLOOD, 1.4)
+			_by(u)._impact_ring(o.position + Vector3(0, 0.25, 0), BLOOD.lightened(0.2), 1.6)
+			_by(u)._burst(o.position + Vector3(0, 1.4, 0), BLOOD, 1.4)
 	if ult:
 		add_dot("pure", "Pure Blood", Color(1.0, 0.45, 0.6), PURE_TIME, PURE_DPS, u)
 		get_dot("pure")["plain"] = true
 	# a fonte: um jato vermelho subindo da agulha
 	var jet_m := Fx.mat(Color(BLOOD.r * 2.2, BLOOD.g * 1.5, BLOOD.b * 1.5, 0.95), 0.0, true)
-	var jet := Fx.inst(fx_root, Fx.cyl(0.5, 0.12, 9.0), jet_m, at + Vector3(0.4, 7.2, 0))
+	var jet := _fx(u, fx_root, Fx.cyl(0.5, 0.12, 9.0), jet_m, at + Vector3(0.4, 7.2, 0))
 	jet.scale = Vector3(1.0, 0.05, 1.0)
 	var tj := jet.create_tween()
 	tj.tween_property(jet, "scale", Vector3.ONE, 0.16).set_ease(Tween.EASE_OUT)
@@ -6779,7 +6845,7 @@ func _bloodbath(u: Unit) -> void:
 	tj.tween_callback(jet.queue_free)
 	# a nuvem no alto e o chão coberto, do tamanho exato da área
 	var cloud_m := Fx.mat(Color(BLOOD.r * 1.6, BLOOD.g, BLOOD.b, 0.5), 0.0, true)
-	var cloud := Fx.inst(fx_root, Fx.disc(r, 0.5), cloud_m, at + Vector3(0, 11.0, 0))
+	var cloud := _fx(u, fx_root, Fx.disc(r, 0.5), cloud_m, at + Vector3(0, 11.0, 0))
 	cloud.scale = Vector3(0.1, 1.0, 0.1)
 	var tc := cloud.create_tween()
 	tc.tween_property(cloud, "scale", Vector3.ONE, 0.3).set_delay(0.12).set_ease(Tween.EASE_OUT)
@@ -6787,27 +6853,27 @@ func _bloodbath(u: Unit) -> void:
 	tc.tween_property(cloud_m, "albedo_color:a", 0.0, 0.5)
 	tc.tween_callback(cloud.queue_free)
 	var pool_m := Fx.mat(Color(BLOOD.r * 1.4, BLOOD.g, BLOOD.b, 0.42), 0.0, true)
-	var pool := Fx.inst(fx_root, Fx.disc(r, 0.03), pool_m, at + Vector3(0, 0.06, 0))
+	var pool := _fx(u, fx_root, Fx.disc(r, 0.03), pool_m, at + Vector3(0, 0.06, 0))
 	pool.scale = Vector3(0.1, 1.0, 0.1)
 	var tp := pool.create_tween()
 	tp.tween_property(pool, "scale", Vector3.ONE, 0.5).set_delay(0.3).set_ease(Tween.EASE_OUT)
 	tp.tween_property(pool_m, "albedo_color:a", 0.0, 1.6)
 	tp.tween_callback(pool.queue_free)
-	_impact_ring(at + Vector3(0, 0.3, 0), BLOOD.lightened(0.2), r)
+	_by(u)._impact_ring(at + Vector3(0, 0.3, 0), BLOOD.lightened(0.2), r)
 	# a chuva: gotas grossas caindo por toda a área durante um segundo
 	var drops := 46 if ult else 26
 	for n in drops:
 		var a := randf() * TAU
 		var d := sqrt(randf()) * r
 		var ground := at + Vector3(cos(a) * d, 0.1, sin(a) * d)
-		var drop := Fx.inst(fx_root, Fx.capsule(0.1, 0.7), Fx.mat(Color(BLOOD.r * 2.0, BLOOD.g * 1.4, BLOOD.b * 1.4), 0.0, true), ground + Vector3(0, 11.0, 0))
+		var drop := _fx(u, fx_root, Fx.capsule(0.1, 0.7), Fx.mat(Color(BLOOD.r * 2.0, BLOOD.g * 1.4, BLOOD.b * 1.4), 0.0, true), ground + Vector3(0, 11.0, 0))
 		drop.visible = false
 		var td := drop.create_tween()
 		td.tween_interval(0.3 + randf() * 0.9)
 		td.tween_callback(func(): drop.visible = true)
 		td.tween_property(drop, "position", ground, 0.3).set_ease(Tween.EASE_IN)
 		td.tween_callback(drop.queue_free)
-		td.tween_callback(_burst.bind(ground, BLOOD, 0.8))
+		td.tween_callback(_by_call.bind(u, &"_burst", [ground, BLOOD, 0.8]))
 	hud.flash(BLOOD, 0.2)
 	shake_t = 0.25
 	shake_amp = 0.25
@@ -6832,7 +6898,7 @@ func _consumed_big(u: Unit) -> void:
 		_party_heal(u, heal)
 	else:
 		u.hp = minf(u.max_hp, u.hp + heal)
-		_popup(int(heal), BLOOD.lightened(0.35), 58, u.position + Vector3(0, 2.8, 0), "+")
+		_by(u)._popup(int(heal), BLOOD.lightened(0.35), 58, u.position + Vector3(0, 2.8, 0), "+")
 	u.mend_t = SHARE_TIME
 	u.mend_rate = CONSUMED_REGEN
 	for o in units:
@@ -6841,10 +6907,10 @@ func _consumed_big(u: Unit) -> void:
 		o.mend_t = SHARE_TIME
 		o.mend_rate = SHARE_REGEN
 		# o sangue passa dela pra cada aliado
-		_beam(u.position, o.position, Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.9), 0.5)
-		_impact_ring(o.position + Vector3(0, 0.3, 0), BLOOD.lightened(0.3), 1.6)
-		_burst(o.position + Vector3(0, 1.0, 0), BLOOD.lightened(0.2), 1.3)
-	_burst(u.position + Vector3(0, 1.0, 0), Color(1, 1, 1), 2.2)
+		_by(u)._beam(u.position, o.position, Color(BLOOD.r * 1.8, BLOOD.g, BLOOD.b, 0.9), 0.5)
+		_by(u)._impact_ring(o.position + Vector3(0, 0.3, 0), BLOOD.lightened(0.3), 1.6)
+		_by(u)._burst(o.position + Vector3(0, 1.0, 0), BLOOD.lightened(0.2), 1.3)
+	_by(u)._burst(u.position + Vector3(0, 1.0, 0), Color(1, 1, 1), 2.2)
 	_blood_return(u, 6)
 	if u.controlled:
 		hud.toast("COMPARTILHAMENTO DE SANGUE", 1.4)
@@ -6869,7 +6935,7 @@ func _extract_big(u: Unit) -> void:
 		hud.toast("EXTRAÇÃO TOTAL", 1.6)
 	# a esfera de sangue crescendo na boss
 	var orb_m := Fx.mat(Color(BLOOD.r * 2.6, BLOOD.g * 1.6, BLOOD.b * 1.6, 0.85), 0.0, true)
-	var orb := Fx.inst(fx_root, Fx.sphere(1.0), orb_m, at)
+	var orb := _fx(u, fx_root, Fx.sphere(1.0), orb_m, at)
 	orb.scale = Vector3.ONE * 0.2
 	orb.create_tween().tween_property(orb, "scale", Vector3.ONE * 2.6, EXTRACT_BIG_TIME).set_ease(Tween.EASE_IN)
 	var steps := 24
@@ -6878,14 +6944,14 @@ func _extract_big(u: Unit) -> void:
 			if not is_instance_valid(u) or not u.alive:
 				return
 			var k := float(n) / steps
-			_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * (1.5 + k * 2.5), BLOOD.g, BLOOD.b, 0.95), 0.14)
+			_by(u)._beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * (1.5 + k * 2.5), BLOOD.g, BLOOD.b, 0.95), 0.14)
 			for j in 3:
-				var drop := Fx.inst(fx_root, Fx.sphere(0.1 + k * 0.12), Fx.mat(Color(1.8 + k * 2.0, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-2.4, 2.4), randf_range(-1.4, 3.0), 0))
+				var drop := _fx(u, fx_root, Fx.sphere(0.1 + k * 0.12), Fx.mat(Color(1.8 + k * 2.0, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-2.4, 2.4), randf_range(-1.4, 3.0), 0))
 				var tw := drop.create_tween()
 				tw.tween_property(drop, "position", at, 0.16).set_ease(Tween.EASE_IN)
 				tw.tween_callback(drop.queue_free)
 			if n % 4 == 0:
-				_impact_ring(at, BLOOD.lightened(k * 0.4), 1.5 + k * 3.0)
+				_by(u)._impact_ring(at, BLOOD.lightened(k * 0.4), 1.5 + k * 3.0)
 			shake_t = 0.12
 			shake_amp = 0.08 + k * 0.2
 			for m in u.syringe_mats:
@@ -6898,19 +6964,19 @@ func _extract_big(u: Unit) -> void:
 		u.channel_t = 0.0
 		u.remove_meta("extracting")
 		# a explosão: clarão, coluna de sangue, ondas e uma chuva de gotas pra todo lado
-		_burst(at, Color(1, 1, 1), 9.0)
-		_burst(at, BLOOD, 13.0)
+		_by(u)._burst(at, Color(1, 1, 1), 9.0)
+		_by(u)._burst(at, BLOOD, 13.0)
 		for k in 6:
-			_impact_ring(at, [Color(1, 1, 1), BLOOD, BLOOD.lightened(0.3)][k % 3], 4.0 + k * 2.2)
+			_by(u)._impact_ring(at, [Color(1, 1, 1), BLOOD, BLOOD.lightened(0.3)][k % 3], 4.0 + k * 2.2)
 		var col_m := Fx.mat(Color(BLOOD.r * 2.4, BLOOD.g * 1.5, BLOOD.b * 1.5, 0.9), 0.0, true)
-		var pillar := Fx.inst(fx_root, Fx.cyl(2.2, 2.8, 20.0), col_m, at + Vector3(0, 7.0, 0))
+		var pillar := _fx(u, fx_root, Fx.cyl(2.2, 2.8, 20.0), col_m, at + Vector3(0, 7.0, 0))
 		var tp := pillar.create_tween().set_parallel(true)
 		tp.tween_property(pillar, "scale", Vector3(0.05, 1.1, 0.05), 0.7).set_ease(Tween.EASE_IN)
 		tp.tween_property(col_m, "albedo_color:a", 0.0, 0.7)
 		tp.chain().tween_callback(pillar.queue_free)
 		for n in 28:
 			var a := n * TAU / 28.0
-			var sp := Fx.inst(fx_root, Fx.sphere(0.2), Fx.mat(Color(2.2, 0.15, 0.3), 0.0, true), at)
+			var sp := _fx(u, fx_root, Fx.sphere(0.2), Fx.mat(Color(2.2, 0.15, 0.3), 0.0, true), at)
 			var ts := sp.create_tween().set_parallel(true)
 			ts.tween_property(sp, "position", at + Vector3(cos(a), sin(a) * 0.8, 0.3) * randf_range(4.0, 9.0), 0.7).set_ease(Tween.EASE_OUT)
 			ts.tween_property(sp, "scale", Vector3.ONE * 0.1, 0.7)
@@ -6951,9 +7017,9 @@ func _extract(u: Unit, big := false) -> void:
 			if not is_instance_valid(u) or not u.alive:
 				return
 			# fluxo de sangue da boss pra seringa, cada vez mais forte
-			_beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * (1.5 + n * 0.25), BLOOD.g, BLOOD.b, 0.9), 0.16)
+			_by(u)._beam(at - Vector3(0, 1.0, 0), u.position + Vector3(0.4, 0.0, 0), Color(BLOOD.r * (1.5 + n * 0.25), BLOOD.g, BLOOD.b, 0.9), 0.16)
 			for k in 2:
-				var drop := Fx.inst(fx_root, Fx.sphere(0.1 + n * 0.008), Fx.mat(Color(1.8 + n * 0.15, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-1.4, 1.4), randf_range(-1.0, 1.6), 0))
+				var drop := _fx(u, fx_root, Fx.sphere(0.1 + n * 0.008), Fx.mat(Color(1.8 + n * 0.15, 0.12, 0.25), 0.0, true), at + Vector3(randf_range(-1.4, 1.4), randf_range(-1.0, 1.6), 0))
 				var tw := drop.create_tween()
 				tw.tween_property(drop, "position", u.position + Vector3(0.4, 1.1, -0.6), 0.14).set_ease(Tween.EASE_IN)
 				tw.tween_callback(drop.queue_free)
@@ -6962,10 +7028,10 @@ func _extract(u: Unit, big := false) -> void:
 	get_tree().create_timer(EXTRACT_TIME, false).timeout.connect(func():
 		if ended or not is_instance_valid(u) or not u.alive:
 			return
-		_burst(at, Color(1, 1, 1), 3.0)
-		_burst(at, BLOOD, 5.5)
+		_by(u)._burst(at, Color(1, 1, 1), 3.0)
+		_by(u)._burst(at, BLOOD, 5.5)
 		for k in 3:
-			_impact_ring(at, BLOOD.lightened(k * 0.15), 3.0 + k * 1.5)
+			_by(u)._impact_ring(at, BLOOD.lightened(k * 0.15), 3.0 + k * 1.5)
 		hud.flash(BLOOD, 0.22)
 		shake_t = 0.3
 		shake_amp = 0.35
@@ -6995,15 +7061,15 @@ func _end_taste(u: Unit) -> void:
 		var keep := gained * TASTE_KEEP
 		u.hp = minf(u.max_hp, u.taste_prev + keep)
 		u.skill_cd[1] = minf(u.skill_cd[1], TASTE_CD_PARRY - TASTE_TIME)
-		_burst(u.position, Color(1.0, 0.95, 0.9), 3.0)
+		_by(u)._burst(u.position, Color(1.0, 0.95, 0.9), 3.0)
 		# parry bem-sucedido: explosão de sangue e energia, bem visível
-		_burst(u.position + Vector3(0, 1.0, 0), BLOOD, 4.6)
+		_by(u)._burst(u.position + Vector3(0, 1.0, 0), BLOOD, 4.6)
 		for k in 3:
-			_impact_ring(u.position + Vector3(0, 0.4 + k * 0.5, 0), [Color(1, 1, 1), BLOOD, BLOOD.lightened(0.3)][k], 2.6 + k * 1.2)
+			_by(u)._impact_ring(u.position + Vector3(0, 0.4 + k * 0.5, 0), [Color(1, 1, 1), BLOOD, BLOOD.lightened(0.3)][k], 2.6 + k * 1.2)
 		shake_t = 0.25
 		shake_amp = 0.3
 		_blood_return(u, 4)
-		_popup(int(u.hp - u.taste_prev), BLOOD.lightened(0.35), 60, u.position + Vector3(0, 2.6, 0), "+")
+		_by(u)._popup(int(u.hp - u.taste_prev), BLOOD.lightened(0.35), 60, u.position + Vector3(0, 2.6, 0), "+")
 		if u.controlled:
 			hud.flash(Color(1.0, 1.0, 1.0, 0.25))
 	else:
@@ -7025,7 +7091,7 @@ func _tick_blood(u: Unit, delta: float) -> void:
 		u.party_tick -= delta
 		if u.party_tick <= 0.0:
 			u.party_tick = 0.8
-			_impact_ring(u.position + Vector3(0, 0.15, 0), BLOOD, 1.5)
+			_by(u)._impact_ring(u.position + Vector3(0, 0.15, 0), BLOOD, 1.5)
 	if u.party_t > 0.0:
 		u.party_t -= delta
 		# cura e escudo de fora não entram: a vida que vale é a que ela mesma roubou
@@ -7037,7 +7103,7 @@ func _tick_blood(u: Unit, delta: float) -> void:
 		if u.party_tick <= 0.0:
 			# aura de energia sanguínea, mais rápida conforme o tempo acaba (a urgência)
 			u.party_tick = lerpf(0.25, 0.8, clampf(u.party_t / PARTY_TIME, 0.0, 1.0))
-			_impact_ring(u.position + Vector3(0, 0.3, 0), BLOOD.lightened(0.2) if u.hp < u.max_hp else Color(1, 1, 1), 2.2)
+			_by(u)._impact_ring(u.position + Vector3(0, 0.3, 0), BLOOD.lightened(0.2) if u.hp < u.max_hp else Color(1, 1, 1), 2.2)
 		if u.party_t <= 0.0:
 			u.party_t = 0.0
 			u.bath_free = false  # não usou: perdeu
@@ -7045,11 +7111,11 @@ func _tick_blood(u: Unit, delta: float) -> void:
 			if u.hp >= u.max_hp - 0.5:
 				# conseguiu: sai com a vida cheia
 				u.hp = u.max_hp
-				_burst(u.position, Color(1, 1, 1), 3.0)
+				_by(u)._burst(u.position, Color(1, 1, 1), 3.0)
 				if u.controlled:
 					hud.toast("SOBREVIVEU AO BLOOD PARTY", 1.6)
 			else:
-				_burst(u.position, BLOOD.darkened(0.3), 5.0)
+				_by(u)._burst(u.position, BLOOD.darkened(0.3), 5.0)
 				kill(u, "não recuperou a vida toda no Blood Party")
 
 
@@ -7072,29 +7138,32 @@ func _resolve_lb(u: Unit) -> void:
 	lb = 0.0
 	hud.flash(Color(u.color.r, u.color.g, u.color.b, 0.6))
 	hud.limit_cut(u)
-	_burst(u.position, u.color.lightened(0.4), 7.0)
+	_by(u)._burst(u.position, u.color.lightened(0.4), 7.0)
 	match u.key:
 		"tank", "nurse":
 			for o in units:
 				if o.alive:
 					o.immortal_t = LB_IMMORTAL
-					_burst(o.position, Color(1.0, 0.9, 0.5), 2.2)
+					_by(u)._burst(o.position, Color(1.0, 0.9, 0.5), 2.2)
 		"healer", "apothecary":
 			for o in units:
 				if not o.alive:
 					o.revive(0.6)  # sem Fraqueza: é a vantagem sobre o Reviver comum
 					_spawn_cards(o)
-					_beam(u.position, o.position, Color(1.0, 0.95, 0.6, 0.95), 0.6)
-					_burst(o.position, Color(1.0, 0.95, 0.6), 3.0)
+					_by(u)._beam(u.position, o.position, Color(1.0, 0.95, 0.6, 0.95), 0.6)
+					_by(u)._burst(o.position, Color(1.0, 0.95, 0.6), 3.0)
 		_:
 			var dmg := boss_max * LB_DPS_CUT
 			boss_hp -= dmg
 			u.dmg_total += dmg
 			u.dmg_bucket += dmg
+			dmg_tag = "Limit Break"
+			_meter_add(u, dmg, true)
+			dmg_tag = ""
 			boss.hit_flash()
-			_beam(u.position, _bp(Vector3(0, 5.0, -11.5)), Color(1.0, 1.0, 1.0, 0.98), 0.6)
-			_burst(_bp(Vector3(0, 5, -11.5)), u.color.lightened(0.4), 10.0)
-			_popup(int(dmg), Color(1.0, 0.95, 0.5), 110)
+			_by(u)._beam(u.position, _bp(Vector3(0, 5.0, -11.5)), Color(1.0, 1.0, 1.0, 0.98), 0.6)
+			_by(u)._burst(_bp(Vector3(0, 5, -11.5)), u.color.lightened(0.4), 10.0)
+			_by(u)._popup(int(dmg), Color(1.0, 0.95, 0.5), 110)
 			if boss_hp <= 0.0:
 				boss_hp = 0.0
 				_end(true)
@@ -7102,6 +7171,7 @@ func _resolve_lb(u: Unit) -> void:
 
 ## Feixe entre dois personagens (cura, reviver): mostra de quem pra quem.
 func _beam(from: Vector3, to: Vector3, col: Color, time: float) -> void:
+	var by := _take_by()
 	var a := from + Vector3(0, 1.0, 0)
 	var b := to + Vector3(0, 1.0, 0)
 	var length := a.distance_to(b)
@@ -7110,7 +7180,7 @@ func _beam(from: Vector3, to: Vector3, col: Color, time: float) -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3(0.22, 0.22, length)
 	var m := Fx.mat(Color(col.r, col.g, col.b, minf(col.a, 0.98)), 2.0, true)
-	var mi := Fx.inst(fx_root, box, m, (a + b) * 0.5)
+	var mi := _fx(by, fx_root, box, m, (a + b) * 0.5)
 	mi.look_at(b, Vector3.UP)
 	var tw := mi.create_tween()
 	tw.tween_property(m, "albedo_color:a", 0.0, time).set_ease(Tween.EASE_IN)
@@ -7964,6 +8034,7 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 	lb = minf(1.0, lb + dmg / (boss_max * LB_NEED) * (1.5 if Knowledge.has(u.hero, "spark") else 1.0))
 	u.dmg_total += dmg
 	u.dmg_bucket += dmg
+	_meter_add(u, dmg, show)
 	if u.key == "assassina" and u.frenzy_t > 0.0:
 		u.frenzy_dmg += dmg
 	u.enmity += dmg * (TANK_STANCE if u.tank else 1.0)
@@ -7972,7 +8043,7 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 		var col := Color(1.0, 0.9, 0.4) if big else Color.WHITE
 		if shield:
 			col = Color(0.5, 0.8, 1.0)
-		_popup(int(round(dmg)), col, 64 if big else 46)
+		_by(u)._popup(int(round(dmg)), col, 64 if big else 46)
 	if boss_hp <= 0.0:
 		if Knowledge.practice:
 			# o dummy não morre: a vida enche de novo e o treino continua
@@ -7988,20 +8059,23 @@ func _attack_fx(u: Unit, big: bool) -> void:
 	var from := u.position + Vector3(0, 1.1, 0)
 	var to := _bp(Vector3(randf_range(-1.2, 1.2), randf_range(2.0, 4.0), -11.0))
 	var m := Fx.mat(u.color.lightened(0.4), 7.0 if big else 5.0, true)
-	var mi := Fx.inst(fx_root, Fx.sphere(0.34 if big else 0.2), m, from)
+	var mi := _fx(u, fx_root, Fx.sphere(0.34 if big else 0.2), m, from)
 	var tw := mi.create_tween()
 	tw.tween_property(mi, "position", to, 0.09)
 	tw.tween_callback(mi.queue_free)
-	tw.tween_callback(_burst.bind(to, u.color.lightened(0.3), 1.6 if big else 0.9))
+	tw.tween_callback(_by_call.bind(u, &"_burst", [to, u.color.lightened(0.3), 1.6 if big else 0.9]))
 
 
 func _popup(value: int, col: Color, size: int, at = null, prefix := "") -> void:
+	var by := _take_by()
 	if value <= 0:
 		return
+	if _quiet(by):
+		size = int(size * FX_QUIET_SIZE)
 	var p := _bp(Vector3(randf_range(-2.2, 2.2), randf_range(2.5, 5.0), -9.5))
 	if at != null:
 		p = at
-	var l := Fx.label(fx_root, prefix + str(value), p, size)
+	var l := _fxl(by, fx_root, prefix + str(value), p, size)
 	l.modulate = col
 	var tw := l.create_tween()
 	tw.set_parallel(true)
@@ -8120,6 +8194,7 @@ func kill(u: Unit, reason: String, force := false) -> void:
 				ctrl = i
 				units[i].hold_pos = null
 				units[i].set_controlled(true)
+				_fx_refresh()
 				break
 
 
@@ -9774,13 +9849,107 @@ func _drop_cookie(at: Vector3, delay: float, size: float, victim: Unit) -> void:
 			kill(victim, "Fúria: o tempo acabou", true))
 
 
+# ---- Efeitos por dono
+## Só o herói que está na sua mão aparece (e soa) inteiro. O que os outros três soltam continua
+## acontecendo e continua visível, mas apagado: mais transparente, menor, com menos partículas e
+## mais baixo. Dano, cura e mecânica não mudam: é só o desenho e o volume.
+##
+## Como funciona: todo efeito de herói nasce por `_fx` / `_fxl` / `_fx_rose` (em vez de Fx.inst /
+## Fx.label / Fx.rose), que marcam o nó com o dono. Os ajudantes sem herói na assinatura (_burst,
+## _beam, _popup, _sfx...) recebem o dono por `_by(u)._burst(...)` e começam com `_take_by()`.
+## Sem dono (boss, cenário, avisos de mecânica), nada é mexido. Na troca, `_fx_refresh` reaplica
+## em tudo o que ainda está vivo: quem você assumiu volta inteiro na hora.
+const FX_QUIET_FADE := 0.68    # transparência da malha (0 = inteira, 1 = invisível)
+const FX_QUIET_DIM := 0.4      # o mesmo, pros shaders que escrevem ALPHA (uniform de instância fx_dim)
+const FX_QUIET_SIZE := 0.65    # estouros, volutas e números de dano encolhem pra isso
+const FX_QUIET_COUNT := 0.35   # fração das partículas (pétalas, brasas) que ainda nasce
+const FX_QUIET_DB := -12.0     # sons e notas musicais do herói
+
+var _fx_by: Unit = null
+
+
+## Diz de quem é o efeito que o ajudante chamado logo em seguida vai criar: `_by(u)._burst(...)`.
+func _by(u: Unit):
+	_fx_by = u
+	return self
+
+
+## O ajudante pega o dono (e limpa, pra não vazar pro próximo efeito, que pode ser da boss).
+func _take_by() -> Unit:
+	var u := _fx_by
+	_fx_by = null
+	return u
+
+
+## Pra tween_callback / timer: `_by_call.bind(u, &"_burst", [p, col, r])`.
+func _by_call(by: Unit, method: StringName, args: Array) -> void:
+	_fx_by = by
+	callv(method, args)
+
+
+func _quiet(by: Unit) -> bool:
+	return by != null and not by.controlled
+
+
+func _unit_key(k: String) -> Unit:
+	for u in units:
+		if u.key == k:
+			return u
+	return null
+
+
+func _fx(by: Unit, parent: Node, mesh: Mesh, material: Material, pos := Vector3.ZERO) -> MeshInstance3D:
+	var mi := Fx.inst(parent, mesh, material, pos)
+	_fx_own(mi, by)
+	return mi
+
+
+func _fxl(by: Unit, parent: Node, text: String, pos: Vector3, size := 40) -> Label3D:
+	var l := Fx.label(parent, text, pos, size)
+	_fx_own(l, by)
+	return l
+
+
+func _fx_rose(by: Unit, parent: Node, size: float, col := Color(1.0, 0.76, 0.22)) -> Node3D:
+	var r := Fx.rose(parent, size, col)
+	_fx_own(r, by)
+	return r
+
+
+func _fx_own(n: Node, by: Unit) -> void:
+	if by == null:
+		return
+	if n is GeometryInstance3D:
+		n.set_meta(&"fx_by", by)
+		n.add_to_group(&"hero_fx")
+		_fx_apply(n, not by.controlled)
+	for c in n.get_children():
+		_fx_own(c, by)
+
+
+func _fx_apply(n: GeometryInstance3D, quiet: bool) -> void:
+	n.transparency = FX_QUIET_FADE if quiet else 0.0
+	if n is MeshInstance3D and n.material_override is ShaderMaterial:
+		n.set_instance_shader_parameter(&"fx_dim", FX_QUIET_DIM if quiet else 1.0)
+
+
+## Trocou de herói: tudo o que está vivo em campo passa pro estado novo do dono.
+func _fx_refresh() -> void:
+	for n in get_tree().get_nodes_in_group(&"hero_fx"):
+		var by = n.get_meta(&"fx_by")
+		if is_instance_valid(by):
+			_fx_apply(n, not by.controlled)
+
+
 ## Toca um som uma vez; o player se apaga sozinho quando termina.
 func _sfx(stream: AudioStream, volume_db := 0.0) -> void:
+	var by := _take_by()
 	if autoplay:
 		return  # os testes automáticos rodam mudos
 	var p := AudioStreamPlayer.new()
 	p.stream = stream
-	p.volume_db = volume_db
+	# som de herói que não está na sua mão: toca, mas lá no fundo
+	p.volume_db = volume_db + (FX_QUIET_DB if _quiet(by) else 0.0)
 	p.bus = &"SFX"
 	add_child(p)
 	p.finished.connect(p.queue_free)
@@ -9788,17 +9957,23 @@ func _sfx(stream: AudioStream, volume_db := 0.0) -> void:
 
 
 func _burst(p: Vector3, col: Color, radius: float) -> void:
+	var by := _take_by()
+	var quiet := _quiet(by)
+	if quiet:
+		radius *= FX_QUIET_SIZE
 	var m := Fx.mat(Color(col.r, col.g, col.b, 0.6), 5.0, true)
-	var mi := Fx.inst(fx_root, Fx.sphere(1.0), m, p + Vector3(0, 0.3, 0))
+	var mi := _fx(by, fx_root, Fx.sphere(1.0), m, p + Vector3(0, 0.3, 0))
 	mi.scale = Vector3.ONE * 0.2
 	var tw := mi.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(mi, "scale", Vector3(radius, radius * 0.5, radius), 0.4).set_ease(Tween.EASE_OUT)
 	tw.tween_property(m, "albedo_color:a", 0.0, 0.4)
 	tw.chain().tween_callback(mi.queue_free)
+	if quiet:
+		return  # sem o clarão: de quem não está na sua mão fica só a casca
 	# miolo de luz: um clarão curto, quase branco, na cor do efeito
 	var core_m := Fx.mat(Color(col.r, col.g, col.b, 0.9).lightened(0.55), 9.0, true)
-	var core := Fx.inst(fx_root, Fx.sphere(1.0), core_m, p + Vector3(0, 0.3, 0))
+	var core := _fx(by, fx_root, Fx.sphere(1.0), core_m, p + Vector3(0, 0.3, 0))
 	core.scale = Vector3.ONE * radius * 0.28
 	var tc := core.create_tween().set_parallel(true)
 	tc.tween_property(core, "scale", Vector3.ONE * radius * 0.05, 0.22)

@@ -309,7 +309,7 @@ func _initialize() -> void:
 	menus.show_screen("bosses")
 	await frames(2)
 	var bosses = menus.bosses
-	check(bosses.has_node("Practice"), "a tela de bosses tem o TREINO LIVRE")
+	check(bosses.find_child("Practice", true, false) != null, "a tela de bosses tem o TREINO LIVRE")  # agora é a última linha da lista
 	bosses.sel = bosses._practice_at
 	bosses._mark()
 	check(not bosses.get_node("BtnConfirm").disabled, "o treino pode ser confirmado")

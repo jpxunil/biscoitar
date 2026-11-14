@@ -237,8 +237,9 @@ func refresh() -> void:
 
 	$Body/Aggro.visible = targeted and not dead
 	$Body/Chosen.visible = chosen
-	$Body/Dps.text = ("▼ %d DPS" if weak else "%d DPS") % dps
-	$Body/Dps.visible = not dead
+	# o DPS saiu do card: agora mora no medidor da luta (ui/kit/dps_meter.gd). Aqui fica só a Fraqueza.
+	$Body/Dps.text = "▼ FRACO"
+	$Body/Dps.visible = weak and not dead
 	var dps_col := INK.lightened(0.25) if selected else Color(0.66, 0.69, 0.84)
 	if weak:
 		dps_col = HP_LOW.darkened(0.25) if selected else HP_LOW

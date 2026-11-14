@@ -9,6 +9,7 @@ uniform float energy = 0.0;   // 0..1: Embalo
 uniform float gold = 0.0;     // 0..1: Crescendo / Grande Baile
 uniform float spin = 0.0;     // ângulo acumulado (quem gira é o script)
 uniform float alpha = 1.0;
+instance uniform float fx_dim = 1.0;  // 1 = inteira; menor = apagada (Valsa fora da sua mão, ver game.gd)
 uniform float lobes = 10.0;   // recortes da barra (número par)
 
 void fragment() {
@@ -29,5 +30,5 @@ void fragment() {
 	float k = clamp(gold + edge * (0.25 + 0.75 * energy) + lace * 0.8, 0.0, 1.0);
 	vec3 c = mix(col_a, col_b, k);
 	ALBEDO = c * (1.0 + 0.45 * energy + 0.35 * gold);
-	ALPHA = clamp(fill + edge * 0.9 + lace * 0.7 + ring * (0.35 + 0.5 * energy), 0.0, 1.0) * alpha;
+	ALPHA = clamp(fill + edge * 0.9 + lace * 0.7 + ring * (0.35 + 0.5 * energy), 0.0, 1.0) * alpha * fx_dim;
 }
