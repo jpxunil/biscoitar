@@ -1,7 +1,8 @@
 extends Control
 ## Liga as telas de menu entre si e com a luta:
 ##   título -> PLAY -> saves -> cafeteria (cena lobby.tscn: monta a party) -> bosses -> cartas -> luta
-##   título -> gear (cartas do save ativo, sem o botão de luta)
+##   bosses -> CARTAS (gear: as cartas do save ativo, sem o botão de luta) -> bosses
+##   bosses -> TREINO LIVRE (dummy) -> cartas -> luta sem progresso
 ##   vitória -> loja -> título
 ##   título -> tutoriais -> (cena do tutorial) -> tutoriais
 ##   título -> opções (a tela de opções é do hud.gd: é a mesma que o pause abre)
@@ -35,12 +36,6 @@ func setup(game) -> void:
 		# carrega (ou cria) o save e vai pra cafeteria montar a party; os bosses só abrem depois dela
 		Knowledge.select_slot(n)
 		get_tree().change_scene_to_file("res://lobby.tscn"))
-	title.gear_pressed.connect(func():
-		if Knowledge.slot <= 0 and Knowledge.persist:
-			show_screen("saves")  # as cartas são de um save: sem save escolhido, primeiro escolhe um
-			return
-		_gear = true
-		show_screen("cards"))
 	title.shop_pressed.connect(func(): show_screen("saves" if (Knowledge.slot <= 0 and Knowledge.persist) else "shop"))
 	title.options_pressed.connect(func(): g.hud.open_options(false))
 	title.tutorial_pressed.connect(show_screen.bind("tutorials"))
@@ -55,11 +50,23 @@ func setup(game) -> void:
 		get_tree().change_scene_to_file("res://lobby.tscn"))
 	bosses.boss_chosen.connect(func(i: int):
 		_gear = false
-		if i != Knowledge.boss:
-			g.select_boss(i)  # recarrega a cena já na tela de cartas
+		# trocar de luta (ou entrar/sair do treino) recarrega a cena já na tela de cartas
+		if i < 0:
+			if Knowledge.practice:
+				show_screen("cards")
+			else:
+				g.select_practice()
+		elif i != Knowledge.boss or Knowledge.practice:
+			g.select_boss(i)
 		else:
 			show_screen("cards"))
-	cards.back_pressed.connect(func(): show_screen("title" if _gear else "bosses"))
+	bosses.gear_pressed.connect(func():
+		# gear: as cartas e os baralhos do save ativo, sem começar luta nenhuma
+		_gear = true
+		show_screen("cards"))
+	cards.back_pressed.connect(func():
+		_gear = false
+		show_screen("bosses"))
 	cards.ready_pressed.connect(func():
 		if g.select_hero(cards.hero):
 			g.start_fight())

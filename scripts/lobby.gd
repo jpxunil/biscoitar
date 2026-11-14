@@ -14,6 +14,9 @@ const NAVY2 := Color("2B3384")
 const DIM := Color("B9BEEA")
 const CARD := Vector2(330, 262)
 const FOCUS_COL := Color(0.3, 0.9, 1.0)
+## Arte de corpo inteiro dos personagens: altura de uma figura alta e a maior largura, em metros.
+const FIG_H := 2.7
+const FIG_W := 2.1
 
 ## Lugares do salão: onde fica e pra onde olha. A cada entrada os heróis são sorteados entre eles.
 const SPOTS := [
@@ -212,8 +215,8 @@ func _refresh() -> void:
 		card_name.add_theme_font_size_override("font_size", px)
 		card_role.text = String(h["role"]).to_upper()
 		card_text.text = String(h["blurb"])
-		var art := "res://assets/portraits/%s_art.webp" % h["key"]
-		card_art.texture = load(art if ResourceLoader.exists(art) else "res://assets/portraits/%s_face.png" % h["key"])
+		# a moldura da ficha tem a proporção do retrato (5:7): a arte de corpo inteiro não caberia sem corte
+		card_art.texture = load("res://assets/portraits/%s_face.png" % h["key"])
 		if _in_team(focus):
 			card_btn.text = "JÁ ESTÁ NA PARTY"
 			card_btn.disabled = true
@@ -303,15 +306,35 @@ func _build_heroes() -> void:
 		u.position = spot["at"]
 		u.face(spot["look"] as Vector3)
 		u.set_meta("yaw", u.visual.rotation.y)
-		# o rosto do herói flutuando em cima da cabeça, pra dar pra reconhecer de longe
-		var face := Sprite3D.new()
-		face.texture = load("res://assets/portraits/%s_face.png" % u.key)
-		face.pixel_size = 0.9 / face.texture.get_height()
-		face.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		face.shaded = false
-		face.position = Vector3(0, 2.75, 0)
-		u.add_child(face)
-		var name_l := Fx.label(u, u.unit_name.to_upper(), Vector3(0, 3.45, 0), 34)
+		var art_path := "res://assets/portraits/%s_art.webp" % u.key
+		var top := 3.45  # altura do nome
+		if ResourceLoader.exists(art_path):
+			# a arte de corpo inteiro fica em pé no lugar do boneco, sempre virada pra câmera.
+			# Altura pela proporção do arquivo: figura alta tem FIG_H; figura larga encolhe pra não
+			# ocupar o lugar dos vizinhos. Nada é esticado.
+			u.visual.visible = false
+			var art := Sprite3D.new()
+			art.texture = load(art_path)
+			var ts := art.texture.get_size()
+			var tall := minf(FIG_H, FIG_W * ts.y / ts.x)
+			art.pixel_size = tall / ts.y
+			art.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+			art.shaded = false
+			art.alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
+			art.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			art.position = Vector3(0, tall * 0.5 + 0.05, 0)
+			u.add_child(art)
+			top = tall + 0.3
+		else:
+			# sem arte: o rosto do herói flutuando em cima do boneco, pra dar pra reconhecer de longe
+			var face := Sprite3D.new()
+			face.texture = load("res://assets/portraits/%s_face.png" % u.key)
+			face.pixel_size = 0.9 / face.texture.get_height()
+			face.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			face.shaded = false
+			face.position = Vector3(0, 2.75, 0)
+			u.add_child(face)
+		var name_l := Fx.label(u, u.unit_name.to_upper(), Vector3(0, top, 0), 34)
 		name_l.outline_size = 14
 		name_l.outline_modulate = Paper.INK
 		var f := Fx.inst(u, Fx.torus(0.72, 0.9), Fx.mat(FOCUS_COL, 3.5, true), Vector3(0, 0.05, 0))

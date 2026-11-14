@@ -30,6 +30,9 @@ func _ready() -> void:
 	if look == "cookie":
 		_build_cookie()
 		return
+	if look == "dummy":
+		_build_dummy()
+		return
 	var skin := Fx.mat(Color(0.95, 0.8, 0.74))
 	var hair := Fx.mat(hair_color, 0.35)
 	dress_mat = Fx.mat(Color(0.16, 0.08, 0.3), 0.5)
@@ -134,6 +137,36 @@ func _build_cookie() -> void:
 	shield.visible = false
 
 
+## Treino livre: boneco de palha num poste, com um alvo pintado no peito. Não tem mãos nem ataca.
+func _build_dummy() -> void:
+	_dress_base = Color(0.86, 0.72, 0.42)
+	dress_mat = Fx.mat(_dress_base, 0.2)
+	var wood := Fx.mat(Color(0.42, 0.27, 0.16))
+	var rope := Fx.mat(Color(0.3, 0.2, 0.12))
+	Fx.inst(core, Fx.cyl(1.7, 2.1, 0.5), wood, Vector3(0, 0.25, 0))
+	Fx.inst(core, Fx.cyl(0.38, 0.38, 9.0), wood, Vector3(0, 4.5, 0))
+	Fx.inst(core, Fx.cyl(1.9, 1.5, 4.4), dress_mat, Vector3(0, 5.4, 0))
+	for y in [3.6, 7.2]:
+		Fx.inst(core, Fx.torus(1.55, 1.85), rope, Vector3(0, y, 0))
+	var arm := Fx.inst(core, Fx.capsule(0.42, 8.4), dress_mat, Vector3(0, 6.7, 0))
+	arm.rotation.z = PI / 2.0
+	Fx.inst(core, Fx.sphere(1.35), dress_mat, Vector3(0, 9.2, 0))
+	# alvo no peito: discos deitados de frente pra arena
+	var rings := [[1.3, Color(0.95, 0.94, 0.88)], [0.9, Color(0.86, 0.16, 0.22)], [0.5, Color(0.95, 0.94, 0.88)], [0.2, Color(0.86, 0.16, 0.22)]]
+	for k in rings.size():
+		var d := Fx.inst(core, Fx.disc(rings[k][0], 0.04), Fx.mat(rings[k][1], 0.4), Vector3(0, 5.6, 1.78 + k * 0.03))
+		d.rotation.x = PI / 2.0
+	eye_mat = Fx.mat(Color(0.1, 0.08, 0.1), 0.0)
+	for s in [-1.0, 1.0]:
+		# olhos de botão, em X
+		for r in [-1.0, 1.0]:
+			var x := Fx.inst(core, Fx.capsule(0.07, 0.6), eye_mat, Vector3(s * 0.5, 9.4, 1.28))
+			x.rotation.z = r * PI / 4.0
+	halo = Fx.inst(core, Fx.torus(0.9, 1.05), rope, Vector3(0, 10.3, 0))
+	shield = Fx.inst(self, Fx.sphere(7.2), Fx.mat(Color(0.35, 0.9, 1.0, 0.16), 1.2), Vector3(0, 6.0, 0))
+	shield.visible = false
+
+
 ## Provocada pelo Bora Biscoitar: treme de raiva, com os punhos fechados pra cima.
 func rage() -> void:
 	rage_t = RAGE_TIME
@@ -149,6 +182,10 @@ func set_shield(on: bool) -> void:
 
 
 func hit_flash() -> void:
+	if look == "dummy":
+		# o boneco balança no poste a cada golpe
+		core.rotation.x = -0.09
+		core.create_tween().tween_property(core, "rotation:x", 0.0, 0.25).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 	dress_mat.emission_energy_multiplier = 2.5
 	var tw := create_tween()
 	tw.tween_property(dress_mat, "emission_energy_multiplier", 0.5, 0.12)

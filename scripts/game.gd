@@ -504,6 +504,12 @@ const BOSSES := [
 	{"name": "FUSÃO-CHAN", "hp": 11500.0, "enrage": 165.0, "steps": STEPS_FUSION, "elements": true, "haste": 1.2, "hair": Color(0.75, 0.45, 1.0), "scale": 1.3},
 ]
 
+## Treino livre (Knowledge.practice): um boneco no lugar da boss. Não ataca, não tem mecânica,
+## não tem Fúria e não morre: quando a vida zera, ela enche de novo (DUMMY_HP por volta).
+const DUMMY_HP := 20000.0
+const DUMMY := {"name": "DUMMY DE TREINO", "hp": DUMMY_HP, "enrage": 1.0e9, "steps": [{"t": "idle", "dur": 60.0}],
+	"look": "dummy", "hair": Color(0.9, 0.75, 0.4), "scale": 0.9}
+
 var units: Array[Unit] = []
 var ctrl := 0
 var swap_cd := 0.0
@@ -617,7 +623,9 @@ func _ready() -> void:
 	for a in args:
 		if a.begins_with("--boss="):
 			Knowledge.boss = clampi(int(a.trim_prefix("--boss=")), 0, BOSSES.size() - 1)
-	boss_def = BOSSES[Knowledge.boss]
+	if args.has("--practice"):
+		Knowledge.practice = true
+	boss_def = DUMMY if Knowledge.practice else BOSSES[Knowledge.boss]
 	steps = boss_def["steps"]
 	boss_max = boss_def["hp"]
 	enrage = boss_def["enrage"]
@@ -842,13 +850,29 @@ func resume() -> void:
 
 ## Sai da luta pelo menu de pause. Conta como desistência (mais uma tentativa), igual ao wipe.
 ## `screen` é a tela que abre depois: "cards" (seleção de cartas) ou "title" (menu principal).
+## A run foi abandonada: o que tinha sido ganho nela (cartas, maestria) é descartado.
 func leave_fight(screen: String) -> void:
-	Knowledge.attempts += 1
+	Knowledge.abort_run()
+	if not Knowledge.practice:
+		Knowledge.attempts += 1
 	Knowledge.screen = screen
 	_reload()
 
 
+## TENTAR NOVAMENTE do pause: recomeça a mesma luta do zero, com a mesma party, os mesmos baralhos
+## e o mesmo herói no controle, sem passar pelos menus. Vale como abandonar a run: nada do que
+## foi ganho nesta tentativa fica.
+func retry_fight() -> void:
+	Knowledge.abort_run()
+	if not Knowledge.practice:
+		Knowledge.attempts += 1
+	Knowledge.screen = "cards"
+	Knowledge.autostart = true
+	_reload()
+
+
 func start_fight() -> void:
+	Knowledge.begin_run()
 	prep = false
 	hud.set_prep(false)
 	intro_left = hud.play_intro()
@@ -926,6 +950,7 @@ func select_hero(i: int) -> bool:
 
 
 func select_boss(i: int) -> void:
+	Knowledge.practice = false
 	Knowledge.boss = i
 	Knowledge.attempts = 1
 	Knowledge.screen = "cards"
@@ -934,6 +959,15 @@ func select_boss(i: int) -> void:
 
 
 ## Clique num card: escolhe aquele personagem como alvo das suas habilidades de suporte.
+## Treino livre: recarrega a cena com o dummy no lugar da boss, já na tela de cartas.
+func select_practice() -> void:
+	Knowledge.practice = true
+	Knowledge.attempts = 1
+	Knowledge.screen = "cards"
+	Knowledge.save()
+	get_tree().reload_current_scene()
+
+
 func select_target(i: int) -> void:
 	sel = -1 if sel == i else i
 	for u in units:
@@ -1193,7 +1227,7 @@ func _tick_dps(delta: float) -> void:
 ## Carta roxa Rotação: segure um DPS bom pra classe por DPS_WINDOW segundos seguidos
 ## no controle do herói e a IA dele aprende a bater assim. Chamado uma vez por segundo.
 func _tick_rotation(u: Unit) -> void:
-	if autoplay or not u.alive or Knowledge.dps_known.has(u.key):
+	if autoplay or Knowledge.practice or not u.alive or Knowledge.dps_known.has(u.key):
 		return
 	if rot_unit != u.idx:
 		rot_unit = u.idx
@@ -1582,8 +1616,8 @@ func _tick_auto(delta: float) -> void:
 	target = _aggro_target()
 	for u in units:
 		u.targeted = u == target
-	if target == null:
-		return
+	if target == null or Knowledge.practice:
+		return  # o dummy não bate em ninguém
 	if phase == "dodgetime":
 		return  # conjurando o Dodge Time: ela não bate
 	auto_t += delta
@@ -3718,6 +3752,11 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 			col = Color(0.5, 0.8, 1.0)
 		_popup(int(round(dmg)), col, 64 if big else 46)
 	if boss_hp <= 0.0:
+		if Knowledge.practice:
+			# o dummy não morre: a vida enche de novo e o treino continua
+			boss_hp = boss_max
+			hud.toast("O dummy se recompôs", 1.6)
+			return
 		boss_hp = 0.0
 		_end(true)
 
@@ -3848,10 +3887,13 @@ func _end(victory: bool) -> void:
 	won = victory
 	var rank := -1
 	var prize := {}
-	if victory:
+	if victory and not Knowledge.practice:
 		rank = Knowledge.rank_for(_score())
 		if not autoplay:
 			prize = Knowledge.reward(Knowledge.boss, rank)
+	# a run terminou (vitória ou wipe): o que foi ganho nela passa a valer e é gravado no save
+	prize["cards"] = [] if Knowledge.practice else Knowledge.run_cards()
+	Knowledge.commit_run()
 	hud.show_end(victory, log_lines, rank, prize)
 
 
@@ -3871,7 +3913,7 @@ func _score() -> float:
 ## Maestria: você resolveu a mecânica certo, na mão. Na terceira vez a carta é liberada
 ## e entra no baralho de quem tiver slot livre, então a IA já sai usando.
 func _master(key: String) -> void:
-	if autoplay or Knowledge.mastery_of(key) >= Knowledge.MASTERY_NEED:
+	if autoplay or Knowledge.practice or Knowledge.mastery_of(key) >= Knowledge.MASTERY_NEED:
 		return
 	var card: String = Knowledge.MASTERY[key]["card"]
 	if Knowledge.add_mastery(key):
@@ -4144,7 +4186,7 @@ func _resolve_cataclysm() -> void:
 			u.set_element(-1)
 			u.hold_pos = null
 	# A carta roxa é prêmio por já ter resolvido a mecânica inteira com a party toda viva.
-	if survivors == 4 and not autoplay and Knowledge.grant("mark"):
+	if survivors == 4 and not autoplay and not Knowledge.practice and Knowledge.grant("mark"):
 		hud.card_unlocked("mark")
 	if order == "hold":
 		order = "atk"

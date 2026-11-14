@@ -63,13 +63,29 @@ const QUOTES := {
 	"assassina": "Pisca e já acabou.",
 	"maga": "Relaxa, eu resolvo. Como sempre.",
 	"nurse": "Fica parado. Vai doer.",
+	"burner": "Queima primeiro. Pergunta depois.",
+	"ringstar": "Um, dois... nocaute!",
+	"apothecary": "Remédio ou veneno? Depende da dose.",
+	"sleepwalker": "Zzz... só mais cinco minutinhos.",
 }
 ## Ordem dos heróis no seletor: as duas tanks ficam lado a lado.
 const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8]
-## Enquadramento da arte por herói: largura na tela e canto de cima. A altura segue a proporção do arquivo;
-## o que passar da parte de baixo fica atrás dos painéis.
-const ART_FRAME := {"nurse": {"w": 540.0, "x": 790.0, "y": 26.0}}
+## Enquadramento da arte. As artes (assets/portraits/<chave>_art.webp) são de corpo inteiro, recortadas
+## rente à figura, cada uma com uma proporção. A largura na tela sai da proporção do arquivo (ver
+## _art_frame): figura alta aparece da cabeça até a cintura e o resto fica atrás dos painéis; figura
+## larga (a Sleepwalker na almofada, a Maga com as marias-chiquinhas) aparece inteira.
+## ART_FRAME é só pra corrigir um herói à mão: {"w", "x", "y"} em pixels da tela.
+const ART_FRAME := {}
 const ART_DEFAULT := {"w": 430.0, "x": 860.0, "y": 50.0}
+## Centro da área da arte e o maior tamanho que ela ocupa.
+const ART_MID_X := 1076.0
+const ART_TOP := 22.0
+const ART_MAX_W := 440.0
+const ART_MAX_H := 840.0
+## Onde fica o rosto na arte, de cima pra baixo (0..1). Quem levanta o braço (espada, luva, frasco)
+## tem o rosto mais embaixo: a arte encolhe até o rosto ficar acima da placa do nome (ART_FACE_Y).
+const ART_FACE := {"tank": 0.44, "ringstar": 0.37, "apothecary": 0.37}
+const ART_FACE_Y := 245.0
 const CARD_HALF := Vector2(CardView.W, CardView.H) * 0.5
 
 
@@ -240,6 +256,8 @@ var _d_name: Label
 var _d_kind: Tag
 var _d_cat: Tag
 var _d_desc: Label
+## Pista da carta desconhecida (some quando a carta é do jogador).
+var _d_hint: Label
 var _ready_btn: ShineButton
 var _ready_shadow: Draw
 
@@ -318,6 +336,18 @@ func _go(to: int, dir: int) -> void:
 	refresh(true, dir)
 
 
+## Enquadra uma arte de corpo inteiro: a maior escala que cabe em ART_MAX_W x ART_MAX_H, sem
+## distorcer, centrada em ART_MID_X.
+func _art_frame(tex: Texture2D, key := "") -> Dictionary:
+	var ts := tex.get_size()
+	var max_h := minf(ART_MAX_H, ART_FACE_Y / float(ART_FACE.get(key, 0.28)))
+	var w := minf(ART_MAX_W, max_h * ts.x / ts.y)
+	var h := w * ts.y / ts.x
+	# figura baixa (cabe inteira acima dos painéis) desce um pouco pra não ficar colada no topo
+	var y := ART_TOP + maxf(0.0, (360.0 - h) * 0.5)
+	return {"w": w, "x": ART_MID_X - w * 0.5, "y": y}
+
+
 func refresh(animate := false, dir := 0) -> void:
 	var h: Dictionary = Knowledge.HEROES[hero]
 	_th = Paper.THEMES.get(h["key"], Paper.THEMES["tank"])
@@ -345,7 +375,9 @@ func refresh(animate := false, dir := 0) -> void:
 			break
 	_art_tex.visible = art != ""
 	_face_frame.visible = art == ""
-	var frame: Dictionary = ART_FRAME.get(h["key"], ART_DEFAULT) if art != "" else ART_DEFAULT
+	var frame: Dictionary = ART_DEFAULT
+	if art != "":
+		frame = ART_FRAME[h["key"]] if ART_FRAME.has(h["key"]) else _art_frame(load(art), h["key"])
 	if not tutor.is_empty():
 		# quem aparece é quem ensina; nome, classe e vida do herói saem pra dar lugar à fala
 		art = tutor["art"]
@@ -593,7 +625,7 @@ func _build() -> void:
 	_hp = _drawer(_top, _draw_hp, Vector2(1060, 446), Vector2(140, 28))
 
 	# detalhes da carta
-	_d_panel = _add(_top, CutPanel.make(Rect2(916, 480, 348, 124), [[.02, 0], [1, .05], [.97, 1], [0, .94]], Paper.CREAM, 5, Vector2(8, 8)))
+	_d_panel = _add(_top, CutPanel.make(Rect2(916, 480, 348, 142), [[.02, 0], [1, .05], [.97, 1], [0, .94]], Paper.CREAM, 5, Vector2(8, 8)))
 	_d_tile =_drawer(_top, _draw_tile, Vector2(936, 496), Vector2(44, 44))
 	_d_tile.pivot_offset = Vector2(22, 22)
 	_d_tile.rotation = deg_to_rad(-6.0)
@@ -608,7 +640,11 @@ func _build() -> void:
 	_d_desc = Paper.label("", 16, Paper.INK, Paper.body(700))
 	_d_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_d_desc.add_theme_constant_override("line_spacing", -5)
-	_add(_top, _d_desc, Vector2(938, 546), Vector2(306, 48))
+	_add(_top, _d_desc, Vector2(938, 546), Vector2(306, 56))
+	_d_hint = Paper.label("", 12, Color("5B2BB8"), Paper.body(700))
+	_d_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_d_hint.add_theme_constant_override("line_spacing", -4)
+	_add(_top, _d_hint, Vector2(938, 563), Vector2(312, 46))
 
 	# READY FOR BATTLE
 	var ready_shape := [[.03, .06], [1, 0], [.97, .92], [0, 1]]
@@ -708,7 +744,7 @@ func _draw_boss(d: Draw) -> void:
 	d.draw_colored_polygon(pts, Paper.INK)
 	d.draw_colored_polygon(Paper.inset(pts, 3), Paper.PINK)
 	var f := Paper.display()
-	var nm: String = Knowledge.BOSS_INFO[Knowledge.boss]["name"] if _show_ready else "GEAR"
+	var nm: String = ("TREINO LIVRE" if Knowledge.practice else Knowledge.BOSS_INFO[Knowledge.boss]["name"]) if _show_ready else "GEAR"
 	var vs := "VS" if _show_ready else ""
 	var w1 := f.get_string_size(vs, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 	var px := 17
@@ -1350,6 +1386,7 @@ func _update_details() -> void:
 		# aula: sem carta pra mostrar (todas já foram pro baralho), o painel de detalhes some
 		for n in [_d_panel, _d_tile, _d_name, _d_desc]:
 			n.visible = id != ""
+	_d_hint.text = ""
 	if id == "":
 		_d_name.text = ""
 		_d_desc.text = ""
@@ -1375,10 +1412,11 @@ func _update_details() -> void:
 	_d_cat.position.x = _d_kind.position.x + _d_kind.size.x + 8.0
 	if mine:
 		_d_desc.text = c["desc"]
-	elif key != "":
-		_d_desc.text = ""
 	else:
-		_d_desc.text = c.get("earn", "À venda na loja.")
+		# carta desconhecida: o nome fica "???"; no lugar da descrição, um mistério e uma pista
+		_d_desc.text = Knowledge.mystery(id)
+		_d_hint.text = Knowledge.hint(id)
+	_d_desc.add_theme_font_size_override("font_size", 16 if mine else 14)
 
 
 # ---------------------------------------------------------------- movimento parado

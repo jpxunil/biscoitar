@@ -109,6 +109,7 @@ func setup(game) -> void:
 	pause = PauseMenu.new()
 	root.add_child(pause)
 	pause.resume_pressed.connect(g.resume)
+	pause.retry_pressed.connect(g.retry_fight)
 	pause.cards_pressed.connect(g.leave_fight.bind("cards"))
 	pause.title_pressed.connect(g.leave_fight.bind("title"))
 	pause.options_pressed.connect(open_options.bind(true))
@@ -423,6 +424,10 @@ func _process(delta: float) -> void:
 	UiStyle.set_bar(time_bar, time_ratio)
 	# pequena folga: nos primeiros segundos a vida ainda não desceu e isso não é "estar atrás"
 	var behind: bool = time_ratio < g.boss_hp / g.boss_max - 0.05
+	if Knowledge.practice:
+		# treino livre: não existe prazo, o relógio só conta o tempo de treino
+		behind = false
+		time_left = g.fight_time
 	time_bar.get_node("Fill").self_modulate = UiStyle.DANGER if behind else Color.WHITE
 	time_label.text = "%d:%02d" % [int(time_left) / 60, int(time_left) % 60]
 	time_label.add_theme_color_override("font_color", UiStyle.DANGER if behind else UiStyle.DIM)
@@ -723,6 +728,8 @@ func card_unlocked(id: String) -> void:
 	nm.size = Vector2(300, 40)
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	holder.add_child(nm)
+	# a carta só é do save quando a run termina; sair ou reiniciar pelo pause joga ela fora
+	toast("Carta garantida quando a luta terminar", 3.2)
 
 
 ## Limit Break: o rosto de quem soltou entra pela direita.
@@ -842,7 +849,7 @@ func show_end(victory: bool, lines: Array, rank := -1, prize := {}) -> void:
 		end_title.text = "VITÓRIA"
 		sb.bg_color = UiStyle.YELLOW
 	else:
-		end_title.text = "WIPE"
+		end_title.text = "FIM DO TREINO" if Knowledge.practice else "WIPE"
 		sb.bg_color = UiStyle.DANGER
 	var t := int(g.fight_time)
 	var head_line := "%s  ·  tentativa %d  ·  %d:%02d" % [g.boss_def["name"], Knowledge.attempts, t / 60, t % 60]
@@ -856,6 +863,12 @@ func show_end(victory: bool, lines: Array, rank := -1, prize := {}) -> void:
 				head_line += "   ·   +1 ticket roxo"
 			if String(prize.get("card", "")) != "":
 				head_line += "   ·   carta: " + Knowledge.CARDS[prize["card"]]["name"]
+	var got: Array = prize.get("cards", [])
+	if not got.is_empty():
+		var names: Array = []
+		for id in got:
+			names.append(Knowledge.CARDS[id]["name"])
+		head_line += "\n\nCARTAS GARANTIDAS:  " + ",  ".join(names)
 	end_body.text = head_line
 	if lines.size() > 0:
 		end_body.text += "\n\n" + "\n".join(lines)

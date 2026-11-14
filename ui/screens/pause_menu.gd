@@ -2,17 +2,20 @@ class_name PauseMenu
 extends Control
 ## Menu de pause da luta (ESC). Congela a árvore com get_tree().paused e roda mesmo assim,
 ## porque fica em PROCESS_MODE_ALWAYS. Quem decide o que cada opção faz é o game.gd.
+## Opções: CONTINUAR, TENTAR NOVAMENTE, OPÇÕES, SELEÇÃO DE CARTAS, MENU PRINCIPAL.
 ##   ↑↓ / W S escolhem · ENTER confirma · ESC ou a tecla de pause (ou CONTINUAR) volta pra luta.
 ## OPÇÕES abre a tela de opções por cima (hud.gd), com a luta ainda congelada.
 ## Visual: kit de papel (Paper), seguindo o design "Tela de Cartas": painel recortado, etiqueta
 ## creme de título, botão principal dourado e os outros em creme inclinado, todos com sombra dura.
 
 signal resume_pressed
+## TENTAR NOVAMENTE: recomeça a luta atual do zero (game.gd: retry_fight).
+signal retry_pressed
 signal options_pressed
 signal cards_pressed
 signal title_pressed
 
-const PANEL := Vector2(460, 500)
+const PANEL := Vector2(460, 578)
 const DIM := Color("A9AEDC")
 
 ## No tutorial não existe seleção de cartas pra voltar: o menu fica com CONTINUAR, OPÇÕES e SAIR
@@ -40,10 +43,10 @@ func _ready() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
-	var items := [["CONTINUAR", "resume"], ["OPÇÕES", "options"], ["SELEÇÃO DE CARTAS", "cards"], ["MENU PRINCIPAL", "title"]]
+	var items := [["CONTINUAR", "resume"], ["TENTAR NOVAMENTE", "retry"], ["OPÇÕES", "options"], ["SELEÇÃO DE CARTAS", "cards"], ["MENU PRINCIPAL", "title"]]
 	if in_tutorial:
 		items = [["CONTINUAR", "resume"], ["OPÇÕES", "options"], ["SAIR DO TUTORIAL", "title"]]
-	var box_size := Vector2(PANEL.x, PANEL.y - (4 - items.size()) * 78.0)
+	var box_size := Vector2(PANEL.x, PANEL.y - (5 - items.size()) * 78.0)
 
 	# caixa de tamanho fixo, sempre no centro da tela
 	_box = Control.new()
@@ -152,6 +155,7 @@ func _choose(k: int) -> void:
 		return
 	match String(_btns[k].get_meta("id")):
 		"resume": resume_pressed.emit()
+		"retry": retry_pressed.emit()
 		"options": options_pressed.emit()
 		"cards": cards_pressed.emit()
 		"title": title_pressed.emit()

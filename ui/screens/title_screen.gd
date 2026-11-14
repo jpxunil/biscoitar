@@ -1,11 +1,11 @@
 class_name TitleScreen
 extends Control
-## Tela inicial: PLAY (saves -> cafeteria -> bosses), GEAR, LOJA (abre depois da primeira vitória),
-## TUTORIAL DO JOGO e OPÇÕES. GEAR e LOJA valem pro save ativo; sem save escolhido, levam pros saves.
+## Tela inicial: PLAY (saves -> cafeteria -> bosses), LOJA (abre depois da primeira vitória),
+## TUTORIAL DO JOGO e OPÇÕES. A LOJA vale pro save ativo; sem save escolhido, leva pros saves.
+## As cartas (gear) são de cada save: o acesso fica dentro dele, na tela de bosses (botão CARTAS).
 ## O layout fica na cena (title_screen.tscn); aqui é só comportamento.
 
 signal play_pressed
-signal gear_pressed
 signal shop_pressed
 signal options_pressed
 signal tutorial_pressed
@@ -15,9 +15,8 @@ var _focus := 0
 
 
 func _ready() -> void:
-	_btns = [$BtnPlay, $BtnGear, $BtnShop, $BtnTutorial, $BtnOptions]
+	_btns = [$BtnPlay, $BtnShop, $BtnTutorial, $BtnOptions]
 	$BtnPlay.pressed.connect(func(): play_pressed.emit())
-	$BtnGear.pressed.connect(func(): gear_pressed.emit())
 	$BtnShop.pressed.connect(func(): shop_pressed.emit())
 	$BtnOptions.pressed.connect(func(): options_pressed.emit())
 	$BtnTutorial.pressed.connect(func(): tutorial_pressed.emit())

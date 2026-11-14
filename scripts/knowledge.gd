@@ -25,7 +25,7 @@ const HEROES := [
 	# Malpractice (era a Gothic Nurse; a chave interna continua "nurse" por causa do save e da arte).
 	{"key": "nurse", "name": "Malpractice", "role": "Tanque de Sangue", "color": Color(0.36, 0.4, 0.95), "hp": 80, "tank": true,
 		"blurb": "De papel: sangra a cada golpe. Vive de parry e bate mais forte quase morta."},
-	# Classes novas (design/classes-v2.md). Ainda sem arte: o retrato é um provisório com as iniciais.
+	# Classes novas (design/classes-v2.md).
 	{"key": "burner", "name": "Soulburner", "role": "DPS à distância", "color": Color(1.0, 0.55, 0.25), "hp": 90,
 		"blurb": "Anjo do fogo: marca o inimigo e estoura a marca com uma lança na hora certa."},
 	{"key": "ringstar", "name": "Ringstar", "role": "DPS corpo a corpo", "color": Color(1.0, 0.45, 0.75), "hp": 110,
@@ -120,6 +120,63 @@ const CARDS := {
 		"desc": "Uma vez por luta, cura 50 quando a vida cai abaixo de 30%."},
 	"cookie": {"name": "Biscoito da Sorte", "kind": "item", "cat": "special", "price": 150,
 		"desc": "O Limit Break começa a luta com 25% de carga."},
+}
+
+## Carta ainda não liberada: o nome fica "???" e a tela de cartas mostra, no lugar da descrição,
+## uma frase de mistério e uma pista de como ela se consegue. id -> [mistério, pista].
+## A pista aponta pro jeito de verdade (maestria da mecânica, loja, ticket, feito), sem dizer com
+## todas as letras. Mudou como uma carta é liberada? Mude a pista junto.
+const SECRETS := {
+	"dodge": ["O primeiro reflexo de quem quer ficar de pé.", "Ninguém entra na arena sem isto."],
+	# maestria: resolver a mecânica certo, na mão, MASTERY_NEED vezes
+	"stack": ["Um peso que ninguém aguenta sozinho.",
+		"O laranja pesa menos com gente junto. Quem corre pra perto na hora certa, algumas vezes, ensina o caminho."],
+	"pair": ["Dois chamados ao mesmo tempo.",
+		"Quando o laranja se divide, a conta só fecha com a party bem repartida. Acerte essa conta mais de uma vez."],
+	"spread": ["Tem hora em que a companhia é o perigo.",
+		"O roxo não gosta de multidão. Dar espaço a todo mundo, vez após vez, vira hábito."],
+	"link": ["Uma corrente que só existe de perto.",
+		"Certos laços só se desfazem com distância. Quem os rompe com as próprias pernas aprende a saída."],
+	"zone": ["Fogo não se apaga com fogo.",
+		"Carregar um elemento é saber onde mora o seu contrário. O chão certo, pisado algumas vezes, fica na memória."],
+	"partner": ["Ninguém cruza a tempestade sem o seu avesso.",
+		"No pior momento de certa luta, alguém carrega o oposto do que você carrega. Ache essa pessoa a tempo."],
+	"shelter": ["Quem não carrega nada também quer um teto.",
+		"Quando o céu desaba e você está de mãos vazias, existe um lugar feito pra isso. Chegue lá sozinho."],
+	"safe_cast": ["A paciência de quem conjura.",
+		"Quem vive de palavras longas e ainda escapa ilesa do vermelho, vez após vez, aprende onde não conjurar."],
+	"mitigate": ["O golpe mais pesado tem hora marcada.",
+		"Quem fica na frente aprende a ler o gesto antes do impacto. Feche-se no instante certo e fique de pé."],
+	"provoke": ["A atenção dela é disputada.",
+		"Quando ela desvia o olhar de quem deveria apanhar, alguém precisa chamá-la de volta com a própria voz."],
+	"instinct": ["Um olho sempre na vida dos outros.",
+		"Quem socorre com as próprias mãos alguém por um fio, mais de uma vez, passa a fazer isso sem pensar."],
+	"final": ["O último ato tem regras próprias.",
+		"Perto do fim, ela levanta uma das mãos, e há pilares esperando dono. Saia ileso desse ato algumas vezes."],
+	# feitos
+	"breath": ["Até o adversário mais doce deixa algo pra trás.",
+		"Algumas recompensas esperam atrás da luta que quase ninguém leva a sério."],
+	"dps": ["Cada herói tem um ritmo próprio.",
+		"Quem sustenta esse ritmo com as próprias mãos, por tempo suficiente, ensina o herói a dançar sozinho."],
+	"mark": ["A tempestade respeita quem a cruza inteiro.",
+		"Há um cataclismo que cobra um preço de quase todo grupo. Passe por ele sem deixar ninguém pra trás."],
+	# loja, por moedas (ela abre depois da primeira vitória)
+	"sharpen": ["Um fio a mais na lâmina.", "Nem tudo se conquista suando. Depois da primeira vitória, alguém passa a aceitar moedas."],
+	"plate": ["Uma camada entre você e o golpe.", "Tem coisa que não se aprende: se encomenda. Um certo balcão só abre pra quem já venceu."],
+	"eshield": ["Proteção que chega um segundo antes.", "Quem cuida dos outros acha isto numa prateleira, não numa arena. Leve moedas."],
+	"burst": ["O golpe forte, lapidado até brilhar.", "Não é a boss que guarda isto. É alguém que cobra pelo polimento, e cobra caro."],
+	"executor": ["Quem está quase caindo cai mais rápido.", "Certas crueldades têm preço fixo. Procure onde se pesa moeda."],
+	"secondskin": ["Você nunca entra de todo desprotegido.", "Uma vendedora guarda peles sobressalentes atrás do balcão."],
+	"spark": ["O limite chega cedo pra quem tem pressa.", "Brilha numa vitrine. Vitrines pedem moedas, e só aparecem depois de uma vitória."],
+	"potion": ["Um gole guardado pro pior momento.", "Coisa de bolso, comprada, não conquistada. Barata, pra quem já venceu uma vez."],
+	"cookie": ["A sorte, em forma de sobremesa.", "Quem vende biscoito também vende sorte. Junte moedas."],
+	# loja, por ticket (ranking máximo num boss de verdade)
+	"revive": ["Ninguém fica no chão por muito tempo.",
+		"A vendedora não troca isto por moedas. Só um papel roxo a convence, e ele é de quem vence sem defeito."],
+	"phoenix": ["Cair não precisa ser o fim.",
+		"Fica longe do balcão comum. O que abre essa gaveta é raro: é o prêmio de uma luta impecável."],
+	"overdrive": ["Mais força do que é prudente carregar.",
+		"Moeda nenhuma compra isto. Uma nota perfeita deixa cair outro tipo de pagamento."],
 }
 
 ## Mecânicas com maestria: o que o jogador precisa fazer na mão, e a carta que isso libera.
@@ -344,6 +401,15 @@ static func grant(id: String) -> bool:
 	return true
 
 
+## Texto da carta ainda desconhecida: a frase de mistério e a pista de como chegar nela.
+static func mystery(id: String) -> String:
+	return SECRETS[id][0] if SECRETS.has(id) else "Ninguém sabe dizer o que é."
+
+
+static func hint(id: String) -> String:
+	return SECRETS[id][1] if SECRETS.has(id) else "Continue jogando."
+
+
 # ---------------------------------------------------------------- maestria
 
 static func mastery_of(key: String) -> int:
@@ -469,6 +535,62 @@ static func leave_sandbox() -> void:
 	sandbox = false
 
 
+# ---------------------------------------------------------------- run (uma tentativa de luta)
+
+## Uma run é uma tentativa de luta, do GO até a tela de fim (vitória ou wipe).
+## Tudo que o jogador ganha no meio dela (maestria, cartas, Rotação) é provisório:
+##   begin_run   guarda como o save estava e para de gravar em disco;
+##   commit_run  a run terminou (venceu ou morreu): o que foi ganho passa a valer e é gravado;
+##   abort_run   o jogador saiu ou reiniciou pelo pause: volta tudo ao que era antes do GO.
+## Fechar o jogo no meio da luta também não grava nada, porque save() não escreve durante a run.
+static var in_run := false
+static var _run_kept := {}
+## Treino livre (dummy): luta sem progresso. Nada do que acontece nela é ganho nem gravado.
+static var practice := false
+
+
+static func begin_run() -> void:
+	if in_run:
+		return
+	_run_kept = {"owned": owned.duplicate(), "decks": decks.duplicate(true), "mastery": mastery.duplicate(), "dps": dps_known.duplicate()}
+	in_run = true
+
+
+static func commit_run() -> void:
+	if not in_run:
+		return
+	if practice:
+		abort_run()
+		return
+	in_run = false
+	_run_kept = {}
+	save()
+
+
+static func abort_run() -> void:
+	if not in_run:
+		return
+	owned = _run_kept["owned"]
+	decks = _run_kept["decks"]
+	mastery = _run_kept["mastery"]
+	dps_known = _run_kept["dps"]
+	_run_kept = {}
+	in_run = false
+
+
+## Cartas ganhas nesta run e ainda não confirmadas (somem se a run for abandonada).
+static func run_cards() -> Array:
+	var out: Array = []
+	if not in_run:
+		return out
+	for id in owned:
+		if not _run_kept["owned"].has(id):
+			out.append(id)
+	if dps_known.size() > _run_kept["dps"].size():
+		out.append("dps")
+	return out
+
+
 static func save_path(n: int) -> String:
 	return save_dir + "save_%d.json" % n
 
@@ -478,7 +600,7 @@ static func slot_exists(n: int) -> bool:
 
 
 static func save() -> void:
-	if not persist or sandbox or slot <= 0:
+	if not persist or sandbox or in_run or slot <= 0:
 		return
 	var data := {
 		"owned": owned.keys(), "decks": {}, "mastery": mastery, "money": money, "tickets": tickets,
@@ -507,6 +629,9 @@ static func reset_progress() -> void:
 	boss = 1
 	attempts = 1
 	party = []
+	in_run = false
+	_run_kept = {}
+	practice = false
 
 
 ## Na abertura do jogo: converte o save antigo (arquivo único) no save 1 e reabre o último save usado.

@@ -112,7 +112,7 @@ func _initialize() -> void:
 	# ---- pause -> opções -> captura de tecla -> pause
 	await key(KEY_ESCAPE)
 	check(paused and hud.pause.visible, "ESC pausa")
-	hud.pause._btns[1].pressed.emit()
+	hud.pause._btns[2].pressed.emit()
 	await process_frame
 	check(opt.visible and not hud.pause.visible and paused, "OPÇÕES no pause abre a tela e a luta segue pausada")
 	opt._show_tab(1)
