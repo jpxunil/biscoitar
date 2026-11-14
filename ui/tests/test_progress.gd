@@ -111,7 +111,7 @@ func _initialize() -> void:
 	var main := await open_main()
 	var menus = main.hud.menus
 	check(not menus.title.has_node("Stage/BtnGear"), "menu principal não tem mais o botão GEAR")
-	check(menus.title._btns.size() == 5 and menus.title.has_node("Stage/BtnSkills"), "menu principal: PLAY, LOJA, SKILLS, TUTORIAL e OPÇÕES")
+	check(menus.title._btns.size() == 4 and menus.title.has_node("Stage/BtnSkills") and not menus.title.has_node("Stage/BtnShop"), "menu principal: JOGAR, SKILLS, TUTORIAL e OPÇÕES (a loja fica no save)")
 	menus.title.get_node("Stage/BtnSkills").pressed.emit()
 	await frames(3)
 	var sks = menus.skills

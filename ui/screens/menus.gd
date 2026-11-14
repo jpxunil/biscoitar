@@ -3,7 +3,8 @@ extends Control
 ##   título -> PLAY -> saves -> cafeteria (cena lobby.tscn: monta a party) -> bosses -> cartas -> luta
 ##   bosses -> CARTAS (gear: as cartas do save ativo, sem o botão de luta) -> bosses
 ##   bosses -> TREINO LIVRE (dummy) -> cartas -> luta sem progresso
-##   vitória -> loja -> título
+##   bosses -> LOJA (do save ativo; abre depois da primeira vitória) -> bosses
+##   vitória -> loja -> bosses
 ##   título -> tutoriais -> (cena do tutorial) -> tutoriais
 ##   título -> SKILLS (consulta das habilidades de todos os personagens) -> título
 ##   cartas -> SKILLS (botão pequeno embaixo do VOLTAR, abre no herói que está sendo visto) -> cartas
@@ -54,7 +55,6 @@ func setup(game) -> void:
 		# carrega (ou cria) o save e vai pra cafeteria montar a party; os bosses só abrem depois dela
 		Knowledge.select_slot(n)
 		get_tree().change_scene_to_file("res://lobby.tscn"))
-	title.shop_pressed.connect(func(): show_screen("saves" if (Knowledge.slot <= 0 and Knowledge.persist) else "shop"))
 	title.options_pressed.connect(func(): g.hud.open_options(false))
 	title.tutorial_pressed.connect(show_screen.bind("tutorials"))
 	tutorials.back_pressed.connect(show_screen.bind("title"))
@@ -88,7 +88,9 @@ func setup(game) -> void:
 	cards.ready_pressed.connect(func():
 		if g.select_hero(cards.hero):
 			g.start_fight())
-	shop.back_pressed.connect(show_screen.bind("title"))
+	bosses.shop_pressed.connect(show_screen.bind("shop"))
+	# a loja é do save: sair dela volta pros bosses (sem save ou party, isso cai na tela de saves)
+	shop.back_pressed.connect(show_screen.bind("bosses"))
 	visible = false
 
 
@@ -100,7 +102,7 @@ func set_open(on: bool) -> void:
 
 func show_screen(id: String) -> void:
 	if id == "shop" and not Knowledge.shop_unlocked:
-		id = "title"
+		id = "bosses"
 	Knowledge.screen = id
 	# os bosses e as cartas de luta só existem com um save e uma party de quatro
 	if id == "bosses" and Knowledge.persist and (Knowledge.slot <= 0 or not Knowledge.party_ready()):

@@ -2,7 +2,7 @@ class_name BossScreen
 extends Control
 ## Escolha do boss. Um painel por luta de Knowledge.BOSS_INFO; os painéis são montados aqui,
 ## dentro do contêiner "List" da cena. Embaixo, entre VOLTAR e CONFIRMAR, fica o TREINO LIVRE
-## (dummy que não morre; não dá recompensa nem mexe no save). No topo, CARTAS abre o gear do save.
+## (dummy que não morre; não dá recompensa nem mexe no save). No topo, CARTAS abre o gear do save e LOJA a loja dele.
 ##   A D / ← → trocam de boss · S / ↓ vai pro treino, W / ↑ volta · ENTER confirma · ESC volta.
 
 ## index = boss em Knowledge.BOSS_INFO, ou -1 pro treino livre.
@@ -10,6 +10,8 @@ signal boss_chosen(index: int)
 signal back_pressed
 ## Abrir as cartas (gear) do save ativo, sem luta.
 signal gear_pressed
+## Abrir a loja do save ativo (só depois da primeira vitória).
+signal shop_pressed
 
 const HAIR := [Color(0.86, 0.6, 0.3), Color(0.25, 0.8, 0.9), Color(1.0, 0.38, 0.66), Color(0.75, 0.45, 1.0)]
 
@@ -31,6 +33,12 @@ func _ready() -> void:
 	gear.size = Vector2(224, 66)
 	gear.pressed.connect(func(): gear_pressed.emit())
 	add_child(gear)
+	var shop := Ink.button("LOJA", Ink.GRAPE, Ink.CREAM, 26, 13)
+	shop.name = "BtnShop"
+	shop.position = Vector2(770, 36)
+	shop.size = Vector2(224, 66)
+	shop.pressed.connect(func(): shop_pressed.emit())
+	add_child(shop)
 	# selo no botão CARTAS quando alguém da party tem carta nova pra ver
 	var chip := Chip.new()
 	chip.name = "NewCards"
@@ -62,6 +70,7 @@ func open() -> void:
 		if Knowledge.has_new(h):
 			any_new = true
 	$NewCards.visible = any_new
+	$BtnShop.disabled = not Knowledge.shop_unlocked
 	_build()
 
 

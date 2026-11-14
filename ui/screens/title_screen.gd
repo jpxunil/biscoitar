@@ -1,14 +1,13 @@
 class_name TitleScreen
 extends Control
-## Tela inicial: JOGAR (saves -> cafeteria -> bosses), LOJA (abre depois da primeira vitória),
-## SKILLS (consulta das habilidades de todos os personagens), TUTORIAL e OPÇÕES. A LOJA vale pro save ativo; sem save escolhido, leva pros saves.
-## As cartas (gear) são de cada save: o acesso fica dentro dele, na tela de bosses (botão CARTAS).
+## Tela inicial: JOGAR (saves -> cafeteria -> bosses), SKILLS (consulta das habilidades de todos os
+## personagens), TUTORIAL e OPÇÕES.
+## As cartas (gear) e a loja são de cada save: o acesso fica dentro dele, na tela de bosses (CARTAS e LOJA).
 ## Layout da prancha "B · Elenco inteiro" do design "Menu Principal" (kit Paper): logo numa linha em cima,
-## os heróis em faixas inclinadas (cada uma na cor do tema dele) e os botões numa barra embaixo.
+## os heróis em faixas inclinadas (cada uma na cor do tema dele) que andam pra direita em carrossel e os botões numa barra embaixo.
 ## A tela é montada em código; a cena (title_screen.tscn) só tem a raiz com o script.
 
 signal play_pressed
-signal shop_pressed
 signal skills_pressed
 signal options_pressed
 signal tutorial_pressed
@@ -18,22 +17,26 @@ const PURPLE := Color("5B2BB8")
 const PURPLE2 := Color("7A3FE0")
 const DEEP := Color("1E2460")
 const DEEP2 := Color("2B3384")
-const TICKET := Color("C9A6FF")
 const COOKIE := Color("D9984F")
 ## Faixa do elenco: topo, altura e inclinação (graus) dos recortes.
 const BAND_Y := 150.0
 const BAND_H := 398.0
 const BAND_SKEW := 12.0
-## Bordas das faixas, medidas no meio da altura (a primeira e a última passam da tela).
-const BAND_X := [-50.0, 213.0, 426.0, 639.0, 852.0, 1065.0, 1335.0]
+## Largura de cada faixa e velocidade do carrossel (px por segundo, pra direita).
+const BAND_W := 213.0
+const BAND_SPEED := 28.0
 ## Caixa em que a arte é encaixada (cobre a caixa, ancorada no topo).
 const ART_BOX := Vector2(300, 560)
-## Um herói por faixa: chave da arte, cor do fundo e cor do pontilhado.
+const ART_WIDE := 440.0
+## Um herói por faixa, na ordem do carrossel: chave da arte, cor do fundo e cor do pontilhado.
 const ROSTER := [
 	["tank", "2B4FBF", "4D80FF"],
 	["maga", "E08A14", "FFC233"],
 	["healer", "1F8A4C", "3FB86B"],
 	["ringstar", "D9408F", "FF73BE"],
+	["sleepwalker", "5A5FC8", "8A8FF0"],
+	["burner", "D9622A", "FF9A4D"],
+	["apothecary", "2F7A5C", "46A082"],
 	["assassina", "7A3FE0", "9E5CFF"],
 	["nurse", "D9DCF5", "B9BFEE"],
 ]
@@ -41,10 +44,8 @@ const ROSTER := [
 var _stage: Control
 var _btns: Array = []
 var _focus := 0
-var _enter: Chip
-var _arts: Array = []
-var _coins: Label
-var _tickets: Label
+var _panels: Array[Control] = []
+var _scroll := 0.0
 var _built := false
 
 
@@ -57,10 +58,6 @@ func _ready() -> void:
 
 
 func open() -> void:
-	_coins.text = str(Knowledge.money)
-	_tickets.text = str(Knowledge.tickets)
-	$Stage/BtnShop.disabled = not Knowledge.shop_unlocked
-	$Stage/ShopLock.visible = not Knowledge.shop_unlocked
 	_focus = 0
 	# o logo "carimba" e os botões entram um depois do outro
 	var logo: Control = $Stage/LogoPanel
@@ -100,17 +97,14 @@ func _build() -> void:
 	_stage.offset_bottom = STAGE.y * 0.5
 	add_child(_stage)
 
-	for r in ROSTER:
-		var path := "res://assets/portraits/%s_art.webp" % r[0]
-		_arts.append(load(path) if ResourceLoader.exists(path) else null)
 	var back := Control.new()
 	back.size = STAGE
 	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	back.draw.connect(_draw_back.bind(back))
 	_stage.add_child(back)
+	_build_band()
 
 	_build_logo()
-	_build_wallet()
 
 	var motto := Chip.new()
 	motto.px = 13
@@ -120,7 +114,7 @@ func _build() -> void:
 	motto.border = 0.0
 	motto.shadow = Vector2.ZERO
 	motto.text = "UM JOGADOR · QUATRO HERÓIS · UMA BOSS"
-	motto.position = Vector2(STAGE.x - 56.0 - motto.size.x, 92)
+	motto.position = Vector2(STAGE.x - 56.0 - motto.size.x, 62)
 	motto.rotation = deg_to_rad(-2.0)
 	_stage.add_child(motto)
 
@@ -132,41 +126,15 @@ func _build() -> void:
 	play.fill_hover = Paper.GOLD_HOVER
 	play.hover_scale = 1.05
 	play.pressed.connect(func(): play_pressed.emit())
-	var shop := _button("BtnShop", "LOJA", Rect2(452, 606, 180, 60), Paper.KIND["purple"]["bg"], 24)
-	shop.auto_hover = true
-	shop.pressed.connect(func(): shop_pressed.emit())
-	var skills := _button("BtnSkills", "SKILLS", Rect2(652, 606, 180, 60), Paper.CYAN, 24)
+	var skills := _button("BtnSkills", "SKILLS", Rect2(472, 606, 220, 60), Paper.CYAN, 26)
 	skills.auto_hover = true
 	skills.pressed.connect(func(): skills_pressed.emit())
-	var tut := _button("BtnTutorial", "TUTORIAL", Rect2(852, 606, 180, 60), Paper.CREAM, 20)
+	var tut := _button("BtnTutorial", "TUTORIAL", Rect2(732, 606, 220, 60), Paper.CREAM, 24)
 	tut.fill_hover = Paper.GOLD_HOVER
 	tut.pressed.connect(func(): tutorial_pressed.emit())
-	var opt := _button("BtnOptions", "OPÇÕES", Rect2(1052, 606, 180, 60), Paper.CREAM, 20)
+	var opt := _button("BtnOptions", "OPÇÕES", Rect2(992, 606, 220, 60), Paper.CREAM, 24)
 	opt.fill_hover = Paper.GOLD_HOVER
 	opt.pressed.connect(func(): options_pressed.emit())
-
-	var lock := Chip.new()
-	lock.name = "ShopLock"
-	lock.px = 11
-	lock.pad = 10.0
-	lock.fill = Paper.INK
-	lock.ink = Paper.GOLD
-	lock.border = 0.0
-	lock.shadow = Vector2.ZERO
-	lock.text = "VENÇA UM BOSS PRA ABRIR"
-	lock.position = Vector2(446, 584)
-	lock.rotation = deg_to_rad(-4.0)
-	_stage.add_child(lock)
-
-	# a etiqueta ENTER acompanha o botão em foco
-	_enter = Chip.new()
-	_enter.px = 14
-	_enter.pad = 12.0
-	_enter.skew = 0.0
-	_enter.shadow = Vector2(4, 4)
-	_enter.text = "ENTER"
-	_enter.rotation = deg_to_rad(4.0)
-	_stage.add_child(_enter)
 
 
 func _button(node_name: String, label: String, rect: Rect2, col: Color, px: int) -> ShineButton:
@@ -223,41 +191,63 @@ func _build_logo() -> void:
 	logo.add_child(cookie)
 
 
-func _build_wallet() -> void:
-	var wallet := Control.new()
-	wallet.name = "Wallet"
-	wallet.size = Vector2(236, 46)
-	wallet.position = Vector2(STAGE.x - 52.0 - wallet.size.x, 26)
-	wallet.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wallet.draw.connect(func(): wallet.draw_colored_polygon(Paper.skew_rect(wallet.size, 12.0), Paper.INK))
-	_stage.add_child(wallet)
-	var coin := Control.new()
-	coin.position = Vector2(22, 10)
-	coin.size = Vector2(26, 26)
-	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	coin.draw.connect(func(): Ink.draw_coin(coin, 26))
-	wallet.add_child(coin)
-	_coins = Paper.label("0", 22, Paper.GOLD, Paper.display(0.0))
-	_coins.name = "Coins"
-	_coins.position = Vector2(56, 0)
-	_coins.size = Vector2(72, 46)
-	_coins.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	wallet.add_child(_coins)
-	var ticket := Control.new()
-	ticket.position = Vector2(132, 10)
-	ticket.size = Vector2(26, 26)
-	ticket.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ticket.draw.connect(func(): Ink.draw_ticket(ticket, 26))
-	wallet.add_child(ticket)
-	_tickets = Paper.label("0", 22, TICKET, Paper.display(0.0))
-	_tickets.name = "Tickets"
-	_tickets.position = Vector2(166, 0)
-	_tickets.size = Vector2(60, 46)
-	_tickets.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	wallet.add_child(_tickets)
+## Faixa do elenco: um recorte inclinado por herói, com a arte dentro. As faixas andam pra direita
+## sem parar e voltam pela esquerda, então todos os heróis passam pela tela.
+func _build_band() -> void:
+	var band := Control.new()
+	band.name = "Band"
+	band.position = Vector2(0, BAND_Y)
+	band.size = Vector2(STAGE.x, BAND_H)
+	band.clip_contents = true
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stage.add_child(band)
+	for r in ROSTER:
+		var path := "res://assets/portraits/%s_art.webp" % r[0]
+		var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+		var panel := Control.new()
+		panel.size = Vector2(BAND_W, BAND_H)
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.draw.connect(_draw_panel.bind(panel, tex, Color(r[1]), Color(r[2])))
+		band.add_child(panel)
+		_panels.append(panel)
+	_place_panels()
 
 
-## Fundo: pontilhado, recortes e a faixa do elenco (um recorte inclinado por herói, com a arte dentro).
+func _draw_panel(ci: Control, tex: Texture2D, bg: Color, dot: Color) -> void:
+	var d := tan(deg_to_rad(BAND_SKEW)) * BAND_H * 0.5
+	var pts := PackedVector2Array([Vector2(d, 0), Vector2(BAND_W + d, 0), Vector2(BAND_W - d, BAND_H), Vector2(-d, BAND_H)])
+	ci.draw_colored_polygon(pts, bg)
+	_dots(ci, pts, dot)
+	if tex != null:
+		# a arte cobre a caixa ART_BOX, centrada na faixa e recortada no formato dela
+		var ts := tex.get_size()
+		# arte larga (Sleepwalker, Maga) encolhe até ART_WIDE de largura, pra caber mais do boneco na faixa
+		var sz := ts * maxf(ART_BOX.x / ts.x, minf(ART_BOX.y / ts.y, ART_WIDE / ts.x))
+		var at := Vector2((BAND_W - sz.x) * 0.5, 14.0)
+		var uvs := PackedVector2Array()
+		for p in pts:
+			uvs.append((p - at) / sz)
+		ci.draw_colored_polygon(pts, Color.WHITE, uvs, tex)
+	# contorno dos dois lados: quem dá a volta no carrossel muda de ordem de desenho
+	ci.draw_line(pts[0], pts[3], Paper.INK, 7.0, true)
+	ci.draw_line(pts[1], pts[2], Paper.INK, 7.0, true)
+
+
+func _place_panels() -> void:
+	var d := tan(deg_to_rad(BAND_SKEW)) * BAND_H * 0.5
+	var total := BAND_W * _panels.size()
+	for i in _panels.size():
+		_panels[i].position.x = fposmod(i * BAND_W + _scroll + d + BAND_W, total) - d - BAND_W
+
+
+func _process(delta: float) -> void:
+	if not is_visible_in_tree():
+		return
+	_scroll = fposmod(_scroll + BAND_SPEED * delta, BAND_W * _panels.size())
+	_place_panels()
+
+
+## Fundo: pontilhado, recortes e a base escura atrás da faixa do elenco.
 func _draw_back(ci: Control) -> void:
 	ci.draw_rect(Rect2(Vector2.ZERO, STAGE), PURPLE)
 	_dots(ci, PackedVector2Array([Vector2.ZERO, Vector2(STAGE.x, 0), STAGE, Vector2(0, STAGE.y)]), PURPLE2)
@@ -265,28 +255,6 @@ func _draw_back(ci: Control) -> void:
 	ci.draw_colored_polygon(PackedVector2Array([Vector2(-20, 584), Vector2(1300, 540), Vector2(1300, 740), Vector2(-20, 740)]), DEEP)
 	ci.draw_colored_polygon(PackedVector2Array([Vector2(420, 692), Vector2(1300, 668), Vector2(1300, 688), Vector2(429, 708)]), DEEP2)
 	ci.draw_rect(Rect2(0, BAND_Y - 8.0, STAGE.x, BAND_H + 16.0), Paper.INK)
-	var d := tan(deg_to_rad(BAND_SKEW)) * BAND_H * 0.5
-	var bottom := BAND_Y + BAND_H
-	for i in ROSTER.size():
-		var l: float = BAND_X[i]
-		var r: float = BAND_X[i + 1]
-		var pts := PackedVector2Array([Vector2(l + d, BAND_Y), Vector2(r + d, BAND_Y), Vector2(r - d, bottom), Vector2(l - d, bottom)])
-		ci.draw_colored_polygon(pts, Color(ROSTER[i][1]))
-		_dots(ci, pts, Color(ROSTER[i][2]))
-		var tex: Texture2D = _arts[i]
-		if tex != null:
-			# a arte cobre a caixa ART_BOX, centrada na parte da faixa que aparece na tela
-			var ts := tex.get_size()
-			var sz := ts * maxf(ART_BOX.x / ts.x, ART_BOX.y / ts.y)
-			var cx := (maxf(l, 0.0) + minf(r, STAGE.x)) * 0.5
-			var at := Vector2(cx - sz.x * 0.5, BAND_Y + 14.0)
-			var uvs := PackedVector2Array()
-			for p in pts:
-				uvs.append((p - at) / sz)
-			ci.draw_colored_polygon(pts, Color.WHITE, uvs, tex)
-	for i in range(1, ROSTER.size()):
-		var x: float = BAND_X[i]
-		ci.draw_line(Vector2(x + d, BAND_Y), Vector2(x - d, bottom), Paper.INK, 7.0, true)
 
 
 ## Pontilhado de 20 em 20 px, só nos pontos que caem dentro do polígono.
@@ -294,7 +262,6 @@ func _dots(ci: Control, pts: PackedVector2Array, col: Color) -> void:
 	var box := Rect2(pts[0], Vector2.ZERO)
 	for p in pts:
 		box = box.expand(p)
-	box = box.intersection(Rect2(Vector2.ZERO, STAGE))
 	var y := floorf(box.position.y / 20.0) * 20.0 + 10.0
 	while y < box.end.y:
 		var x := floorf(box.position.x / 20.0) * 20.0 + 10.0
@@ -308,8 +275,6 @@ func _dots(ci: Control, pts: PackedVector2Array, col: Color) -> void:
 func _mark_focus() -> void:
 	for k in _btns.size():
 		_btns[k].focused = k == _focus
-	var b: Control = _btns[_focus]
-	_enter.position = b.position + Vector2(b.size.x - 54.0, -16.0)
 
 
 func _unhandled_input(event: InputEvent) -> void:
