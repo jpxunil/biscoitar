@@ -100,6 +100,32 @@ var ricochet_out := true
 # Ringstar: sequência Jab -> Direto -> Gancho (0 = começo, 1 = Direto fortalecido, 2 = Gancho fortalecido)
 var chain := 0
 var count_t := 0.0     # Contagem Regressiva
+# Valsa
+var waltz_step := 0    # compasso do Passo de Valsa: 0 e 1 são passos; em 2, o próximo é o Giro
+var waltz_side := 0    # pra que lado sai o próximo passo (alterna)
+var embalo := 0        # 0..EMBALO_MAX: abre a saia (alcance e força do bônus da party)
+var embalo_t := 0.0    # quanto falta pro Embalo começar a cair
+var partner: Unit      # Par de Dança: recebe o bônus de qualquer lugar e acompanha os Giros
+var twirl_t := 0.0     # Pirueta: enquanto gira, os golpes passam por ela
+var twirl_hit := false # ... e já rendeu o BRAVO desta Pirueta
+var crescendo_t := 0.0
+var petal_t := 0.0     # Chuva de Pétalas caindo
+var petal_tick := 0.0
+var ball_t := 0.0      # Grande Baile
+var ai_waltz := 0.0    # IA sem a carta Rotação: tempo dançando ao alcance da boss (rende Embalo sozinho)
+## O boneco dela: o suporte que gira (rig), a saia, os cachos e as mãos. `skirt_kick` é o quanto a saia
+## está aberta A MAIS por causa de um giro (as animações mexem nele); `skirt_open` segue o Embalo.
+var rig: Node3D
+var skirt: Node3D
+var curls: Array[Node3D] = []
+var skirt_kick := 0.0
+var skirt_open := 0.78
+var _waltz_tw: Tween
+## A roseta no chão (até onde o bônus alcança) e as rosas do Embalo, que orbitam a cintura.
+var aura: MeshInstance3D
+var aura_mat: ShaderMaterial
+var aura_spin := 0.0
+var rose_orbit: Node3D
 # Apotecário
 var vestiges := 0      # Vestígios (0..3): renovar a Decomposição na hora certa
 var patient: Unit      # Paciente: último aliado que recebeu Sutura
@@ -189,8 +215,9 @@ var body_mat: StandardMaterial3D
 ## Cor normal do material do corpo: a do herói no boneco de cápsula, branco no boneco low-poly
 ## (lá as cores vêm dos vértices e o material só multiplica).
 var body_tint := Color.WHITE
-## Boneco low-poly (HeroModels): os braços, que seguem as mãos. Vazio no boneco de cápsula.
+## Boneco low-poly (HeroModels): os braços, que seguem as mãos (`hands`). Vazio no boneco de cápsula.
 var arms: Array[Node3D] = []
+var hands: Array[Node3D] = []
 var ring: MeshInstance3D
 var orb: MeshInstance3D
 var orb_mat: StandardMaterial3D
@@ -278,6 +305,27 @@ func setup(i: int, d: Dictionary) -> void:
 			cuff.rotation.x = PI / 2.0
 			gloves.append(hand)
 
+	if key == "valsa":
+		# a roseta da saia no chão: mostra até onde o bônus dela alcança (quem liga e escala é o game.gd)
+		var plane := PlaneMesh.new()
+		plane.size = Vector2(2.0, 2.0)
+		aura_mat = ShaderMaterial.new()
+		aura_mat.shader = load("res://shaders/valsa_aura.gdshader")
+		aura = Fx.inst(self, plane, aura_mat, Vector3(0, 0.035, 0))
+		aura.visible = false
+		# uma rosa dourada por ponto de Embalo, orbitando a cintura
+		rose_orbit = Node3D.new()
+		rose_orbit.position = Vector3(0, 1.05, 0)
+		rose_orbit.visible = false
+		add_child(rose_orbit)
+		for n in 5:
+			var a := n * TAU / 5.0
+			var holder := Node3D.new()
+			holder.position = Vector3(cos(a), 0, sin(a)) * 0.95
+			rose_orbit.add_child(holder)
+			var flower := Fx.rose(holder, 0.13)
+			flower.rotation.z = 0.5
+
 	ring = Fx.inst(self, Fx.torus(0.62, 0.74), Fx.mat(Color(1, 1, 1), 2.5, true), Vector3(0, 0.04, 0))
 	ring.visible = false
 
@@ -322,8 +370,10 @@ func setup(i: int, d: Dictionary) -> void:
 
 func _process(delta: float) -> void:
 	# boneco low-poly: cada braço vai do ombro até a mão, onde quer que a animação a tenha levado
+	if skirt != null:
+		_tick_skirt(delta)
 	for n in arms.size():
-		var reach: Vector3 = daggers[n].position - arms[n].position
+		var reach: Vector3 = hands[n].position - arms[n].position
 		var len := reach.length()
 		if len > 0.05:
 			var up := Vector3.UP if absf(reach.normalized().y) < 0.95 else Vector3.BACK
@@ -762,6 +812,158 @@ func glove_anim(move: String, time := 1.0) -> void:
 			tw.parallel().tween_property(r, "scale", Vector3.ONE, 0.18)
 
 
+func _hand_home(s: float) -> Vector3:
+	return Vector3(s * 0.5, 1.72, -0.3)
+
+
+## Valsa, a cada frame: a saia abre com o Embalo (e mais ainda num giro: skirt_kick) e roda devagar,
+## os cachos voam pra fora quando ela gira, e as rosas do Embalo orbitam a cintura.
+func _tick_skirt(delta: float) -> void:
+	var t := Time.get_ticks_msec() * 0.001
+	skirt_open = lerpf(skirt_open, 0.78 + 0.075 * embalo, minf(1.0, delta * 6.0))
+	var open := skirt_open + skirt_kick * 0.42
+	skirt.scale = Vector3(open, 1.0 - (open - 0.78) * 0.4, open)
+	skirt.rotation.y -= delta * (0.5 + 0.35 * embalo + skirt_kick * 16.0)
+	skirt.rotation.x = sin(t * 2.2) * 0.03
+	for n in curls.size():
+		var s := -1.0 if n == 0 else 1.0
+		curls[n].rotation.z = s * (skirt_kick * 0.55 + sin(t * 2.6 + n) * 0.04)
+	if rose_orbit != null:
+		rose_orbit.visible = alive and embalo > 0
+		rose_orbit.rotation.y += delta * (1.2 + 0.4 * embalo + skirt_kick * 5.0)
+		for n in rose_orbit.get_child_count():
+			var holder: Node3D = rose_orbit.get_child(n)
+			holder.visible = n < embalo
+			holder.position.y = sin(t * 3.0 + n * 1.3) * 0.12
+
+
+## Uma rosa do Embalo acabou de nascer: ela estoura grande e assenta.
+func rose_pop(n: int) -> void:
+	if rose_orbit == null or n < 0 or n >= rose_orbit.get_child_count():
+		return
+	var holder: Node3D = rose_orbit.get_child(n)
+	holder.scale = Vector3.ONE * 2.6
+	holder.create_tween().tween_property(holder, "scale", Vector3.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## A dança da Valsa. O corpo gira no suporte (`rig`), então não briga com face(). `move`:
+##   "step" passo pro lado, alternando (os dois primeiros tempos do compasso) ·
+##   "giro" uma volta inteira com os braços abertos e a saia no máximo (o terceiro tempo) ·
+##   "pirueta" três voltas na ponta do pé, uma mão no alto, durante `time` ·
+##   "offer" estende a mão pro par (Passo a Dois) · "toss" joga o buquê pro alto (Chuva de Pétalas) ·
+##   "crescendo" os braços sobem em V e ela cresce · "ball" duas voltas lentas, flutuando (Grande Baile) ·
+##   "bow" a reverência do fim do baile.
+func waltz_anim(move: String, time := 0.4) -> void:
+	if rig == null or not alive:
+		return
+	if _waltz_tw != null:
+		_waltz_tw.kill()
+	var l := hands[0]
+	var r := hands[1]
+	var lh := _hand_home(-1.0)
+	var rh := _hand_home(1.0)
+	l.position = lh
+	r.position = rh
+	rig.rotation = Vector3.ZERO
+	rig.position = Vector3.ZERO
+	_waltz_tw = create_tween()
+	var tw := _waltz_tw
+	match move:
+		"step":
+			var s := -1.0 if waltz_side == 0 else 1.0
+			waltz_side = 1 - waltz_side
+			var hand: Node3D = l if s < 0.0 else r
+			var home: Vector3 = lh if s < 0.0 else rh
+			tw.tween_property(rig, "rotation", Vector3(0, s * -0.5, s * -0.14), 0.09).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(rig, "position:x", s * 0.12, 0.09)
+			tw.parallel().tween_property(hand, "position", home + Vector3(s * 0.6, 0.5, -0.45), 0.09)
+			tw.parallel().tween_property(self, "skirt_kick", 0.28, 0.09)
+			tw.tween_property(rig, "rotation", Vector3.ZERO, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(rig, "position:x", 0.0, 0.24)
+			tw.parallel().tween_property(hand, "position", home, 0.24)
+			tw.parallel().tween_property(self, "skirt_kick", 0.0, 0.3)
+		"giro":
+			tw.tween_property(rig, "rotation:y", -TAU, time).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(rig, "position:y", 0.3, time * 0.45).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(l, "position", lh + Vector3(-0.8, 0.5, 0.25), time * 0.3)
+			tw.parallel().tween_property(r, "position", rh + Vector3(0.8, 0.85, 0.25), time * 0.3)
+			tw.parallel().tween_property(self, "skirt_kick", 1.0, time * 0.3).set_ease(Tween.EASE_OUT)
+			tw.tween_callback(func(): rig.rotation.y = 0.0)
+			tw.tween_property(rig, "position:y", 0.0, 0.12).set_ease(Tween.EASE_IN)
+			tw.parallel().tween_property(l, "position", lh, 0.2)
+			tw.parallel().tween_property(r, "position", rh, 0.2)
+			tw.parallel().tween_property(self, "skirt_kick", 0.0, 0.4)
+		"pirueta":
+			tw.tween_property(rig, "rotation:y", -TAU * 3.0, time).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(rig, "position:y", 0.5, time * 0.3).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(r, "position", Vector3(0.12, 3.3, -0.05), time * 0.2)
+			tw.parallel().tween_property(l, "position", lh + Vector3(-0.85, 0.4, 0.2), time * 0.2)
+			tw.parallel().tween_property(self, "skirt_kick", 1.35, time * 0.25).set_ease(Tween.EASE_OUT)
+			tw.tween_callback(func(): rig.rotation.y = 0.0)
+			tw.tween_property(rig, "position:y", 0.0, 0.14).set_ease(Tween.EASE_IN)
+			tw.parallel().tween_property(l, "position", lh, 0.22)
+			tw.parallel().tween_property(r, "position", rh, 0.22)
+			tw.parallel().tween_property(self, "skirt_kick", 0.0, 0.45)
+		"offer":
+			tw.tween_property(r, "position", rh + Vector3(0.25, 0.75, -0.95), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(l, "position", lh + Vector3(-0.5, -0.1, 0.3), 0.12)
+			tw.parallel().tween_property(rig, "position:y", -0.1, 0.12)
+			tw.parallel().tween_property(self, "skirt_kick", 0.45, 0.12)
+			tw.tween_interval(0.22)
+			tw.tween_property(r, "position", rh, 0.22)
+			tw.parallel().tween_property(l, "position", lh, 0.22)
+			tw.parallel().tween_property(rig, "position:y", 0.0, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(self, "skirt_kick", 0.0, 0.3)
+		"toss":
+			l.position = lh + Vector3(0.2, -0.3, -0.2)
+			r.position = rh + Vector3(-0.2, -0.3, -0.2)
+			tw.tween_property(l, "position", Vector3(-0.3, 3.35, -0.1), 0.12).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(r, "position", Vector3(0.3, 3.35, -0.1), 0.12).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(rig, "position:y", 0.25, 0.12)
+			tw.parallel().tween_property(self, "skirt_kick", 0.6, 0.12)
+			tw.tween_interval(0.3)
+			tw.tween_property(l, "position", lh, 0.25)
+			tw.parallel().tween_property(r, "position", rh, 0.25)
+			tw.parallel().tween_property(rig, "position:y", 0.0, 0.2)
+			tw.parallel().tween_property(self, "skirt_kick", 0.0, 0.4)
+		"crescendo":
+			tw.tween_property(l, "position", lh + Vector3(-0.7, -0.2, 0.1), 0.1)
+			tw.parallel().tween_property(r, "position", rh + Vector3(0.7, -0.2, 0.1), 0.1)
+			tw.parallel().tween_property(rig, "position:y", -0.12, 0.1)
+			tw.tween_property(l, "position", Vector3(-0.85, 3.2, 0.0), 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(r, "position", Vector3(0.85, 3.2, 0.0), 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(rig, "position:y", 0.35, 0.3).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(self, "skirt_kick", 0.9, 0.3)
+			tw.tween_interval(0.3)
+			tw.tween_property(l, "position", lh, 0.25)
+			tw.parallel().tween_property(r, "position", rh, 0.25)
+			tw.parallel().tween_property(rig, "position:y", 0.0, 0.2).set_ease(Tween.EASE_IN)
+			tw.parallel().tween_property(self, "skirt_kick", 0.0, 0.5)
+		"ball":
+			tw.tween_property(rig, "rotation:y", -TAU * 2.0, time).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tw.parallel().tween_property(rig, "position:y", 0.7, time * 0.4).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(l, "position", lh + Vector3(-0.9, 0.7, 0.2), time * 0.25)
+			tw.parallel().tween_property(r, "position", rh + Vector3(0.9, 0.7, 0.2), time * 0.25)
+			tw.parallel().tween_property(self, "skirt_kick", 1.4, time * 0.3).set_ease(Tween.EASE_OUT)
+			tw.tween_callback(func(): rig.rotation.y = 0.0)
+			tw.tween_property(rig, "position:y", 0.0, 0.3).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tw.parallel().tween_property(l, "position", lh, 0.3)
+			tw.parallel().tween_property(r, "position", rh, 0.3)
+			tw.parallel().tween_property(self, "skirt_kick", 0.0, 0.6)
+		"bow":
+			tw.tween_property(rig, "position:y", -0.22, 0.14).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(rig, "rotation:x", -0.22, 0.14)
+			tw.parallel().tween_property(l, "position", lh + Vector3(-0.75, -0.25, 0.15), 0.14)
+			tw.parallel().tween_property(r, "position", rh + Vector3(0.75, -0.25, 0.15), 0.14)
+			tw.parallel().tween_property(self, "skirt_kick", 0.8, 0.14)
+			tw.tween_interval(time)
+			tw.tween_property(rig, "position:y", 0.0, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(rig, "rotation:x", 0.0, 0.2)
+			tw.parallel().tween_property(l, "position", lh, 0.2)
+			tw.parallel().tween_property(r, "position", rh, 0.2)
+			tw.parallel().tween_property(self, "skirt_kick", 0.0, 0.4)
+
+
 func punch() -> void:
 	var tw := create_tween()
 	visual.scale = Vector3(1.25, 0.85, 1.25)
@@ -850,6 +1052,20 @@ func die() -> void:
 	mend_t = 0.0
 	chain = 0
 	count_t = 0.0
+	waltz_step = 0
+	embalo = 0
+	embalo_t = 0.0
+	twirl_t = 0.0
+	crescendo_t = 0.0
+	petal_t = 0.0
+	ball_t = 0.0
+	ai_waltz = 0.0
+	if _waltz_tw != null:
+		_waltz_tw.kill()
+	skirt_kick = 0.0
+	if rig != null:
+		rig.rotation = Vector3.ZERO
+		rig.position = Vector3.ZERO
 	ricochet_t = 0.0
 	power_t = 0.0
 	ward_t = 0.0

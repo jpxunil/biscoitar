@@ -21,7 +21,6 @@ var saves: SavesScreen
 var skills: SkillsScreen
 var gear_screen: Control  # GearScreen (ui/screens/gear_screen.gd): equipamentos, atributos e passivas
 var _gear_hero := -1
-var _shop_mode := "cards"
 var _pop: Control       # comemoração de carta que virou passiva
 var _gear := false
 var _skills_from_cards := false
@@ -49,9 +48,6 @@ func setup(game) -> void:
 		_cards_hero = hero
 		show_screen("cards"))
 	bosses.equip_pressed.connect(show_screen.bind("gear"))
-	bosses.items_pressed.connect(func():
-		_shop_mode = "gear"
-		show_screen("shop"))
 	title.play_pressed.connect(show_screen.bind("saves"))
 	title.skills_pressed.connect(show_screen.bind("skills"))
 	skills.back_pressed.connect(func():
@@ -102,9 +98,8 @@ func setup(game) -> void:
 	cards.ready_pressed.connect(func():
 		if g.select_hero(cards.hero):
 			g.start_fight())
-	bosses.shop_pressed.connect(func():
-		_shop_mode = "cards"
-		show_screen("shop"))
+	# uma entrada só: a loja abre no balcão de cartas e a troca pro de itens é lá dentro
+	bosses.shop_pressed.connect(show_screen.bind("shop"))
 	# a loja é do save: sair dela volta pros bosses (sem save ou party, isso cai na tela de saves)
 	shop.back_pressed.connect(show_screen.bind("bosses"))
 	visible = false
@@ -144,7 +139,7 @@ func show_screen(id: String) -> void:
 			_cards_hero = -1
 		"shop":
 			shop.visible = true
-			shop.open(_shop_mode)
+			shop.open()
 		"tutorials":
 			tutorials.visible = true
 			tutorials.open()

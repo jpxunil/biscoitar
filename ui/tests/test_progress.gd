@@ -471,7 +471,34 @@ func _initialize() -> void:
 	menus = main.hud.menus
 	menus.show_screen("bosses")
 	await frames(3)
-	check(menus.bosses.has_node("BtnItems") and menus.bosses.has_node("BtnEquip"), "a tela de bosses tem os botões ITENS e GEAR")
+	check(menus.bosses.has_node("BtnShop") and menus.bosses.has_node("BtnEquip"), "a tela de bosses tem os botões LOJA e GEAR")
+	# painel "o que a party sabe" de cada boss
+	Knowledge.know = {2: {"fan": 40.0}}
+	check(is_equal_approx(Knowledge.understanding(2, "stack"), 100.0) and is_equal_approx(Knowledge.understanding(2, "fan"), 40.0), "entendimento: 100% com passiva ou carta, senão o que aprendeu na prática")
+	Knowledge.solved = {}
+	check(not Knowledge.mech_seen("fan") and not Knowledge.mech_seen("dodge"), "o nome da mecânica fica escondido enquanto o jogador não a resolveu na mão")
+	Knowledge.solve("fan")
+	check(not Knowledge.mech_seen("fan"), "uma vez só ainda não revela")
+	Knowledge.solve("fan")
+	check(Knowledge.mech_seen("fan") and not Knowledge.mech_seen("eye"), "na segunda vez o nome aparece; as outras continuam escondidas")
+	menus.bosses.open_info(4)
+	await frames(2)
+	var info_panel = menus.bosses._info
+	check(info_panel != null and info_panel.find_child("Cell_1_0", true, false) != null and info_panel.find_child("Cell_4_3", true, false) != null, "o botão ? abre o painel com as mecânicas do boss e os quatro heróis da party")
+	var shown := 0
+	for lbl in info_panel.find_children("*", "Label", true, false):
+		if lbl.text == "??????":
+			shown += 1
+	var named := false
+	for lbl in info_panel.find_children("*", "Label", true, false):
+		if lbl.text == "PULO NO VENTILADOR DE RAIOS":
+			named = true
+	check(shown >= 3 and named, "só a mecânica já resolvida tem nome; as outras aparecem como ?????? (%d)" % shown)
+	menus.bosses.close_info()
+	await frames(2)
+	check(menus.bosses._info == null, "FECHAR fecha o painel")
+	Knowledge.know = {}
+	Knowledge.solved = {}
 	check(menus._pop != null and is_instance_valid(menus._pop), "voltando da luta, a carta que virou passiva é comemorada")
 	menus._pop.queue_free()
 	menus._pop = null
@@ -482,14 +509,22 @@ func _initialize() -> void:
 	await frames(2)
 	Knowledge.shop_unlocked = true
 	menus.bosses.open()
-	menus.bosses.get_node("BtnItems").pressed.emit()
+	check(not menus.bosses.has_node("BtnItems"), "a loja tem uma entrada só")
+	menus.bosses.get_node("BtnShop").pressed.emit()
 	await frames(3)
-	check(menus.shop.visible and menus.shop.mode == "gear" and menus.shop.get_node("TitlePanel/Title").text == "ITENS", "ITENS abre o balcão de equipamentos")
+	check(menus.shop.visible and menus.shop.mode == "cards" and menus.shop.get_node("Vendor").who == "cards", "LOJA abre a loja de cartas, com a Shopkeeper")
+	menus.shop.get_node("BtnSwap").pressed.emit()
+	await frames(2)
+	check(menus.shop.mode == "gear" and menus.shop.get_node("TitlePanel/Title").text == "ITENS" and menus.shop.get_node("Vendor").who == "gear", "a troca leva pro balcão de itens, com a vendedora dele")
+	check(menus.shop.get_node("Vendor")._art() != null, "a vendedora de itens tem a arte dela")
+	menus.shop.get_node("BtnSwap").pressed.emit()
+	await frames(2)
+	check(menus.shop.mode == "cards" and menus.shop.get_node("TitlePanel/Title").text == "LOJA", "e a troca de novo volta pra loja de cartas")
 	menus.shop.back_pressed.emit()
 	await frames(2)
 	menus.bosses.get_node("BtnShop").pressed.emit()
 	await frames(3)
-	check(menus.shop.visible and menus.shop.mode == "cards", "LOJA abre a loja de cartas")
+	check(menus.shop.mode == "cards", "a loja sempre abre no balcão de cartas")
 	main.queue_free()
 	await frames(2)
 

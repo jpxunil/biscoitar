@@ -34,6 +34,8 @@ const HEROES := [
 		"blurb": "Healer que bate: mantém a Decomposição, junta Vestígios e escolhe entre curar forte ou envenenar."},
 	{"key": "sleepwalker", "name": "Sleepwalker", "role": "DPS à distância", "color": Color(0.55, 0.58, 1.0), "hp": 85,
 		"blurb": "O mais difícil: prepara acordado em janelas de 1 s e descarrega dormindo, imóvel."},
+	{"key": "valsa", "name": "Valsa", "role": "Suporte dançarina", "color": Color(0.74, 0.62, 1.0), "hp": 95,
+		"blurb": "Um, dois, três e gira: cada Giro abre a saia, e quem dança dentro dela bate mais forte."},
 ]
 
 ## Mesma ordem de BOSSES em game.gd.
@@ -43,6 +45,8 @@ const BOSS_INFO := [
 	{"name": "PROTÓTIPO-CHAN", "mini": false, "blurb": "Marca Elemental, zonas e Cataclismo."},
 	{"name": "FUSÃO-CHAN", "mini": false, "blurb": "Tudo junto e mais rápido."},
 	{"name": "TROVÃO-KUN", "mini": true, "blurb": "Mini boss. Salta, solta faíscas e gira um ventilador de raios: pule!"},
+	# "open": já vem aberta, sem precisar vencer a luta anterior
+	{"name": "MEL-CHAN", "mini": false, "open": true, "blurb": "Desvio puro: pule o mel, fuja dos ferrões e não junte 4 corações."},
 ]
 
 ## TRÊS COISAS DIFERENTES, que não competem entre si:
@@ -60,6 +64,17 @@ const GEAR_SLOTS := 4
 ## Quanto uma luta vencida e limpa (sem morrer e sem tomar aquela mecânica) rende de aprendizado
 ## pra carta equipada: três lutas assim e ela vira passiva.
 const LEARN_WIN := 34.0
+## As mecânicas de cada boss (mesma ordem de BOSS_INFO), pro painel "o que a party sabe".
+## Cada entrada é o id de uma carta de aprendizado ou a chave de um conhecimento de KNOW_NAME.
+const BOSS_MECHS := [
+	["dodge", "stack"],
+	["dodge", "stack", "pair", "spread", "link", "mitigate", "final"],
+	["dodge", "zone", "partner", "shelter", "mitigate"],
+	["dodge", "stack", "spread", "zone", "partner", "shelter", "mitigate"],
+	["dodge", "fan", "eye", "mitigate", "stack"],
+	["dodge", "fan"],
+]
+const KNOW_NAME := {"fan": "Pulo no ventilador de raios", "eye": "Olho da tempestade"}
 const KINDS := ["purple", "gold", "white", "item"]
 const SLOTS := {"purple": 2, "gold": 3, "white": 4, "item": 1}
 const KIND_NAME := {"purple": "Épica", "gold": "Rara", "white": "Comum", "item": "Item"}
@@ -231,7 +246,7 @@ const RANK_COINS := [20, 40, 60, 90, 120, 160, 220, 300, 400]
 const MINI_REWARD := 0.4
 const LOW_HP := 0.5
 ## DPS que você precisa segurar por DPS_WINDOW segundos seguidos controlando o herói pra liberar a Rotação.
-const DPS_GOAL := {"tank": 14.0, "nurse": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0, "burner": 26.0, "ringstar": 36.0, "apothecary": 22.0, "sleepwalker": 45.0}
+const DPS_GOAL := {"tank": 14.0, "nurse": 14.0, "healer": 7.0, "assassina": 40.0, "maga": 30.0, "burner": 26.0, "ringstar": 36.0, "apothecary": 22.0, "sleepwalker": 45.0, "valsa": 24.0}
 const DPS_WINDOW := 25
 ## Saves: SLOT_COUNT arquivos independentes (user://save_1.json ...). Cada um guarda o progresso,
 ## as cartas e a party daquele save; nada passa de um pro outro. LEGACY_SAVE é o arquivo único de
@@ -270,6 +285,9 @@ static var fresh := {}
 ## Todo mundo começa em KNOW_START: tem uma vaga ideia, não é um zumbi.
 const KNOW_START := 1.0
 static var know := {}
+## Quantas vezes o jogador resolveu cada mecânica na mão (solved[chave]); ver mech_seen.
+const REVEAL_NEED := 2
+static var solved := {}
 ## Equipamentos por herói (gear[hero] = GEAR_SLOTS ids, "" = vazio), passivas aprendidas
 ## (passive[hero] = [ids]) e o progresso de cada carta de aprendizado (progress[hero][id] = 0..100).
 static var gear := {}
@@ -654,7 +672,7 @@ static func buy(id: String) -> bool:
 
 static func boss_open(i: int) -> bool:
 	# o mini boss e o primeiro boss estão sempre abertos; cada vitória abre o seguinte
-	return i <= 1 or BOSS_INFO[i]["mini"] or best_rank.has(i - 1)
+	return i <= 1 or BOSS_INFO[i]["mini"] or BOSS_INFO[i].get("open", false) or best_rank.has(i - 1)
 
 
 static func rank_for(score: float) -> int:
@@ -699,6 +717,42 @@ static func learn(hero: int, mech: String, amount: float) -> void:
 	if not know.has(hero):
 		know[hero] = {}
 	know[hero][mech] = clampf(knowledge(hero, mech) + amount, 0.0, 100.0)
+
+
+static func mech_name(key: String) -> String:
+	if key == "dodge":
+		return "Desvio de vermelho"
+	if KNOW_NAME.has(key):
+		return KNOW_NAME[key]
+	return CARDS[key]["name"] if CARDS.has(key) else key
+
+
+## A mecânica vale pra este herói? (cartas com "who" são só de algumas classes)
+static func mech_applies(hero: int, key: String) -> bool:
+	return not CARDS.has(key) or usable(hero, key)
+
+
+## Quanto o herói entende de uma mecânica, de 0 a 100: 100 com a carta equipada ou como passiva;
+## sem ela, o que ele já aprendeu na prática (knowledge).
+static func understanding(hero: int, key: String) -> float:
+	if CARDS.has(key) and has(hero, key):
+		return 100.0
+	return knowledge(hero, key)
+
+
+## O jogador resolveu essa mecânica na mão mais uma vez (conta pra revelar o nome dela no painel).
+static func solve(key: String) -> void:
+	if sandbox or practice:
+		return
+	solved[key] = int(solved.get(key, 0)) + 1
+
+
+## O nome da mecânica só aparece no painel depois que o JOGADOR a resolveu por conta própria
+## REVEAL_NEED vezes. Antes disso é "??????": não é justo entregar o que ele ainda não descobriu.
+static func mech_seen(key: String) -> bool:
+	if int(solved.get(key, 0)) >= REVEAL_NEED:
+		return true
+	return CARDS.has(key) and mastery_key(key) != "" and mastery_of(mastery_key(key)) >= REVEAL_NEED
 
 
 static func layout(hero: int, count := 6) -> Array:
@@ -878,6 +932,7 @@ static func save() -> void:
 		data["passive"][str(h)] = passive[h]
 	for h in progress:
 		data["progress"][str(h)] = progress[h]
+	data["solved"] = solved
 	data["know"] = {}
 	for h in know:
 		data["know"][str(h)] = know[h]
@@ -902,6 +957,7 @@ static func reset_progress() -> void:
 	fresh = {}
 	layouts = {}
 	know = {}
+	solved = {}
 	gear = {}
 	passive = {}
 	progress = {}
@@ -1013,6 +1069,9 @@ static func _read(path: String) -> void:
 	boss = clampi(int(parsed.get("boss", 1)), 0, BOSS_INFO.size() - 1)
 	if not boss_open(boss):
 		boss = 1
+	var saved_solved: Dictionary = parsed.get("solved", {})
+	for key in saved_solved:
+		solved[str(key)] = int(saved_solved[key])
 	var saved_know: Dictionary = parsed.get("know", {})
 	for sh in saved_know:
 		var hk := int(sh)

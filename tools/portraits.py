@@ -22,6 +22,7 @@ MAP = {
     "RINGSTAR.png": ("ringstar", 420, 590, 320, (255, 115, 190)),
     "APOTHECARY.png": ("apothecary", 432, 590, 280, (70, 160, 130)),
     "SLEEPWALKER.png": ("sleepwalker", 612, 646, 300, (120, 130, 230)),
+    "VALSA.png": ("valsa", 408, 560, 330, (150, 120, 235)),
 }
 
 
@@ -57,6 +58,25 @@ def cut(path):
     out = np.dstack([col, alpha * 255.0]).astype(np.uint8)
     return Image.fromarray(out, "RGBA")
 
+
+def body(name):
+    rgba = cut(SRC + name)
+    box = rgba.split()[3].point(lambda v: 255 if v > 24 else 0).getbbox()
+    art = rgba.crop((max(box[0] - 6, 0), max(box[1] - 6, 0), min(box[2] + 6, rgba.width), min(box[3] + 6, rgba.height)))
+    if art.height > 1200:
+        art = art.resize((round(art.width * 1200 / art.height), 1200), Image.LANCZOS)
+    return art
+
+
+# quem não é herói só precisa do corpo inteiro (sem retrato): arquivo -> chave
+ART_ONLY = {
+    "ITEM seller.png": "itemseller",
+}
+
+for name, key in ART_ONLY.items():
+    art = body(name)
+    art.save(OUT + key + "_art.webp", quality=92, method=6)
+    print(key, "art", art.size, "de", name)
 
 for name, (key, fx, fy, fw, bgc) in MAP.items():
     rgba = cut(SRC + name)

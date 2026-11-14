@@ -22,6 +22,7 @@ var eye_mat: StandardMaterial3D
 var dress_mat: StandardMaterial3D
 var shield: MeshInstance3D
 var core: Node3D
+var wings: Array = []  # MEL-CHAN: os pivôs das asas
 var orbit: Node3D  # mini boss da tempestade: as esferas de raio que giram em volta dele
 
 
@@ -36,6 +37,9 @@ func _ready() -> void:
 		return
 	if look == "storm":
 		_build_storm()
+		return
+	if look == "bee":
+		_build_bee()
 		return
 	var skin := Fx.mat(Color(0.95, 0.8, 0.74))
 	var hair := Fx.mat(hair_color, 0.35)
@@ -76,6 +80,9 @@ func _process(delta: float) -> void:
 		orbit.rotate_y(delta * (4.2 if casting else 1.8))
 		orbit.position.y = 1.7 + sin(t * 2.4) * 0.15
 	halo.rotate_y(delta * (5.0 if casting else 1.0))
+	for i in wings.size():
+		var ws := -1.0 if i == 0 else 1.0
+		wings[i].rotation.z = ws * (0.3 + sin(t * (36.0 if casting else 24.0)) * 0.45)
 	for i in hands.size():
 		var s := -1.0 if i == 0 else 1.0
 		var lift := 2.2 if casting or rage_t > 0.0 else 0.0
@@ -174,6 +181,48 @@ func _build_storm() -> void:
 		Fx.inst(orbit, Fx.sphere(0.3), Fx.mat(Color(0.55, 1.05, 1.5), 0.0, true), Vector3(cos(a) * 2.0, sin(a * 2.0) * 0.3, sin(a) * 2.0))
 	halo = Fx.inst(core, Fx.torus(0.55, 0.68), Fx.mat(Color(0.6, 0.95, 1.0), 3.0), Vector3(0, 4.3, 0))
 	shield = Fx.inst(self, Fx.sphere(3.4), Fx.mat(Color(0.35, 0.9, 1.0, 0.16), 1.2), Vector3(0, 1.8, 0))
+	shield.visible = false
+
+
+## MEL-CHAN: abelha idol de papel. Abdômen listrado com ferrão, saia de palco, dois coques,
+## antenas com ponta de coração e asas que batem.
+func _build_bee() -> void:
+	_dress_base = Color(1.0, 0.78, 0.2)
+	dress_mat = Fx.mat(_dress_base, 0.12)
+	dress_mat.emission = Color(0.5, 0.3, 0.05)
+	var dark := Fx.mat(Color(0.16, 0.1, 0.12))
+	var skin := Fx.mat(Color(0.97, 0.84, 0.76))
+	var hair := Fx.mat(hair_color, 0.3)
+	var pink := Fx.mat(Color(1.0, 0.45, 0.72), 0.25)
+	var body := Fx.inst(core, Fx.sphere(1.0), dress_mat, Vector3(0, 1.75, -0.35))
+	body.scale = Vector3(1.0, 1.2, 1.05)
+	for y in [1.3, 1.95]:
+		var band := Fx.inst(core, Fx.torus(0.8, 1.05), dark, Vector3(0, y, -0.35))
+		band.scale = Vector3(1.0, 0.9, 1.05)
+	Fx.inst(core, Fx.cyl(0.32, 0.0, 0.85), dark, Vector3(0, 0.38, -0.5))
+	Fx.inst(core, Fx.cyl(0.55, 1.4, 0.7), pink, Vector3(0, 2.6, 0))
+	Fx.inst(core, Fx.torus(1.3, 1.45), Fx.mat(Color(0.86, 0.8, 0.78)), Vector3(0, 2.28, 0))
+	Fx.inst(core, Fx.sphere(0.78), skin, Vector3(0, 3.55, 0.1))
+	Fx.inst(core, Fx.sphere(0.86), hair, Vector3(0, 3.72, -0.14))
+	eye_mat = Fx.mat(Color(0.28, 0.14, 0.12))
+	for s in [-1.0, 1.0]:
+		Fx.inst(core, Fx.sphere(0.42), hair, Vector3(s * 0.8, 4.22, -0.1))
+		var stem := Fx.inst(core, Fx.capsule(0.05, 0.9), dark, Vector3(s * 0.32, 4.6, 0.2))
+		stem.rotation.z = s * -0.35
+		Fx.inst(core, Fx.sphere(0.17), pink, Vector3(s * 0.5, 5.05, 0.2))
+		var eye := Fx.inst(core, Fx.sphere(0.12), eye_mat, Vector3(s * 0.28, 3.58, 0.8))
+		eye.scale = Vector3(1.0, 1.5, 0.4)
+		var cheek := Fx.inst(core, Fx.sphere(0.11), pink, Vector3(s * 0.48, 3.36, 0.7))
+		cheek.scale = Vector3(1.0, 0.7, 0.3)
+		# asa: gira em volta do ombro
+		var pivot := Node3D.new()
+		pivot.position = Vector3(s * 0.4, 2.95, -0.6)
+		core.add_child(pivot)
+		var wing := Fx.inst(pivot, Fx.sphere(1.0), Fx.mat(Color(0.8, 0.95, 1.0, 0.5), 0.0, true), Vector3(s * 1.05, 0.25, 0))
+		wing.scale = Vector3(1.1, 0.07, 0.6)
+		wings.append(pivot)
+	halo = Fx.inst(core, Fx.torus(0.42, 0.54), Fx.mat(Color(1.0, 0.85, 0.35), 1.2), Vector3(0, 5.5, 0))
+	shield = Fx.inst(self, Fx.sphere(3.2), Fx.mat(Color(0.35, 0.9, 1.0, 0.16), 1.2), Vector3(0, 2.3, 0))
 	shield.visible = false
 
 

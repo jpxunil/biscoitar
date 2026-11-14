@@ -1858,7 +1858,7 @@ func _initialize() -> void:
 	main._next_step()
 	check(main.phase == "leap" and main.hazards.size() == 1 and main.hazards[0]["shape"] == "circle", "Salto Trovejante marca um círculo vermelho no chão")
 	var land: Vector3 = main.leap_to
-	await wait(1.75)
+	await wait(1.95)
 	check(main.boss_pos.distance_to(land) < 0.7 and main.phase == "chase", "ele cai no ponto marcado e começa a perseguir")
 	var tanky: Unit = main.units[0]
 	for o in main.units:
@@ -1875,15 +1875,24 @@ func _initialize() -> void:
 	# faíscas
 	main.step = 4
 	main._next_step()
+	check(main.phase == "orbs" and main.eye_ring != null and main.eye_ring.visible, "nas faíscas aparece o anel do olho da tempestade")
 	for o in main.units:
 		o.invuln = 9.0  # ninguém estoura as faíscas enquanto o teste olha pra elas
-	await wait(0.7)
+	await wait(1.1)
 	check(main.phase == "orbs" and main.orbs.size() > 6 and main.orbs.size() < main.ORB_COUNT, "Enxame de Faíscas: uma onda em roda, com buracos (%d)" % main.orbs.size())
 	var spark: Dictionary = main.orbs[0]
 	var s0: Vector3 = spark["node"].position
 	await wait(0.4)
 	check(is_instance_valid(spark["node"]) and (spark["node"].position - s0).normalized().dot(spark["dir"]) > 0.95, "as faíscas andam em linha reta, sem seguir ninguém")
-	main.step = 6
+	var nearest := 99.0
+	for o in main.orbs:
+		nearest = minf(nearest, Vector2(o["node"].position.x - main.boss_pos.x, o["node"].position.z - main.boss_pos.z).length())
+	check(nearest >= main.ORB_START - 0.1 and main.ORB_START > main.MELEE_RANGE, "elas nascem fora do alcance corpo a corpo: perto dele é seguro (%.1f)" % nearest)
+	var kinds: Array = []
+	for st in main.STEPS_STORM:
+		kinds.append(st["t"])
+	check(kinds.has("buster") and kinds.has("raid") and kinds.has("stack"), "o ciclo tem trabalho de party: Esmagar no tank, Trovoada e Comunhão")
+	main.step = 7
 	main._next_step()
 	check(main.phase == "fan" and main.fan_beams.size() == 3 and not main.fan_on, "Ventilador de Raios: três raios, primeiro só o aviso")
 	check(is_equal_approx(main.arena_r, 13.5) and main.arena_r > main.ARENA_R, "a arena dele é bem maior que a normal")
@@ -1935,6 +1944,120 @@ func _initialize() -> void:
 				tries[pass_i] += 1
 	main.fan_speed = 0.0
 	check(tries[0] < 15 and tries[1] > 50, "o conhecimento muda a CHANCE de a IA tentar o pulo (%d e %d de 60)" % [tries[0], tries[1]])
+	# ---------- MEL-CHAN: boss de desvio (pulo, ferrões, corações)
+	Knowledge.boss = 5
+	Knowledge.know = {}
+	main = await fight(2)
+	u = main.units[main.ctrl]
+	check(main.bee and main.roam and main.boss_def["name"] == "MEL-CHAN", "MEL-CHAN é uma boss que anda")
+	check(main.phase == "bee_idle" and main.bee_act == 1, "a luta abre com uma folga, no 1º ato")
+	# segura a luta num passo parado, pra testar cada peça na mão
+	main.bee_events.clear()
+	main.phase = "bee_hold"
+	main.phase_dur = 999.0
+	main.auto_t = -9999.0
+	main.boss_pos = Vector3(0, 0, -6.0)
+	u.position = Vector3(0, 0, 3.0)
+	u.invuln = 0.0
+	main._bee_wave(Vector3(0, 0, 1), 0.0, 7.0)
+	var honey: Dictionary = main.bee_waves[-1]
+	await wait(0.8)
+	check(is_equal_approx(float(honey["s"]), -(main.arena_r + 0.8)) and main.bee_hearts[u.idx] == 0, "Onda de Mel: avisa parada na borda antes de correr")
+	while main.bee_waves.has(honey) and float(honey["s"]) < u.position.z + 1.0:
+		await process_frame
+	check(main.bee_hearts[u.idx] == 1 and u.invuln > 0.0, "no chão a onda pega: +1 coração e um instante sem tomar outro golpe")
+	u.invuln = 0.0
+	u.hp = u.max_hp
+	main._bee_wave(Vector3(0, 0, 1), 0.0, 7.0)
+	honey = main.bee_waves[-1]
+	while float(honey["s"]) < u.position.z - 1.5:
+		await process_frame
+	main.jump(u)
+	await wait(0.5)
+	check(main.bee_hearts[u.idx] == 1, "pulando, a onda passa por baixo")
+	u.invuln = 0.0
+	u.position = main.boss_pos + Vector3(0, 0, 4.0)
+	main._bee_ring(6.0)
+	await wait(0.9)
+	check(main.bee_hearts[u.idx] == 2, "a onda de choque da Batida do Palco também é pra pular")
+	# ferrões: a leva pesada vai em quem o jogador controla
+	for o in main.bee_shots:
+		o["node"].queue_free()
+	main.bee_shots.clear()
+	main.bee_focus = u
+	u.invuln = 5.0
+	main._bee_volley(0)
+	var aim: Vector3 = (u.position - main.boss_pos).normalized()
+	check(main.bee_shots.size() == 6 and (main.bee_shots[2]["dir"] as Vector3).dot(aim) > 0.99, "Rajada de Ferrões: leque de 5 mirado em você, mais um ferrão num colega")
+	await wait(0.7)
+	check(main.bee_hearts[u.idx] == 2, "com invulnerabilidade (dash) o ferrão passa direto")
+	u.invuln = 0.0
+	main._bee_shot(main.boss_pos, aim, 9.0)
+	await wait(0.5)
+	check(main.bee_hearts[u.idx] == 3, "sem ela, o ferrão dá o 3º coração")
+	# 4º coração: encantado
+	main.boss_hp = main.boss_max * 0.9
+	var hp_boss: float = main.boss_hp
+	main._bee_heart(u)
+	check(main.bee_hearts[u.idx] == 0 and u.lock_t > 2.0 and main.bee_power > 1.05 and main.boss_hp > hp_boss, "4 corações: o herói fica encantado, ela se cura e fica mais forte")
+	# corte no primeiro do aggro
+	var tanky2: Unit = main.units[0]
+	for o in main.units:
+		o.enmity = 0.0
+	tanky2.enmity = 999.0
+	tanky2.position = main.boss_pos + Vector3(5.0, 0, 0)
+	main.hazards.clear()
+	main._bee_start({"t": "bee_slash", "dur": 2.0})
+	check(main.hazards.size() == 1 and (main.hazards[0]["dir"] as Vector3).dot(Vector3(1, 0, 0)) > 0.99, "Corte Ferroado sai na direção de quem está no topo do aggro")
+	# virada de ato pela vida dela
+	main.bee_events.clear()
+	main.boss_hp = main.boss_max * 0.6
+	main.bee_hearts[u.idx] = 2
+	main._next_step()
+	check(main.phase == "bee_finale" and main.bee_act == 2 and main.bee_shots.is_empty() and main.bee_waves.is_empty(), "abaixo de 66% ela canta o Finale e limpa a arena")
+	for o in main.units:
+		o.hp = o.max_hp
+	await wait(3.6)
+	check(main.bee_hearts[u.idx] == 0 and main.phase == "bee_idle" and main.bee_homing.size() == 2, "o Finale zera os corações e o 2º ato apresenta os corações teleguiados")
+	check(main.bee_homing[0]["unit"] == u, "o primeiro coração teleguiado persegue quem o jogador controla")
+	# aprendizado das cartas: só conta a mecânica que apareceu na luta
+	Knowledge.owned["final"] = true
+	Knowledge.owned["stack"] = true
+	Knowledge.passive = {}
+	Knowledge.progress = {}
+	Knowledge.equip(u.hero, "final")
+	Knowledge.equip(u.hero, "stack")
+	main.died = {}
+	main.card_fail = {}
+	main.fight_mechs = {"dodge": true, "stack": true}
+	main._learn_cards()
+	check(is_equal_approx(Knowledge.learn_progress(u.hero, "final"), 0.0), "carta de uma mecânica que não apareceu na luta não ganha aprendizado")
+	check(is_equal_approx(Knowledge.learn_progress(u.hero, "stack"), Knowledge.LEARN_WIN) and is_equal_approx(Knowledge.learn_progress(u.hero, "dodge"), Knowledge.LEARN_WIN), "a que apareceu, e foi resolvida limpa, ganha")
+	main.card_fail = {u.hero: {"dodge": true}}
+	main._learn_cards()
+	check(is_equal_approx(Knowledge.learn_progress(u.hero, "dodge"), Knowledge.LEARN_WIN) and Knowledge.learn_progress(u.hero, "stack") > 60.0, "quem tomou a mecânica nesta luta não ganha por ela")
+	Knowledge.passive = {}
+	Knowledge.progress = {}
+	Knowledge.learned_now.clear()
+	# HELL TIME: abaixo de metade da vida ela volta pro meio e toca a partitura
+	main.boss_pos = Vector3(4.0, 0, -3.0)
+	main.boss_hp = main.boss_max * 0.49
+	main._next_step()
+	check(main.phase == "bee_hell" and main.bee_hell and main.bee_events.size() > 100, "abaixo de metade da vida começa o HELL TIME, com a partitura inteira marcada (%d eventos)" % main.bee_events.size())
+	check(is_equal_approx(main.phase_dur, main.HELL_PRE + (main.HELL_BARS * 4 + 1) * main.HELL_BEAT), "ele dura a subida mais os 32 compassos da música")
+	for o in main.units:
+		o.invuln = 30.0
+	await wait(main.HELL_PRE + 0.25)
+	check(main.boss_pos.length() < 0.2 and main.bee_rings.size() >= 1, "ela chega no meio do palco junto com a primeira batida")
+	check(main.hell_fire.visible and main.hell_glow > 0.9, "o fogo roxo sobe atrás do cenário")
+	main.phase_t = main._hb(8, 0.5)
+	await frames_of(3)
+	check(main.bee_hell_dir != 0.0 and main.boss_pos.length() < 0.2, "na seção B o pólen gira e ela continua parada no meio")
+	main.phase_t = main.phase_dur - 0.2
+	await wait(0.5)
+	check(main.phase == "bee_idle" and not main.bee_hell and main.bee_hell_done, "no fim da música a luta volta ao normal, e o HELL TIME não repete")
+	await wait(1.4)
+	check(not main.hell_fire.visible, "e o fogo apaga")
 	Knowledge.boss = 1
 	Knowledge.know = {}
 

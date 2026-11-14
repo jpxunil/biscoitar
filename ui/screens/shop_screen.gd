@@ -1,7 +1,9 @@
 class_name ShopScreen
 extends Control
-## Loja do Farelo: cartas por moedas, e as roxas por ticket (o ticket vem do ranking SSS).
-## Toda compra passa por Knowledge.buy. O layout fica na cena (shop_screen.tscn).
+## A loja: um lugar só, com dois balcões. O da Shopkeeper vende cartas (por moedas; as roxas por
+## ticket, que vem do ranking SSS) e o da vendedora de itens vende equipamentos e consumíveis.
+## O botão BtnSwap (ou TAB) troca de um pro outro. Toda compra passa por Knowledge.buy.
+## O layout fica na cena (shop_screen.tscn).
 
 signal back_pressed
 
@@ -17,7 +19,7 @@ const LINES := {
 	"bought": ["Boa escolha! Vai lá equipar.", "Vendido! Usa com carinho.", "Isso, leva. Depois me conta se funcionou."],
 }
 
-## Falas do balcão de itens (mode "gear"): a Latinha, ferreira de equipamentos e consumíveis.
+## Falas do balcão de itens (mode "gear"): a vendedora de equipamentos e consumíveis.
 const LINES_GEAR := {
 	"hello": ["Equipamento não ensina nada. Só deixa o que você já sabe mais forte.", "Tudo aqui é pra vestir, calçar ou beber."],
 	"attack": ["Esse faz o número subir.", "Bate igual, dói mais."],
@@ -30,7 +32,7 @@ const LINES_GEAR := {
 	"bought": ["Fechado! Vai lá no GEAR equipar.", "Boa. Põe num slot e sente a diferença."],
 }
 
-## "cards": a loja de cartas do Farelo. "gear": o balcão de itens (equipamentos e consumíveis).
+## "cards": a loja de cartas da Shopkeeper. "gear": o balcão de itens (equipamentos e consumíveis).
 var mode := "cards"
 var cat := ""
 var sel := ""
@@ -48,6 +50,13 @@ func _ready() -> void:
 			else:
 				Ink.draw_ticket(icon, 32))
 	$Details/PriceTag/PriceIcon.draw.connect(_draw_price_icon)
+	# troca de balcão, à direita: da loja de cartas pra de itens e de volta, sem sair da loja
+	var swap := Ink.button("", Ink.COIN, Ink.OUT, 20, 27)
+	swap.name = "BtnSwap"
+	swap.position = Vector2(650, 30)
+	swap.size = Vector2(262, 60)
+	swap.pressed.connect(swap_shop)
+	add_child(swap)
 	if get_tree().current_scene == self:
 		Knowledge.persist = false
 		Knowledge.money = 500
@@ -60,8 +69,10 @@ func open(shop_mode := "cards") -> void:
 	cat = ""
 	sel = ""
 	$TitlePanel/Title.text = "ITENS" if mode == "gear" else "LOJA"
-	# o mesmo balcão, outra vendedora (por enquanto ela é o Farelo de outra cor)
-	$Vendor.modulate = Color(0.7, 0.95, 1.3) if mode == "gear" else Color.WHITE
+	# o mesmo balcão, outra vendedora
+	$Vendor.who = mode
+	$BtnSwap.text = "LOJA DE CARTAS  ›" if mode == "gear" else "LOJA DE ITENS  ›"
+	_close_dialog()
 	_build_tabs()
 	_build_grid()
 	_refresh_wallet()
@@ -69,6 +80,11 @@ func open(shop_mode := "cards") -> void:
 	if not all.is_empty():
 		_select(all[0])
 	_say("hello")
+
+
+## Vai pro outro balcão (cartas <-> itens). Dá pra ficar trocando à vontade.
+func swap_shop() -> void:
+	open("cards" if mode == "gear" else "gear")
 
 
 func _say(key: String, mood := "idle") -> void:
@@ -184,7 +200,7 @@ func _press_buy() -> void:
 	if sel == "" or Knowledge.owned.has(sel):
 		return
 	if not Knowledge.can_buy(sel):
-		# sem recurso: o botão balança e o Farelo reclama. Nada de diálogo.
+		# sem recurso: o botão balança e a vendedora reclama. Nada de diálogo.
 		_say("ticket" if Knowledge.CARDS[sel].has("ticket") else "poor", "sad")
 		var b: Control = $BtnBuy
 		var home := b.position.x
@@ -279,6 +295,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				_close_dialog()
 			else:
 				back_pressed.emit()
+		KEY_TAB:
+			if _dialog == null:
+				swap_shop()
 		KEY_ENTER, KEY_KP_ENTER:
 			if _dialog != null:
 				confirm_buy()

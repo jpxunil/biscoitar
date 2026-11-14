@@ -5,12 +5,13 @@ extends RefCounted
 ## Heróis sem função aqui continuam com o boneco de cápsula de unit.gd.
 
 static func has(key: String) -> bool:
-	return key == "assassina"
+	return key == "assassina" or key == "valsa"
 
 
 static func build(u: Unit) -> void:
 	match u.key:
 		"assassina": _assassina(u)
+		"valsa": _valsa(u)
 
 
 static func _v2(list: Array) -> PackedVector2Array:
@@ -117,3 +118,110 @@ static func _assassina(u: Unit) -> void:
 		var pommel := LowPoly.build(grip, LowPoly.plate(_v2(ring_pts), 0.04), A_GOLD, m, Vector3(0, -0.02, 0.2))
 		pommel.rotation.y = PI / 2.0
 		u.daggers.append(hand)
+		u.hands.append(hand)
+
+
+# ---------------------------------------------------------------- Valsa
+
+const V_SKIN := Color(0.47, 0.23, 0.16)
+const V_WHITE := Color(0.97, 0.96, 1.0)
+const V_LILAC := Color(0.8, 0.7, 1.0)
+const V_DEEP := Color(0.6, 0.47, 0.95)
+const V_GOLD := Color(1.0, 0.76, 0.22)
+const V_SHRINK := 2.0
+const V_SHOULDER := Vector3(0.22, 2.02, 0.0)
+## Onde a saia prende (a cintura), em unidades do boneco.
+const V_WAIST := 1.6
+
+
+## A dançarina: pernas compridas, saia enorme em dois babados (é um nó à parte, `u.skirt`: unit.gd abre
+## e gira conforme o Embalo), corpete branco, e os dois coques com cachos em mola (`u.curls`, que voam
+## pra fora quando ela gira). Rosas douradas no cabelo, no peito, na cintura e nos pulsos.
+static func _valsa(u: Unit) -> void:
+	var v := Node3D.new()
+	v.name = "Rig"
+	v.scale = Vector3.ONE / V_SHRINK
+	u.visual.add_child(v)
+	u.rig = v
+	var m := LowPoly.paint()
+	u.body_mat = m
+	u.body_tint = Color.WHITE
+	# sapatilhas claras e as pernas finas
+	for s in [-1.0, 1.0]:
+		var x: float = s * 0.14
+		LowPoly.build(v, LowPoly.loft([[0.0, 0.2, 0.46, x, -0.08], [0.12, 0.19, 0.4, x, -0.06], [0.22, 0.15, 0.2, x, 0.0]]), V_WHITE, m)
+		LowPoly.build(v, LowPoly.loft([[0.2, 0.13, 0.14, x, 0.0], [0.85, 0.17, 0.18, x, 0.0], [1.5, 0.21, 0.21, x * 0.9, 0.0]]), V_SKIN, m)
+	# a renda da meia, numa coxa só
+	LowPoly.build(v, LowPoly.loft([[1.1, 0.24, 0.24, 0.135, 0.0], [1.24, 0.25, 0.25, 0.13, 0.0]]), V_WHITE, m)
+	# calção e corpete brancos
+	LowPoly.build(v, LowPoly.loft([[1.38, 0.42, 0.3], [1.6, 0.34, 0.26]]), V_WHITE, m)
+	LowPoly.build(v, LowPoly.loft([[1.58, 0.3, 0.22], [1.82, 0.3, 0.22], [2.04, 0.46, 0.26], [2.1, 0.34, 0.22]]), V_WHITE, m)
+	# a saia: anágua mais escura e maior por baixo, girada meio gomo, e a saia clara por cima
+	var skirt := Node3D.new()
+	skirt.name = "Skirt"
+	skirt.position = Vector3(0, V_WAIST, 0)
+	v.add_child(skirt)
+	u.skirt = skirt
+	var under := LowPoly.build(skirt, LowPoly.loft([[-0.64, 2.55, 2.55], [-0.32, 1.55, 1.55], [-0.02, 0.4, 0.4]], 10), V_DEEP, m)
+	under.rotation.y = TAU / 20.0
+	LowPoly.build(skirt, LowPoly.loft([[-0.5, 2.2, 2.2], [-0.22, 1.36, 1.36], [0.05, 0.42, 0.42]], 10), V_LILAC, m)
+	# rosa na cintura (frente e costas: a câmera vê as costas) e no peito
+	for z in [-1.0, 1.0]:
+		var waist := Fx.rose(v, 0.13, V_GOLD)
+		waist.position = Vector3(0.0, V_WAIST + 0.02, z * 0.2)
+		waist.rotation.x = z * PI / 2.0
+	var chest := Fx.rose(v, 0.12, V_GOLD)
+	chest.position = Vector3(-0.08, 1.98, -0.15)
+	chest.rotation.x = -PI / 2.0
+	# pescoço e cabeça
+	LowPoly.build(v, LowPoly.loft([[2.08, 0.13, 0.13], [2.2, 0.13, 0.13]]), V_SKIN, m)
+	var head := Node3D.new()
+	head.name = "Head"
+	v.add_child(head)
+	LowPoly.build(head, LowPoly.loft([[2.14, 0.32, 0.4, 0, 0.0], [2.36, 0.8, 0.6, 0, 0.0], [2.66, 0.84, 0.62, 0, 0.0], [2.8, 0.58, 0.48, 0, 0.0]]), V_SKIN, m)
+	LowPoly.decal(head, load("res://assets/models/valsa_face.png"), Vector2(0.78, 0.6), Vector3(0, 2.49, -0.318))
+	for s in [-1.0, 1.0]:
+		var ear := LowPoly.build(head, LowPoly.plate(_v2([[0, -0.08], [s * 0.26, 0.1], [0, 0.1]]), 0.05), V_SKIN, m, Vector3(s * 0.4, 2.44, -0.04))
+		ear.rotation.y = s * -0.35
+	# cabelo branco: a parte de trás, o topo, a franja em pontas e uma mecha de cada lado do rosto
+	var back := [[-0.5, 2.16], [-0.66, 2.5], [-0.54, 2.9], [0.0, 3.04], [0.54, 2.9], [0.66, 2.5], [0.5, 2.16], [0.2, 2.04], [-0.2, 2.04]]
+	LowPoly.build(head, LowPoly.plate(_v2(back), 0.42), V_WHITE, m, Vector3(0, 0, 0.2))
+	LowPoly.build(head, LowPoly.loft([[2.72, 0.92, 0.72, 0, 0.03], [2.9, 0.76, 0.6, 0, 0.05], [3.0, 0.34, 0.3, 0, 0.06]]), V_WHITE, m)
+	var fringe := [[-0.46, 2.86], [-0.47, 2.58], [-0.3, 2.7], [-0.15, 2.56], [0.02, 2.74], [0.2, 2.58], [0.33, 2.7], [0.47, 2.58], [0.46, 2.86], [0.0, 2.94]]
+	LowPoly.build(head, LowPoly.plate(_v2(fringe), 0.08), V_WHITE, m, Vector3(0, 0, -0.33))
+	for s in [-1.0, 1.0]:
+		var lock := [[s * 0.38, 2.72], [s * 0.54, 2.3], [s * 0.46, 1.96], [s * 0.34, 2.3]]
+		LowPoly.build(head, LowPoly.plate(_v2(lock), 0.1), V_WHITE, m, Vector3(0, 0, -0.2))
+	# os dois coques, cada um com o cacho em mola pendurado do lado de fora
+	for s in [-1.0, 1.0]:
+		var curl := Node3D.new()
+		curl.position = Vector3(s * 0.86, 3.0, 0.1)
+		head.add_child(curl)
+		LowPoly.build(curl, LowPoly.loft([[-0.5, 0.36, 0.36], [-0.3, 0.86, 0.8], [0.0, 1.02, 0.94], [0.3, 0.86, 0.8], [0.5, 0.36, 0.36]], 6), V_WHITE, m)
+		var spring := [[0.0, 0.12, 0.12], [0.14, 0.36, 0.36], [0.26, 0.24, 0.24], [0.42, 0.52, 0.52], [0.56, 0.36, 0.36],
+			[0.74, 0.68, 0.68], [0.9, 0.48, 0.48], [1.1, 0.8, 0.8], [1.26, 0.6, 0.6], [1.46, 0.84, 0.84]]
+		var tail := LowPoly.build(curl, LowPoly.loft(spring, 6), V_WHITE, m, Vector3(s * 0.5, -1.62, 0.06))
+		tail.rotation.z = s * 0.26
+		u.curls.append(curl)
+		# rosa dourada na frente de cada coque
+		var flower := Fx.rose(head, 0.17, V_GOLD)
+		flower.position = Vector3(s * 0.5, 2.94, -0.36)
+		flower.rotation = Vector3(-PI / 2.0 + 0.3, 0, s * -0.4)
+	# braços: do ombro até a mão, onde quer que a dança a leve
+	for s in [-1.0, 1.0]:
+		var arm := Node3D.new()
+		arm.position = Vector3(s * V_SHOULDER.x, V_SHOULDER.y, V_SHOULDER.z)
+		v.add_child(arm)
+		var limb := LowPoly.build(arm, LowPoly.loft([[0.0, 0.1, 0.1], [1.0, 0.075, 0.075]]), V_SKIN, m)
+		limb.rotation.x = -PI / 2.0
+		u.arms.append(arm)
+	# mãos, cada uma com a pulseira dourada (e uma rosa no pulso esquerdo)
+	for s in [-1.0, 1.0]:
+		var hand := Node3D.new()
+		hand.position = u._hand_home(s)
+		v.add_child(hand)
+		LowPoly.build(hand, LowPoly.loft([[-0.09, 0.15, 0.15], [0.07, 0.17, 0.17]]), V_SKIN, m)
+		LowPoly.build(hand, LowPoly.loft([[0.07, 0.23, 0.23], [0.13, 0.23, 0.23]]), V_GOLD, m)
+		if s < 0.0:
+			Fx.rose(hand, 0.1, V_GOLD).position = Vector3(0, 0.14, 0)
+		u.hands.append(hand)

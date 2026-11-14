@@ -60,6 +60,9 @@ func _ready() -> void:
 			scene._captured(KEY_TAB)
 	else:
 		scene.open()
+	if args.has("--swap"):
+		# loja: troca pro balcão de itens
+		scene.swap_shop()
 	if args.has("--dialog"):
 		scene._select("eshield")
 		scene._open_dialog()

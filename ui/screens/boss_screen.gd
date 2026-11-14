@@ -12,10 +12,9 @@ signal back_pressed
 signal gear_pressed
 ## Abrir a loja do save ativo (só depois da primeira vitória).
 signal shop_pressed
-signal items_pressed
 signal equip_pressed
 
-const HAIR := [Color(0.86, 0.6, 0.3), Color(0.25, 0.8, 0.9), Color(1.0, 0.38, 0.66), Color(0.75, 0.45, 1.0), Color(0.4, 0.8, 1.0)]
+const HAIR := [Color(0.86, 0.6, 0.3), Color(0.25, 0.8, 0.9), Color(1.0, 0.38, 0.66), Color(0.75, 0.45, 1.0), Color(0.4, 0.8, 1.0), Color(1.0, 0.8, 0.25)]
 
 var sel := 1
 var _panels: Array = []
@@ -29,7 +28,7 @@ func _ready() -> void:
 	_practice_at = Knowledge.BOSS_INFO.size()
 	$BtnBack.pressed.connect(func(): back_pressed.emit())
 	$BtnConfirm.pressed.connect(_confirm)
-	# quatro botões no topo: as duas lojas (cartas e itens) e as duas telas do herói (cartas e gear)
+	# três botões no topo: a loja (cartas e itens, lá dentro) e as duas telas do herói (cartas e gear)
 	var gear := Ink.button("CARTAS", Ink.CREAM, Ink.OUT, 22, 11)
 	gear.name = "BtnGear"
 	gear.position = Vector2(884, 40)
@@ -38,16 +37,10 @@ func _ready() -> void:
 	add_child(gear)
 	var shop := Ink.button("LOJA", Ink.GRAPE, Ink.CREAM, 22, 13)
 	shop.name = "BtnShop"
-	shop.position = Vector2(516, 40)
+	shop.position = Vector2(700, 40)
 	shop.size = Vector2(170, 60)
 	shop.pressed.connect(func(): shop_pressed.emit())
 	add_child(shop)
-	var items := Ink.button("ITENS", Ink.GRAPE, Ink.CREAM, 22, 17)
-	items.name = "BtnItems"
-	items.position = Vector2(700, 40)
-	items.size = Vector2(170, 60)
-	items.pressed.connect(func(): items_pressed.emit())
-	add_child(items)
 	var equip := Ink.button("GEAR", Ink.COIN, Ink.OUT, 22, 19)
 	equip.name = "BtnEquip"
 	equip.position = Vector2(1068, 40)
@@ -86,7 +79,6 @@ func open() -> void:
 			any_new = true
 	$NewCards.visible = any_new
 	$BtnShop.disabled = not Knowledge.shop_unlocked
-	$BtnItems.disabled = not Knowledge.shop_unlocked
 	_build()
 
 
@@ -163,7 +155,9 @@ func _build() -> void:
 		c.queue_free()
 	_panels.clear()
 	# com mais de quatro lutas os painéis estreitam pra caber todos na tela
-	var w := 283.0 if Knowledge.BOSS_INFO.size() <= 4 else 222.0
+	var count := Knowledge.BOSS_INFO.size()
+	var w := 283.0 if count <= 4 else floorf((1188.0 - 18.0 * (count - 1)) / count)
+	var slim := w < 200.0
 	for i in Knowledge.BOSS_INFO.size():
 		var info: Dictionary = Knowledge.BOSS_INFO[i]
 		var open_now := Knowledge.boss_open(i)
@@ -189,15 +183,15 @@ func _build() -> void:
 			var tl := Ink.title("MINI BOSS", 15, Ink.OUT)
 			tl.position = Vector2(10, 4)
 			tag.add_child(tl)
-		var nm := Ink.title(info["name"], 25 if w > 250.0 else 20, Ink.CREAM if open_now else Ink.CREAM.darkened(0.45))
+		var nm := Ink.title(info["name"], 25 if w > 250.0 else (17 if slim else 20), Ink.CREAM if open_now else Ink.CREAM.darkened(0.45))
 		nm.position = Vector2(10, 204)
 		nm.size = Vector2(w - 20.0, 36)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		p.add_child(nm)
-		var bl := Ink.text(info["blurb"] if open_now else "Vença o anterior pra abrir.", 15, Color(0.8, 0.82, 0.95) if open_now else Color(0.55, 0.56, 0.7))
+		var bl := Ink.text(info["blurb"] if open_now else "Vença o anterior pra abrir.", 13 if slim else 15, Color(0.8, 0.82, 0.95) if open_now else Color(0.55, 0.56, 0.7))
 		bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		bl.position = Vector2(22, 246)
-		bl.size = Vector2(w - 44.0, 90)
+		bl.position = Vector2(12 if slim else 22, 246)
+		bl.size = Vector2(w - (24.0 if slim else 44.0), 90)
 		bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		p.add_child(bl)
 		if Knowledge.best_rank.has(i):
@@ -212,6 +206,13 @@ func _build() -> void:
 			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			rl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			stamp.add_child(rl)
+		# botão "?": o que cada herói da party sabe das mecânicas desta luta
+		var q := Ink.button("?", Ink.COIN, Ink.OUT, 22, 23 + i)
+		q.name = "Info%d" % i
+		q.position = Vector2(w - 54.0, 26)
+		q.size = Vector2(42, 42)
+		q.pressed.connect(open_info.bind(i))
+		slot.add_child(q)
 		if open_now:
 			slot.gui_input.connect(func(e: InputEvent):
 				if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
@@ -251,6 +252,24 @@ func _draw_emblem(e: Control, i: int, open_now: bool) -> void:
 	var c := e.size * 0.5
 	var col: Color = HAIR[i] if open_now else HAIR[i].darkened(0.6)
 	var ink := Ink.OUT
+	if Knowledge.BOSS_INFO[i]["name"] == "MEL-CHAN":
+		# abelha: asas, corpo listrado e antenas com ponta de coração
+		var wing := Color(0.8, 0.95, 1.0) if open_now else Color(0.35, 0.4, 0.45)
+		var pink := Color(1.0, 0.45, 0.72) if open_now else Color(0.45, 0.25, 0.35)
+		for s in [-1.0, 1.0]:
+			e.draw_circle(c + Vector2(s * 58, -26), 36, ink)
+			e.draw_circle(c + Vector2(s * 58, -26), 31, wing)
+			e.draw_line(c + Vector2(s * 16, -52), c + Vector2(s * 34, -80), ink, 5.0, true)
+			e.draw_circle(c + Vector2(s * 36, -82), 11, ink)
+			e.draw_circle(c + Vector2(s * 36, -82), 8, pink)
+		e.draw_circle(c + Vector2(0, 6), 62, ink)
+		e.draw_circle(c + Vector2(0, 6), 56, col)
+		for y in [-6.0, 26.0]:
+			var half := sqrt(maxf(0.0, 56.0 * 56.0 - (y + 7.0) * (y + 7.0)))
+			e.draw_rect(Rect2(c.x - half, c.y + y, half * 2.0, 14), ink)
+		e.draw_circle(c + Vector2(-18, -22), 7, ink)
+		e.draw_circle(c + Vector2(18, -22), 7, ink)
+		return
 	if Knowledge.BOSS_INFO[i]["name"] == "TROVÃO-KUN":
 		# nuvem de tempestade com um raio no meio
 		for p in [Vector2(-34, 6), Vector2(34, 6), Vector2(0, -22), Vector2(-20, -8), Vector2(22, -10), Vector2(0, 14)]:
@@ -321,3 +340,114 @@ func _step(dir: int) -> void:
 			break
 	_last_boss = sel
 	_mark()
+
+
+# ---------------------------------------------------------------- o que a party sabe
+
+var _info: Control
+
+## Painel de informação de um boss: as mecânicas dele em linhas e os quatro heróis da party em colunas,
+## com o quanto cada um entende de cada uma (carta equipada ou passiva = 100%; sem carta, o que ele
+## aprendeu na prática). Mecânica que ninguém viu ainda aparece como "??????".
+func open_info(i: int) -> void:
+	close_info()
+	_info = Control.new()
+	_info.name = "InfoPanel"
+	_info.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_info.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_info)
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.03, 0.03, 0.1, 0.8)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_info.add_child(dim)
+	# boss sem lista própria (ainda): mostra pelo menos o desvio de vermelho
+	var mechs: Array = Knowledge.BOSS_MECHS[i] if i < Knowledge.BOSS_MECHS.size() else ["dodge"]
+	var party: Array = Knowledge.fight_party()
+	var row_h := 46.0
+	var box := Ink.panel(Ink.NAVY, 41)
+	box.size = Vector2(1000, 190 + mechs.size() * row_h)
+	box.position = Vector2((1280.0 - box.size.x) * 0.5, (720.0 - box.size.y) * 0.5)
+	_info.add_child(box)
+	var head := Ink.title(String(Knowledge.BOSS_INFO[i]["name"]) + "  ·  O QUE A PARTY SABE", 28, Ink.CREAM)
+	head.position = Vector2(34, 22)
+	head.size = Vector2(800, 40)
+	box.add_child(head)
+	var sub := Ink.text("100% = resolve sozinho (carta equipada ou passiva). Abaixo disso, ele tenta com o que aprendeu jogando.", 14, Color(0.8, 0.82, 0.95))
+	sub.position = Vector2(36, 62)
+	sub.size = Vector2(920, 22)
+	box.add_child(sub)
+	var col_x := 330.0
+	var col_w := 160.0
+	for c in party.size():
+		var hero: int = party[c]
+		var face := TextureRect.new()
+		face.texture = load("res://assets/portraits/%s_face.png" % Knowledge.HEROES[hero]["key"])
+		face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		face.position = Vector2(col_x + c * col_w + 8, 94)
+		face.size = Vector2(44, 44)
+		box.add_child(face)
+		var nm := Ink.title(String(Knowledge.HEROES[hero]["name"]).to_upper(), 13, Knowledge.HEROES[hero]["color"].lightened(0.35))
+		nm.position = Vector2(col_x + c * col_w + 58, 106)
+		nm.size = Vector2(col_w - 60, 22)
+		nm.clip_text = true
+		box.add_child(nm)
+	for r in mechs.size():
+		var key: String = mechs[r]
+		var seen := Knowledge.mech_seen(key)
+		var y := 150.0 + r * row_h
+		var stripe := ColorRect.new()
+		stripe.color = Color(1, 1, 1, 0.05 if r % 2 == 0 else 0.0)
+		stripe.position = Vector2(24, y - 4)
+		stripe.size = Vector2(952, row_h - 4)
+		stripe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(stripe)
+		var lab := Ink.title(Knowledge.mech_name(key).to_upper() if seen else "??????", 16, Ink.CREAM if seen else Color(0.55, 0.56, 0.7))
+		lab.position = Vector2(36, y + 4)
+		lab.size = Vector2(290, 26)
+		lab.clip_text = true
+		box.add_child(lab)
+		for c in party.size():
+			var hero: int = party[c]
+			var cell := Control.new()
+			cell.name = "Cell_%d_%d" % [r, c]
+			cell.position = Vector2(col_x + c * col_w + 8, y + 2)
+			cell.size = Vector2(col_w - 20, 30)
+			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			box.add_child(cell)
+			if not Knowledge.mech_applies(hero, key):
+				var na := Ink.text("não é com ele", 12, Color(0.5, 0.52, 0.66))
+				na.position = Vector2(0, 6)
+				cell.add_child(na)
+				continue
+			var val := Knowledge.understanding(hero, key) if seen else 0.0
+			cell.set_meta("value", val)
+			cell.draw.connect(func():
+				var bar := Rect2(0, 8, cell.size.x - 46, 14)
+				cell.draw_rect(bar.grow(2), Ink.OUT)
+				cell.draw_rect(bar, Color(0.09, 0.09, 0.2))
+				var full := val >= 100.0
+				cell.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(val / 100.0, 0.0, 1.0), bar.size.y)), Ink.COIN if full else Ink.VIOLET))
+			var pct := Ink.title(("%d%%" % roundi(val)) if seen else "?", 14, Ink.COIN if val >= 100.0 else Ink.CREAM)
+			pct.position = Vector2(cell.size.x - 42, 4)
+			pct.size = Vector2(44, 22)
+			cell.add_child(pct)
+	var ok := Ink.button("FECHAR", Ink.CREAM, Ink.OUT, 20, 29)
+	ok.name = "InfoClose"
+	ok.size = Vector2(170, 46)
+	ok.position = Vector2(box.size.x - 200, 26)
+	ok.pressed.connect(close_info)
+	box.add_child(ok)
+	_info.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed:
+			close_info())
+	box.pivot_offset = box.size * 0.5
+	box.scale = Vector2.ONE * 0.92
+	box.create_tween().tween_property(box, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func close_info() -> void:
+	if _info != null and is_instance_valid(_info):
+		_info.queue_free()
+	_info = null

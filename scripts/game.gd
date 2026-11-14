@@ -14,7 +14,7 @@ const DANGER := Color(1.0, 0.12, 0.32)
 const ARENA_R := 8.6
 const BOSS_POINT := Vector3(0, 0, -9.0)
 const MELEE_RANGE := 4.8
-const RANGED_RANGE := 13.0  # quem ataca de longe também tem limite: o fundo da arena fica fora
+const RANGED_RANGE := 40.0  # quem ataca de longe alcança a arena inteira (como no FFXIV): não tem limite pra mostrar
 const ZONE_R := 2.2
 const SHELTER_R := 2.7
 const CIRCLE_R := 1.9
@@ -74,6 +74,7 @@ const UNIT_DEFS := [
 	{"name": "Ringstar", "range": MELEE_RANGE, "key": "ringstar", "color": Color(1.0, 0.45, 0.75), "hp": 110.0, "melee": true, "ai_dps": 9.0, "hit": 14.0},
 	{"name": "Apotecário", "range": RANGED_RANGE, "key": "apothecary", "color": Color(0.35, 0.8, 0.66), "hp": 90.0, "melee": false, "ai_dps": 5.0, "hit": 8.0},
 	{"name": "Sleepwalker", "range": RANGED_RANGE, "key": "sleepwalker", "color": Color(0.55, 0.58, 1.0), "hp": 85.0, "melee": false, "ai_dps": 8.0, "hit": 11.0},
+	{"name": "Valsa", "range": MELEE_RANGE, "key": "valsa", "color": Color(0.74, 0.62, 1.0), "hp": 95.0, "melee": true, "ai_dps": 6.0, "hit": 9.0},
 ]
 
 ## Cada passo: t = tipo, dur = quanto dura até o próximo. Ataques de desvio:
@@ -248,6 +249,15 @@ const SKILLS := {
 		{"name": "Senhor Travesseiro", "cd": 15.0},
 		{"name": "A Cama Caiu!", "cd": 15.0},
 		{"name": "Sono Profundo", "cd": 3.0}],
+	# Valsa: suporte que dança colada na boss. O Passo de Valsa conta um, dois, TRÊS: o terceiro é o
+	# Giro, que rende Embalo (unit.embalo). O Embalo abre a saia: quem está dentro dela bate mais forte.
+	# Só o Passo de Valsa exige alcance; o resto do kit sai de qualquer lugar.
+	"valsa": [{"name": "Passo de Valsa", "cd": 1.2, "dmg": 16.0},
+		{"name": "Passo a Dois", "cd": 8.0},
+		{"name": "Pirueta", "cd": 9.0},
+		{"name": "Chuva de Pétalas", "cd": 18.0},
+		{"name": "Crescendo", "cd": 30.0},
+		{"name": "Grande Baile", "big": true, "cd": 60.0}],
 }
 ## Sleepwalker, Modo Dormindo: sequência obrigatória; "cost" é o Torpor gasto.
 const SKILLS_ASLEEP := [
@@ -277,13 +287,13 @@ const AI_ROT_MULT := 0.5
 ##   4. depois de voltarem da recarga, elas esperaram em média no máximo ROT_DELAY_MAX pra ser usadas;
 ##   5. nenhuma delas está parada há mais de ROT_STALE segundos agora.
 const ROT_SLOTS := {"tank": [1, 3], "nurse": [2], "healer": [], "assassina": [2, 3, 4], "maga": [3], "burner": [1, 2, 4],
-	"ringstar": [3, 4], "apothecary": [1], "sleepwalker": [1, 2, 3, 4]}
+	"ringstar": [3, 4], "apothecary": [1], "sleepwalker": [1, 2, 3, 4], "valsa": [1, 4]}
 const ROT_IDLE_MAX := 0.35
 const ROT_DELAY_MAX := 3.0
 const ROT_STALE := 6.0
 ## DPS da IA com a carta roxa Rotação (sem ela vale o ai_dps de UNIT_DEFS).
 ## Assassina e Maga, além disso, soltam o golpe forte de 20 s (Lâmina Final / Ruína) sempre que dá.
-const ROTATION_DPS := {"tank": 10.0, "nurse": 4.0, "healer": 6.0, "assassina": 14.0, "maga": 10.0, "burner": 11.0, "ringstar": 12.0, "apothecary": 8.0, "sleepwalker": 12.0}
+const ROTATION_DPS := {"tank": 10.0, "nurse": 4.0, "healer": 6.0, "assassina": 14.0, "maga": 10.0, "burner": 11.0, "ringstar": 12.0, "apothecary": 8.0, "sleepwalker": 12.0, "valsa": 9.0}
 ## Cura em Área: metade da Cura, em todo mundo perto do Healer.
 const AOE_HEAL_R := 6.0
 ## Quanto tempo Maga e Healer ficam presos no cast quando um vermelho aparece e não têm Cautela.
@@ -430,6 +440,37 @@ const KNOCKOUT_AIR := 0.8      # Nocaute Final: tempo do salto, no ar (passa por
 const KNOCKOUT_HEIGHT := 7.5   # ... altura do salto ...
 const KNOCKOUT_R := 7.0        # ... e raio da onda de choque: o dano é em quem estiver dentro dela
 const STAR := Color(1.0, 0.45, 0.75)
+## Kit da Valsa (dançarina de salão; suporte corpo a corpo).
+const LILAC := Color(0.74, 0.62, 1.0)
+const ROSE_GOLD := Color(1.0, 0.8, 0.3)
+const WALTZ_GIRO := 40.0       # Passo de Valsa, terceiro tempo (o Giro): dano ...
+const WALTZ_GIRO_PER := 4.0    # ... e mais isso por ponto de Embalo que ela já tinha
+const EMBALO_MAX := 5          # Embalo: cada Giro dá 1, até 5. É o quanto a saia está aberta
+const EMBALO_HOLD := 6.0       # sem girar por esse tempo, o Embalo começa a cair ...
+const EMBALO_DROP := 2.0       # ... um ponto a cada tanto
+const SKIRT_R := 3.2           # raio da saia (até onde o bônus alcança) sem Embalo ...
+const SKIRT_R_PER := 0.5       # ... e a mais por ponto
+const SKIRT_BONUS := 0.06      # dano a mais de quem está na saia (ela mesma não ganha) ...
+const SKIRT_BONUS_PER := 0.02  # ... e a mais por ponto de Embalo
+const DUET_DMG := 28.0         # Passo a Dois: o golpe dela (se estiver ao alcance) e o do Par, cada um
+const DUET_HEAL := 18.0        # ... e a cura no Par
+const DUET_ECHO := 8.0         # o Par acompanha cada Giro com um golpe desse dano ...
+const DUET_ECHO_PER := 4.0     # ... e mais isso por ponto de Embalo
+const TWIRL_TIME := 0.6        # Pirueta: tempo girando; golpe que chegar nesse tempo passa por ela
+const TWIRL_DMG := 50.0
+const TWIRL_BRAVO := 2         # ... desviar girando (BRAVO!) dá esse Embalo a mais ...
+const TWIRL_REFUND := 0.5      # ... e a recarga da Pirueta cai pela metade
+const PETAL_TIME := 6.0        # Chuva de Pétalas: quanto dura ...
+const PETAL_BURST := 20.0      # ... cura na hora ...
+const PETAL_HPS := 7.0         # ... e por segundo, em quem está na dança
+const CRESC_TIME := 8.0        # Crescendo: duração ...
+const CRESC_MULT := 2.0        # ... o bônus da saia dobra ...
+const CRESC_GCD := 0.8         # ... e o Passo de Valsa recarrega nisso (o Embalo não cai enquanto dura)
+const BALL_TIME := 10.0        # Grande Baile: a arena vira salão; a party toda conta como dentro da saia
+const BALL_END_DMG := 260.0    # ... e o último acorde dá esse dano ...
+const BALL_END_HEAL := 40.0    # ... e cura isso em todos
+const AI_WALTZ_EVERY := 3.6    # Valsa na mão da IA sem a carta Rotação: um Giro a cada tanto ...
+const AI_WALTZ_MAX := 3        # ... e o Embalo dela não passa disso
 ## Kit do Apotecário.
 const DECOMP_TIME := 8.0       # Decomposição (DoT da Necropsia)
 const DECOMP_DPS := 6.0
@@ -523,7 +564,7 @@ const REBIRTH_DOT_TIME := 12.0 # ... durante esse tempo
 ## Velocidade de andar por classe, como fração da velocidade-base (unit.speed). Assassina e Malpractice
 ## são as ágeis (base cheia); o resto anda 40% mais devagar; Sleepwalker e Apotecário, 65% mais devagar.
 ## Vale só pra quem o jogador controla (ver move_speed). Dash, avanços e empurrões não mudam.
-const MOVE_MULT := {"assassina": 1.0, "nurse": 1.0, "sleepwalker": 0.35, "apothecary": 0.35}
+const MOVE_MULT := {"assassina": 1.0, "nurse": 1.0, "sleepwalker": 0.35, "apothecary": 0.35, "valsa": 0.85}
 const MOVE_DEFAULT := 0.6
 const HASTE_MULT := 1.6        # pressa da Nuvem Conservante do Apotecário: +60% de velocidade ...
 const HASTE_TIME := 8.0        # ... na party toda, por esse tempo
@@ -653,22 +694,31 @@ const STEPS_COOKIE := [
 	{"t": "knives", "n": 2, "dur": 2.6},
 	{"t": "idle", "dur": 2.5},
 ]
-## TROVÃO-KUN (mini boss, "roam"): fica no meio da arena e anda. O ciclo dele:
-##   leap  — escolhe alguém, marca um círculo vermelho e salta ali (dano em área na queda);
-##   chase — anda devagar atrás de quem está com a atenção dele (o topo do aggro). Não dá dano de
-##           contato: quem luta de perto bate nele do limite do alcance, sem tomar nada por isso;
-##   orbs  — para e solta ondas de faíscas em linha reta (bullet hell), mais os círculos vermelhos;
-##   fan   — para e gira um ventilador de raios rentes ao chão (PULE na hora que o raio passa),
-##           enquanto bolas caem em cima da party.
+## TROVÃO-KUN (mini boss, "roam"): fica no meio da arena e anda. É uma luta de PARTY: cada passo do
+## ciclo dá trabalho pra um papel diferente, e nenhum castiga quem está só fazendo o próprio serviço.
+##   leap   — marca um círculo vermelho em quem NÃO está com o aggro e salta ali. Quem está no círculo
+##            sai (Desvio); a queda solta uma onda de choque fraca em todo mundo (cura).
+##   chase  — anda atrás de quem está no topo do aggro, sem dano de contato: o tank o leva pra onde
+##            quiser e quem luta de perto continua batendo.
+##   buster — Esmagar no tank (defesa do tank, Escudo do curandeiro).
+##   orbs   — "olho da tempestade": as faíscas nascem num anel em volta dele (ORB_START) e vão pra fora
+##            em ondas. Perto dele é seguro, então quem luta de perto não para de bater; quem luta de
+##            longe entra no olho ou desvia pelos buracos. Caem círculos vermelhos em dois heróis.
+##   raid   — Trovoada: dano em todos, sem desvio. É o momento do curandeiro.
+##   fan    — ventilador de raios rentes ao chão (PULE), com um círculo vermelho em CADA herói de
+##            tempos em tempos: todo mundo se mexe, ninguém fica parado girando.
+##   stack  — Comunhão: a party junta no círculo laranja pra dividir o dano. Fecha o ciclo reagrupando.
 const STEPS_STORM := [
 	{"t": "idle", "dur": 2.5},
-	{"t": "leap", "dur": 1.6},
-	{"t": "chase", "dur": 3.5},
-	{"t": "leap", "dur": 1.6},
-	{"t": "chase", "dur": 3.5},
+	{"t": "leap", "dur": 1.8},
+	{"t": "chase", "dur": 3.0},
+	{"t": "buster", "dur": 3.0},
+	{"t": "idle", "dur": 1.2},
 	{"t": "orbs", "dur": 7.0},
+	{"t": "raid", "name": "Trovoada", "ratio": 0.22, "dur": 3.0},
 	{"t": "idle", "dur": 1.5},
-	{"t": "fan", "dur": 14.0},
+	{"t": "fan", "dur": 12.0},
+	{"t": "stack", "need": 4, "dur": 6.0},
 	{"t": "idle", "dur": 2.0},
 ]
 const JUMP_AIR := 0.55         # o pulo: tempo no ar ...
@@ -676,10 +726,12 @@ const JUMP_CD := 0.8           # ... recarga (do começo de um pulo ao próximo)
 const JUMP_H := 1.7            # ... e altura
 const LEAP_R := 3.2
 const LEAP_DMG := 38.0
+const LEAP_WAVE := 0.08        # onda de choque da queda: essa fração da vida de cada um
 const CHASE_SPEED := 1.7
 ## Faíscas (bullet hell): ondas de ORB_COUNT bolinhas em roda, com ORB_GAPS buracos pra passar;
 ## cada onda sai um pouco girada em relação à anterior. Andam em linha reta e não seguem ninguém.
 const ORB_COUNT := 12
+const ORB_START := 5.4         # as faíscas nascem a essa distância dele: dentro disso é o olho da tempestade
 const ORB_GAPS := 3
 const ORB_WAVE := 0.95         # intervalo entre ondas
 const ORB_SPEED := 4.2
@@ -690,7 +742,8 @@ const FAN_WARN := 1.6          # o ventilador aparece fino e parado por esse tem
 const FAN_W := 0.45            # meia largura de cada raio
 const FAN_DMG := 10.0
 const FAN_INNER := 0.9         # colado no boss os raios ainda não pegam
-const FAN_DROP := 3.2          # de quanto em quanto tempo cai uma bola na party
+const FAN_DROP := 4.0          # de quanto em quanto tempo cai um círculo vermelho em cada herói
+const LEARN_EYE := 4.0         # passou a fase das faíscas sem tomar nenhuma: aprende o olho da tempestade
 ## [raios, velocidade em rad/s] conforme a vida do boss: acima de 66%, acima de 33%, e o resto.
 const FAN_STAGES := [[3, 0.75], [4, 0.95], [5, 1.15]]
 ## Sem a carta de um ataque, a chance de o herói perceber (com conhecimento zero) e o atraso dele.
@@ -702,6 +755,65 @@ const LEARN_HIT := 1.0         # tomou o raio: aprende um pouco, de tanto apanha
 const LEARN_OWN := 3.0         # pulou e passou sozinho: repete o que deu certo
 const LEARN_HAND := 6.0        # o jogador pulou e passou controlando este herói
 const LEARN_WATCH := 1.5       # viu o jogador passar
+## MEL-CHAN (boss "bee", que também anda): a abelha idol. Luta de DESVIO: pouco pra decorar, muito
+## pra executar. Regra única: cada golpe dela que pega dá +1 coração (em cima da cabeça do herói); no
+## 4º ele fica encantado, ela se cura e fica mais forte pra sempre. São três atos, pela vida dela
+## (66% e 33%), cada um aberto por um Finale que limpa a arena e os corações. Os golpes saem de um
+## saco embaralhado, sempre com uma folga depois (é a hora de bater).
+##   wave   — Onda de Mel: barra baixa que atravessa a arena. PULE.
+##   ring   — Batida do Palco: ela cai e solta ondas de choque em anel. PULE.
+##   sting  — Rajada de Ferrões: leques mirados em quem o jogador controla (5 com um no meio, depois
+##            4 com um vão no meio, alternando).
+##   spiral — Chuva de Pólen: braços de bolinhas girando (do 2º ato em diante).
+##   dive   — Mergulho: faixa vermelha e ela atravessa a arena.
+##   slash  — Corte Ferroado: faixa larga em quem está no topo do aggro (depois pra trás e pros lados).
+##   corações teleguiados entram por cima dos golpes do 2º ato em diante.
+const STEPS_BEE := [{"t": "bee_idle", "dur": 2.5}]
+const BEE_POOL := [
+	["wave", "sting", "ring", "slash", "dive"],
+	["wave", "sting", "ring", "slash", "dive", "spiral"],
+	["wave", "sting", "ring", "slash", "dive", "spiral"],
+]
+## Duração de cada golpe em cada ato, e a folga depois dele.
+const BEE_DUR := {
+	"wave": [3.2, 3.6, 5.6], "ring": [2.8, 3.9, 4.6], "sting": [3.8, 4.6, 5.2],
+	"slash": [2.0, 3.0, 4.0], "dive": [2.2, 3.5, 4.7], "spiral": [5.0, 5.5, 6.5],
+}
+const BEE_REST := [2.4, 1.9, 1.4]
+const BEE_ACT_AT := [0.66, 0.33]
+const BEE_HEARTS := 4          # no 4º coração o herói fica encantado
+const BEE_CHARM := 3.0         # ... por esse tempo, parado e intocável
+const BEE_IFRAMES := 0.75      # depois de tomar um golpe dela: um instante sem tomar outro
+const BEE_HEAL := 0.015        # cada encantado cura isso da vida dela ...
+const BEE_POWER_UP := 0.1      # ... e soma isso no dano dela, pra sempre
+const BEE_POWER_MAX := 2.0
+const BEE_AI_CHARM := 0.3      # quanto do ganho dela vale quando o encantado é da IA
+const BEE_COL := Color(1.0, 0.45, 0.72)
+const BEE_HONEY := Color(1.0, 0.78, 0.2)
+const BEE_WAVE_W := 0.5
+const BEE_WAVE_WARN := 1.0
+const BEE_WAVE_SPEED := [7.0, 8.0, 9.0]
+const BEE_RING_W := 0.45
+const BEE_RING_SPEED := [5.5, 6.5, 7.5]
+const BEE_SHOT_R := 0.36
+const BEE_SHOT_SPEED := [7.5, 8.5, 9.5]
+const BEE_SPIRAL_SPEED := 4.6
+const BEE_HOMING_SPEED := 2.9
+const BEE_HOMING_LIFE := 7.0
+const BEE_CHASE := 2.2
+const BEE_AI_SOFT := 0.6      # dano dos golpes dela em quem a IA controla
+## HELL TIME: uma vez por luta ela volta pro meio do palco e fica uns 50 s soltando combinações
+## em cima da batida da música (tools/hell_time_music.py gera o arquivo; os tempos são os mesmos).
+const HELL_MUSIC := "res://assets/music/hell_time.wav"
+const HELL_BEAT := 0.4        # 150 BPM
+const HELL_PRE := 3.2         # dois compassos de subida antes do primeiro golpe
+const HELL_BARS := 32
+const HELL_AT_HP := 0.5       # começa quando a vida dela passa disso ...
+const HELL_AT_TIME := 70.0    # ... ou a luta passa desse tempo, o que vier primeiro
+const HELL_RING := 7.5
+const HELL_WAVE := 9.0
+const BEE_AI_SOFT_HELL := 0.4 # no HELL TIME a IA apanha ainda mais leve
+const BEE_DMG := {"wave": 14.0, "ring": 14.0, "shot": 9.0, "dive": 30.0, "slash": 44.0, "homing": 6.0}
 ## Mesma ordem de Knowledge.BOSS_INFO.
 const BOSSES := [
 	{"name": "BISCOITO-KUN", "hp": 2600.0, "enrage": 100.0, "steps": STEPS_COOKIE, "look": "cookie", "hair": Color(0.86, 0.6, 0.3), "scale": 0.8},
@@ -710,6 +822,7 @@ const BOSSES := [
 	# haste: tudo dela (passos, avisos, casts) corre esse tanto mais rápido
 	{"name": "FUSÃO-CHAN", "hp": 11500.0, "enrage": 165.0, "steps": STEPS_FUSION, "elements": true, "haste": 1.2, "hair": Color(0.75, 0.45, 1.0), "scale": 1.3},
 	{"name": "TROVÃO-KUN", "hp": 3600.0, "enrage": 130.0, "steps": STEPS_STORM, "look": "storm", "roam": true, "arena": 13.5, "hair": Color(0.4, 0.8, 1.0), "scale": 1.0},
+	{"name": "MEL-CHAN", "hp": 6200.0, "enrage": 215.0, "steps": STEPS_BEE, "look": "bee", "roam": true, "bee": true, "stage": true, "arena": 10.0, "hair": Color(1.0, 0.8, 0.25), "scale": 1.0},
 ]
 
 ## Treino livre (Knowledge.practice): um boneco no lugar da boss. Não ataca, não tem mecânica,
@@ -744,6 +857,14 @@ var arena_r := ARENA_R
 ## (card_fail[hero][id]). Na vitória, a carta de aprendizado equipada só rende se a luta foi limpa.
 var died := {}
 var card_fail := {}
+## As mecânicas que de fato apareceram nesta luta (id da carta -> true). Carta de uma mecânica que
+## não apareceu não ganha aprendizado: não dá pra provar o que não foi pedido.
+var fight_mechs := {}
+## Cartas que valem em qualquer luta (não dependem de uma mecânica da boss).
+const ALWAYS_LEARN := ["dps", "instinct", "provoke"]
+## Que cartas cada passo da boss põe à prova.
+const PHASE_CARDS := {"spread": ["spread"], "buster": ["mitigate"], "linkcleave": ["link"], "mark": ["zone", "mark"],
+	"zones": ["zone", "mark"], "cata": ["partner", "shelter", "mark"], "collapse": ["final"], "towers": ["final"]}
 var boss_focus := false
 var range_ring: MeshInstance3D
 var range_ring_r := -1.0
@@ -755,6 +876,8 @@ var orbs: Array = []       # {"node", "dir": Vector3}
 var orb_wave_t := 0.0
 var orb_spin := 0.0
 var orb_reds := 0
+var eye_ring: MeshInstance3D   # o limite do olho da tempestade, no chão
+var orb_hit := {}              # quem tomou faísca nesta fase (hero -> true)
 var fan_rig: Node3D
 var fan_beams: Array = []  # MeshInstance3D, um por raio
 var fan_mat: StandardMaterial3D
@@ -763,6 +886,43 @@ var fan_speed := 0.0       # rad/s com sinal (o sentido)
 var fan_on := false
 var fan_drop_t := 0.0
 var fan_flip_done := false
+## Estado da MEL-CHAN.
+var bee := false
+var bee_act := 1
+var bee_n := 0             # passos desde o começo do ato (ímpar = folga, par = golpe)
+var bee_bag: Array = []
+var bee_first := true
+var bee_last := ""
+var bee_power := 1.0       # multiplicador de dano dela (cresce a cada encantado)
+var bee_charms := 0
+var bee_hearts := [0, 0, 0, 0]
+var bee_pip_nodes := {}    # idx do herói -> os corações em cima da cabeça
+var bee_events: Array = [] # [instante dentro do passo, Callable], em ordem
+var bee_tips := {}
+var bee_focus: Unit = null
+var bee_waves: Array = []
+var bee_rings: Array = []
+var bee_shots: Array = []
+var bee_homing: Array = []
+var bee_lift := 0.0
+var bee_lift_tw: Tween
+var bee_face := 0.0
+var bee_aim_node: MeshInstance3D
+var bee_aim_t := 0.0
+var bee_spin := 0.0
+var bee_spin_dir := 1.0
+var bee_spin_flip := true
+var bee_spiral_t := 0.0
+var bee_hell := false      # HELL TIME rolando
+var bee_hell_done := false
+var bee_hell_dir := 0.0    # sentido do pólen no HELL TIME (0 = desligado)
+var bee_hell_next := 0.0
+var hell_player: AudioStreamPlayer
+var hell_fire: Node3D
+var hell_lights: Array = []
+var hell_glow := 0.0       # 0..1: quanto o fogo está aceso
+var hell_tw: Tween
+var stage_env: Environment
 var steps: Array
 var boss_max := 1.0
 var boss_hp := 1.0
@@ -797,6 +957,14 @@ var dream_t := 0.0
 var echoes: Array = []  # Frestas dos Ecos do Pesadelo: {"wait", "open", "hit", "warned"}
 var echo_mark: MeshInstance3D
 var _tones := {}
+## Valsa: a voluta no chão sob quem recebe o bônus (uma por herói), o fio dourado de cada Valsa até o
+## Par dela (idx -> {"root", "beads", "rose"}) e o salão do Grande Baile.
+var valsa_marks: Array = []
+var valsa_threads := {}
+var ball_node: Node3D
+var ball_mat: ShaderMaterial
+var ball_lamp: Node3D
+var ball_spots: Array = []
 var side_mark: Node3D  # Assassina: marca do lado da boss que está valendo
 var side_pips: Array = []
 var side_label: Label3D
@@ -901,6 +1069,7 @@ func _ready() -> void:
 		Knowledge.practice = true
 	boss_def = DUMMY if Knowledge.practice else BOSSES[Knowledge.boss]
 	roam = boss_def.get("roam", false)
+	bee = boss_def.get("bee", false)
 	arena_r = float(boss_def.get("arena", ARENA_R))
 	steps = boss_def["steps"]
 	boss_max = boss_def["hp"]
@@ -1020,14 +1189,17 @@ func _build_world() -> void:
 	cam_home = cam.position
 
 	floor_mat = ShaderMaterial.new()
-	floor_mat.shader = preload("res://shaders/floor.gdshader")
+	var stage: bool = boss_def.get("stage", false)
+	floor_mat.shader = preload("res://shaders/stage.gdshader") if stage else preload("res://shaders/floor.gdshader")
 	floor_mat.set_shader_parameter("arena_r", arena_r + 0.35)
 	floor_mat.set_shader_parameter("melee_center", Vector2(boss_pos.x, boss_pos.z))
 	floor_mat.set_shader_parameter("melee_r", MELEE_RANGE)
-	Fx.inst(self, Fx.disc(arena_r + 0.7, 0.5), floor_mat, Vector3(0, -0.25, 0))
+	Fx.inst(self, Fx.disc(arena_r + (2.4 if stage else 0.7), 0.5), floor_mat, Vector3(0, -0.25, 0))
 
-	# colunas de luz no fundo, só pra dar profundidade
-	for i in 9:
+	if stage:
+		_build_stage(env, rim)
+	# colunas de luz no fundo, só pra dar profundidade (o palco tem o cenário dele)
+	for i in (0 if stage else 9):
 		var a := lerpf(-1.25, 1.25, i / 8.0)
 		var p := Vector3(sin(a) * 26.0, 7.0, -cos(a) * 26.0 - 2.0)
 		var col := Color(0.55, 0.25, 1.0) if i % 2 == 0 else Color(0.25, 0.5, 1.0)
@@ -1062,6 +1234,91 @@ func _build_world() -> void:
 	side_label = Fx.label(side_mark, "", Vector3(0, 2.5, 0), 40)
 	side_label.modulate = SIDE_COL
 	side_mark.visible = false
+
+
+## Palco da MEL-CHAN: o chão de favo é do shader (stage.gdshader). Aqui entram o aro listrado em
+## volta, a arquibancada em arco com a plateia de biscoitinhos e bastões de luz, os painéis do fundo
+## e os holofotes. A frente fica aberta: é por onde a câmera olha.
+func _build_stage(env: Environment, rim: OmniLight3D) -> void:
+	stage_env = env
+	_build_hell_fire()
+	env.background_color = Color(0.09, 0.03, 0.12)
+	env.ambient_light_color = Color(0.75, 0.62, 0.78)
+	env.ambient_light_energy = 0.62
+	env.fog_light_color = Color(0.2, 0.07, 0.2)
+	env.fog_density = 0.0012
+	rim.light_color = Color(1.0, 0.75, 0.4)
+	var edge := arena_r + 2.6
+	# aro listrado
+	var seg := 44
+	for n in seg:
+		var a := n * TAU / seg
+		var box := BoxMesh.new()
+		box.size = Vector3(TAU * edge / seg * 1.03, 0.55, 0.55)
+		var col := Color(0.8, 0.6, 0.15) if n % 2 == 0 else Color(0.14, 0.45, 0.58)
+		var piece := Fx.inst(self, box, Fx.mat(col), Vector3(cos(a), 0, sin(a)) * edge + Vector3(0, -0.05, 0))
+		piece.rotation.y = PI / 2.0 - a
+	# arquibancada: três degraus em arco no fundo, cada bloco com três fãs
+	var cookie := Fx.mat(Color(0.86, 0.6, 0.3))
+	var chip := Fx.mat(Color(0.25, 0.13, 0.07))
+	var sticks := [Fx.mat(Color(1.0, 0.45, 0.72), 0.7), Fx.mat(Color(1.0, 0.85, 0.3), 0.7), Fx.mat(Color(0.4, 0.9, 1.0), 0.7)]
+	var blocks := 13
+	for row in 3:
+		var rad := arena_r + 5.4 + row * 2.5
+		var top := 0.7 + row * 1.35
+		# os fãs de cada degrau balançam em dois grupos, fora de fase
+		var crowds: Array = []
+		for g in 2:
+			var crowd := Node3D.new()
+			add_child(crowd)
+			crowds.append(crowd)
+			var tw := crowd.create_tween().set_loops()
+			tw.tween_interval(0.21 * g + 0.07 * row)
+			tw.tween_property(crowd, "position:y", 0.3, 0.21).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_property(crowd, "position:y", 0.0, 0.21).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+			tw.tween_interval(0.42 - 0.21 * g - 0.07 * row + 0.21)
+		for n in blocks:
+			var t := lerpf(-1.5, 1.5, n / float(blocks - 1))
+			var a := -PI / 2.0 + t
+			var out := Vector3(cos(a), 0, sin(a))
+			var arc := 3.0 * rad / blocks
+			var box := BoxMesh.new()
+			box.size = Vector3(arc * 0.96, top + 1.0, 2.4)
+			var col := Color(0.07, 0.3, 0.35) if (n + row) % 2 == 0 else Color(0.2, 0.11, 0.38)
+			var block := Fx.inst(self, box, Fx.mat(col), out * rad + Vector3(0, (top - 1.0) * 0.5, 0))
+			block.rotation.y = PI / 2.0 - a
+			# faixa clara na beirada do degrau
+			var lip := BoxMesh.new()
+			lip.size = Vector3(arc * 0.96, 0.12, 0.3)
+			var lip_node := Fx.inst(self, lip, Fx.mat(Color(0.7, 0.6, 0.55)), out * (rad - 1.1) + Vector3(0, top + 0.02, 0))
+			lip_node.rotation.y = PI / 2.0 - a
+			var side := Vector3(-out.z, 0, out.x)
+			for f in 3:
+				var crowd: Node3D = crowds[(n + f) % 2]
+				var at := out * (rad - 0.2 + (f % 2) * 0.5) + side * ((f - 1) * arc * 0.3) + Vector3(0, top + 0.42, 0)
+				var fan := Fx.inst(crowd, Fx.sphere(0.44), cookie, at)
+				fan.scale = Vector3(1.0, 0.92, 0.7)
+				fan.rotation.y = PI / 2.0 - a
+				Fx.inst(fan, Fx.sphere(0.09), chip, Vector3(-0.15, 0.1, -0.42))
+				Fx.inst(fan, Fx.sphere(0.09), chip, Vector3(0.15, 0.1, -0.42))
+				var stick := Fx.inst(crowd, Fx.capsule(0.07, 0.7), sticks[(n + f + row) % 3], at + side * 0.5 + Vector3(0, 0.5, 0))
+				stick.rotation.z = 0.35 if f % 2 == 0 else -0.35
+	# painéis do fundo, em xadrez, e holofotes
+	var walls := [Color(0.2, 0.07, 0.17), Color(0.24, 0.17, 0.05), Color(0.11, 0.07, 0.22), Color(0.05, 0.15, 0.2)]
+	for n in 11:
+		var a := -PI / 2.0 + lerpf(-1.35, 1.35, n / 10.0)
+		var out := Vector3(cos(a), 0, sin(a))
+		for lvl in 3:
+			var box := BoxMesh.new()
+			box.size = Vector3(6.3, 7.0, 0.5)
+			var panel := Fx.inst(self, box, Fx.mat(walls[(n + lvl) % 4], 0.0, true), out * (arena_r + 17.0) + Vector3(0, 6.5 + lvl * 7.0, 0))
+			panel.rotation.y = PI / 2.0 - a
+	for n in 4:
+		var a := -PI / 2.0 + lerpf(-1.0, 1.0, n / 3.0)
+		var col := Color(1.0, 0.5, 0.8, 0.025) if n % 2 == 0 else Color(1.0, 0.9, 0.4, 0.025)
+		var beam := Fx.inst(self, Fx.cyl(0.2, 1.6, 30.0), Fx.mat(col, 0.0, true), Vector3(cos(a), 0, sin(a)) * (arena_r + 9.0) + Vector3(0, 14.0, 0))
+		beam.rotation.z = lerpf(0.35, -0.35, n / 3.0)
+		beam.rotation.x = 0.3
 
 
 func _build_units() -> void:
@@ -1501,6 +1758,8 @@ func _process(delta: float) -> void:
 	_tick_boss(delta)
 	if roam:
 		_tick_storm(delta)
+	if bee:
+		_tick_bee(delta)
 	_tick_range_ring()
 	_tick_hazards(delta)
 	_tick_stacks(delta)
@@ -1519,6 +1778,7 @@ func _process(delta: float) -> void:
 	_tick_fairy(delta)
 	_tick_zenith(delta)
 	_tick_rain(delta)
+	_tick_valsa_view(delta)
 	if dream_stacks > 0:
 		dream_t -= delta
 		if dream_t <= 0.0:
@@ -1543,6 +1803,10 @@ func _process(delta: float) -> void:
 						hud.toast("ÚLTIMA DANÇA!", 1.4)
 		u.finisher_t = maxf(0.0, u.finisher_t - delta)
 		u.count_t = maxf(0.0, u.count_t - delta)
+		if u.key == "valsa":
+			_tick_valsa(u, delta)
+			if ended:
+				return
 		u.power_t = maxf(0.0, u.power_t - delta)
 		u.ward_t = maxf(0.0, u.ward_t - delta)
 		if u.key == "maga":
@@ -1626,9 +1890,11 @@ func _process(delta: float) -> void:
 	# arco no chão = até onde o personagem controlado alcança o boss
 	var me := units[ctrl]
 	floor_mat.set_shader_parameter("melee_r", me.atk_range)
-	# boss que anda: o arco acompanha ela, e só aparece com ela em foco (clique nela)
+	# o arco acompanha a boss (numa boss que anda, ele anda junto)
 	floor_mat.set_shader_parameter("melee_center", Vector2(boss_pos.x, boss_pos.z))
-	floor_mat.set_shader_parameter("melee_on", 1.0 if me.alive and (not roam or boss_focus) else 0.0)
+	# o arco do alcance não fica na tela o tempo todo: só com a boss em foco (clique nela), e só pra quem
+	# luta de perto. Quem ataca de longe alcança tudo, então não tem o que mostrar.
+	floor_mat.set_shader_parameter("melee_on", 1.0 if me.alive and me.melee and boss_focus else 0.0)
 	floor_mat.set_shader_parameter("melee_in", 1.0 if _in_range(me) else 0.0)
 	_tick_side_mark()
 
@@ -1862,6 +2128,18 @@ func _rot_pick(u: Unit) -> int:
 					return s
 			if _rot_ready(u, u.chain):
 				return u.chain  # Jab, Direto, Gancho, na ordem
+		"valsa":
+			# o baile e o Crescendo quando voltam; pétalas só com alguém machucado; o resto, no compasso
+			for s in [5, 4]:
+				if _rot_ready(u, s):
+					return s
+			if _rot_ready(u, 3):
+				for o in units:
+					if o.alive and _in_dance(u, o) and o.hp / o.max_hp < 0.7:
+						return 3
+			for s in [1, 2, 0]:
+				if _rot_ready(u, s):
+					return s
 		"apothecary":
 			var rot := get_dot("decomp")
 			if (rot.is_empty() or rot["t"] <= VESTIGE_WINDOW) and u.skill_cd[1] <= 0.0:
@@ -1948,6 +2226,8 @@ func _in_range(u: Unit) -> bool:
 func _tick_ai(u: Unit, delta: float) -> void:
 	if roam:
 		_fan_ai(u, delta)
+	if bee:
+		_bee_ai(u, delta)
 	# conjurando (a Cura da IA também tem cast): fica parado até soltar
 	var i := u.idx
 	var caster := u.key == "healer" or u.key == "maga"
@@ -2004,6 +2284,12 @@ func _tick_ai(u: Unit, delta: float) -> void:
 		if storm != null:
 			goal = storm[0]
 			text = storm[1]
+			kind = 1
+	if bee:
+		var honey = _bee_goal(u)
+		if honey != null:
+			goal = honey[0]
+			text = honey[1]
 			kind = 1
 	var in_danger := _danger_at(u.position, u, true, 0.1)
 	if u.dodge_goal != null and not in_danger and (hazards.is_empty() or u.position.distance_to(u.dodge_goal) <= 0.15):
@@ -2118,6 +2404,8 @@ func _tick_ai(u: Unit, delta: float) -> void:
 	if _in_range(u):
 		var rate: float = u.ai_dps
 		_damage_boss(u, rate * delta, false, false)
+		if u.key == "valsa":
+			_ai_waltz(u, delta)
 		if u.key == "nurse":
 			# as estocadas da IA também roubam um fio de vida
 			u.hp = minf(u.max_hp, u.hp + boss_hp * POKE_STEAL * delta)
@@ -2377,6 +2665,15 @@ func use_skill(u: Unit, slot: int, by_ai := false, forced: Unit = null) -> bool:
 			if ht == null:
 				return false
 			u.cast_target = ht
+		"Passo a Dois":
+			# o Par: o escolhido no card; sem escolha, o Par de agora; sem Par, quem mais bate
+			var pt := _duet_pick(u, by_ai)
+			if forced != null and forced != u:
+				pt = forced
+			if pt == null:
+				u.set_action("Sem par", 2)
+				return false
+			u.cast_target = pt
 		"Solução Hemostática":
 			# com 3 Vestígios e a boss em Decomposição, sem aliado escolhido: vai na boss (Contaminação)
 			var ally: Unit = target if target != null else u
@@ -2446,6 +2743,8 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			2: u.glove_anim("hook")
 			3: u.glove_anim("guard")
 			5: u.glove_anim("raise", KNOCKOUT_AIR)
+	if u.key == "valsa" and slot != 1:
+		u.face(boss_pos - u.position)  # no Passo a Dois ela se vira pro Par
 	if sk.get("big", false) and u.controlled and not by_ai:
 		hud.skill_cut(u, sk["name"])  # habilidade importante, na mão do jogador: destaque de tela
 	if u.key == "sleepwalker":
@@ -2470,6 +2769,8 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 		var gcd: float = COUNT_GCD if u.count_t > 0.0 else sk["cd"]
 		for n in 3:
 			u.skill_cd[n] = gcd
+	if u.key == "valsa" and slot == 0 and u.crescendo_t > 0.0:
+		u.skill_cd[0] = CRESC_GCD  # Crescendo: o compasso acelera
 	match sk["name"]:
 		"Égide":
 			# ergue o escudo: barreira dourada na frente do corpo (unit.gd), 60% menos dano e regeneração
@@ -2604,6 +2905,16 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 			_superstar(u)
 		"Nocaute Final":
 			_knockout_jump(u)
+		"Passo a Dois":
+			_duet(u)
+		"Pirueta":
+			_twirl(u)
+		"Chuva de Pétalas":
+			_petal_rain(u)
+		"Crescendo":
+			_crescendo(u)
+		"Grande Baile":
+			_grand_ball(u)
 		"Passo Rasante":
 			_dash_cut(u, sk["dmg"])
 		"Garras Cruzadas":
@@ -2690,6 +3001,8 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 				_maga_basic_fx(u, slot)
 			elif u.key == "burner":
 				_ember_fx(u)
+			elif u.key == "valsa":
+				pass  # quem anima e desenha o passo é o _waltz_hit, logo abaixo
 			else:
 				_attack_fx(u, big)
 			if sk.has("cast") and sk["cast"] >= LOCKED_CAST and slot != 0:
@@ -2719,6 +3032,9 @@ func _resolve_skill(u: Unit, slot: int, by_ai: bool) -> void:
 					_knock_back(u, 3.0)
 			if u.key == "ringstar":
 				amount = _combo_hit(u, slot, amount)
+				big = amount > 30.0
+			if u.key == "valsa":
+				amount = _waltz_hit(u, amount)
 				big = amount > 30.0
 			if sk["name"] == "Talho Relâmpago":
 				big = false
@@ -4535,6 +4851,8 @@ func glow_slot(u: Unit) -> int:
 		return u.chain
 	if u.key == "maga" and u.pierce_next:
 		return 0
+	if u.key == "valsa" and u.waltz_step == 2:
+		return 0  # o próximo Passo de Valsa é o Giro
 	if u.key == "burner":
 		# a marca está nos últimos instantes: é a hora da Lança Serafim
 		var mk := get_dot("zenite")
@@ -4722,6 +5040,679 @@ func _knockout_land(u: Unit) -> void:
 		_burst(_bp(Vector3(0, 4.5, -11.5)), hot, 8.0)
 
 
+# ---------------------------------------------------------------- Valsa
+
+## Raio da saia: até onde o bônus dela alcança. Cresce com o Embalo.
+func skirt_r(v: Unit) -> float:
+	return SKIRT_R + SKIRT_R_PER * v.embalo
+
+
+## `o` está na dança de `v`? Ela mesma, o Par, quem está dentro da saia; no Grande Baile, a party toda.
+func _in_dance(v: Unit, o: Unit) -> bool:
+	if not v.alive or not o.alive:
+		return false
+	if o == v or o == v.partner or v.ball_t > 0.0:
+		return true
+	return Vector2(o.position.x - v.position.x, o.position.z - v.position.z).length() <= skirt_r(v)
+
+
+## Quanto de dano a mais `o` está dando por causa de uma Valsa (0.16 = +16%). Ela não fortalece a si mesma.
+func valsa_bonus(o: Unit) -> float:
+	var best := 0.0
+	for v in units:
+		if v.key != "valsa" or v == o or not _in_dance(v, o):
+			continue
+		var b: float = SKIRT_BONUS + SKIRT_BONUS_PER * v.embalo
+		if v.crescendo_t > 0.0:
+			b *= CRESC_MULT
+		best = maxf(best, b)
+	return best
+
+
+## Voluta dourada (a espiral da arte dela): abre girando e some. De pé, virada pra câmera, ou deitada no chão.
+func _swirl(at: Vector3, col: Color, size: float, time := 0.5, lying := false) -> void:
+	var m := Fx.flat(Color(col.r * 1.5, col.g * 1.5, col.b * 1.5, 0.95))
+	var mi := Fx.inst(fx_root, Fx.spiral_mesh(), m, at)
+	if lying:
+		mi.rotation.x = -PI / 2.0
+	mi.rotation.z = randf() * TAU
+	mi.scale = Vector3.ONE * size * 0.25
+	var tw := mi.create_tween().set_parallel(true)
+	tw.tween_property(mi, "scale", Vector3.ONE * size, time * 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mi, "rotation:z", mi.rotation.z - TAU * 1.2, time).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, time * 0.45).set_delay(time * 0.55)
+	tw.chain().tween_callback(mi.queue_free)
+
+
+func _petal_mat(gold: float) -> StandardMaterial3D:
+	var col: Color = ROSE_GOLD if randf() < gold else [LILAC.lightened(0.25), Color(1, 1, 1), LILAC][randi() % 3]
+	return Fx.flat(Color(col.r * 1.3, col.g * 1.3, col.b * 1.3, 0.95))
+
+
+## Pétalas: `n` saem de `at` em arco até `spread` de distância, girando, e somem. `gold` = fração dourada.
+func _petals(at: Vector3, n: int, spread: float, up := 1.6, time := 0.8, gold := 0.4) -> void:
+	for k in n:
+		var m := _petal_mat(gold)
+		var mi := Fx.inst(fx_root, Fx.petal_mesh(), m, at)
+		var a := randf() * TAU
+		var far := at + Vector3(cos(a), 0, sin(a)) * randf_range(spread * 0.35, spread)
+		var t := time * randf_range(0.75, 1.15)
+		mi.rotation = Vector3(randf() * TAU, randf() * TAU, 0)
+		mi.scale = Vector3.ONE * randf_range(0.9, 1.7)
+		var tw := mi.create_tween().set_parallel(true)
+		tw.tween_property(mi, "position:x", far.x, t).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(mi, "position:z", far.z, t).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(mi, "position:y", at.y + up * randf_range(0.5, 1.0), t * 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_property(mi, "position:y", maxf(0.06, at.y - 0.9), t * 0.6).set_delay(t * 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_property(mi, "rotation", mi.rotation + Vector3(randf_range(-7.0, 7.0), randf_range(-7.0, 7.0), 0), t)
+		tw.tween_property(m, "albedo_color:a", 0.0, t * 0.3).set_delay(t * 0.7)
+		tw.chain().tween_callback(mi.queue_free)
+
+
+## Uma pétala caindo devagar do alto, balançando, em algum ponto do círculo.
+func _petal_fall(center: Vector3, radius: float, gold := 0.35) -> void:
+	var a := randf() * TAU
+	var d := sqrt(randf()) * radius
+	var p := Vector3(center.x + cos(a) * d, randf_range(3.4, 5.0), center.z + sin(a) * d)
+	var m := _petal_mat(gold)
+	var mi := Fx.inst(fx_root, Fx.petal_mesh(), m, p)
+	mi.scale = Vector3.ONE * randf_range(1.0, 1.8)
+	var t := randf_range(1.0, 1.5)
+	var tw := mi.create_tween().set_parallel(true)
+	tw.tween_property(mi, "position:y", 0.07, t).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.tween_property(mi, "position:x", p.x + randf_range(-0.7, 0.7), t).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(mi, "rotation", Vector3(randf_range(-5.0, 5.0), randf_range(-5.0, 5.0), randf_range(-3.0, 3.0)), t)
+	tw.chain().tween_property(m, "albedo_color:a", 0.0, 0.35)
+	tw.chain().tween_callback(mi.queue_free)
+
+
+## Anel no chão que abre de r0 até r1 e some (a barra da saia passando).
+func _ring_floor(at: Vector3, col: Color, r0: float, r1: float, time := 0.4) -> void:
+	var m := Fx.mat(Color(col.r, col.g, col.b, 0.9), 4.0, true)
+	var ring := Fx.inst(fx_root, Fx.torus(0.93, 1.0), m, Vector3(at.x, 0.09, at.z))
+	ring.scale = Vector3(r0, 0.6, r0)
+	var tw := ring.create_tween().set_parallel(true)
+	tw.tween_property(ring, "scale", Vector3(r1, 0.4, r1), time).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, time * 0.6).set_delay(time * 0.4)
+	tw.chain().tween_callback(ring.queue_free)
+
+
+## Nota de caixinha de música: o compasso da Valsa se ouve. `semis` = semitons acima do Dó.
+func _chime(semis: int, volume_db := -9.0) -> void:
+	if autoplay:
+		return
+	var key := "chime_%d" % semis
+	if not _tones.has(key):
+		var freq := 523.25 * pow(2.0, semis / 12.0)
+		var rate := 22050
+		var count := int(rate * 0.55)
+		var data := PackedByteArray()
+		data.resize(count * 2)
+		for i in count:
+			var t := float(i) / rate
+			var env := exp(-t * 7.5) * minf(1.0, t * 500.0)
+			var v := sin(TAU * freq * t) + 0.32 * sin(TAU * freq * 2.0 * t) + 0.1 * sin(TAU * freq * 3.0 * t) + 0.12 * sin(TAU * freq * 4.2 * t) * exp(-t * 22.0)
+			data.encode_s16(i * 2, int(clampf(v * env * 0.55, -1.0, 1.0) * 26000.0))
+		var wav := AudioStreamWAV.new()
+		wav.format = AudioStreamWAV.FORMAT_16_BITS
+		wav.mix_rate = rate
+		wav.data = data
+		_tones[key] = wav
+	_sfx(_tones[key], volume_db)
+
+
+## Várias notas em sequência (arpejo), uma a cada `gap` segundos.
+func _chimes(notes: Array, gap := 0.08, volume_db := -9.0) -> void:
+	if autoplay:
+		return
+	for n in notes.size():
+		var note: int = notes[n]
+		if n == 0:
+			_chime(note, volume_db)
+		else:
+			get_tree().create_timer(n * gap, false).timeout.connect(_chime.bind(note, volume_db))
+
+
+## "1", "2", "3!" em cima dela: o compasso, pra quem está jogando de Valsa.
+func _count_pop(u: Unit, step: int) -> void:
+	var giro := step == 2
+	var txt: String = ["1", "2", "3!"][step]
+	var dx: float = [-0.75, 0.75, 0.0][step]
+	var l := Fx.label(fx_root, txt, u.position + Vector3(dx, 2.6, 0.0), 78 if giro else 46)
+	l.modulate = ROSE_GOLD if giro else LILAC.lightened(0.45)
+	l.outline_size = 14
+	l.outline_modulate = Color(0.07, 0.08, 0.16)
+	var tw := l.create_tween().set_parallel(true)
+	tw.tween_property(l, "position:y", l.position.y + (1.1 if giro else 0.7), 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "modulate:a", 0.0, 0.25).set_delay(0.3)
+	tw.chain().tween_callback(l.queue_free)
+
+
+## O golpe dela "sai": uma fita dourada da mão até a boss.
+func _ribbon(u: Unit, to: Vector3, big := false) -> void:
+	var m := Fx.mat(Color(1.0, 0.86, 0.45), 7.0, true)
+	var mi := Fx.inst(fx_root, Fx.sphere(0.3 if big else 0.18), m, u.position + Vector3(0, 1.3, 0))
+	var tw := mi.create_tween()
+	tw.tween_property(mi, "position", to, 0.09)
+	tw.tween_callback(mi.queue_free)
+	_beam(u.position + Vector3(0, 0.3, 0), to - Vector3(0, 1.0, 0), Color(1.0, 0.82, 0.4, 0.8 if big else 0.55), 0.22 if big else 0.14)
+
+
+## Onde o golpe dela acerta a boss.
+func _waltz_at() -> Vector3:
+	return _bp(Vector3(randf_range(-1.0, 1.0), randf_range(2.2, 3.8), -11.0))
+
+
+## Ganha Embalo: a rosa nasce na órbita dela e a saia abre mais um pouco.
+func _embalo_add(u: Unit, n: int) -> void:
+	var was := u.embalo
+	u.embalo = mini(EMBALO_MAX, u.embalo + n)
+	u.embalo_t = EMBALO_HOLD
+	for k in range(was, u.embalo):
+		u.rose_pop(k)
+	if u.embalo == EMBALO_MAX and was < EMBALO_MAX:
+		_swirl(u.position + Vector3(0, 2.8, 0), ROSE_GOLD, 1.5, 0.7)
+		_ring_floor(u.position, ROSE_GOLD, 1.0, skirt_r(u), 0.6)
+		if u.controlled:
+			hud.toast("SAIA ABERTA: EMBALO MÁXIMO", 1.2)
+
+
+## Passo de Valsa: o compasso de três tempos. Os dois primeiros são passos; o terceiro é o Giro.
+## Devolve o dano do golpe.
+func _waltz_hit(u: Unit, full: float) -> float:
+	var step := u.waltz_step
+	u.waltz_step = (step + 1) % 3
+	if u.controlled:
+		_count_pop(u, step)
+	var hit := _waltz_at()
+	if step == 2:
+		return _giro(u, hit)
+	_chime(0 if step == 0 else 4)
+	u.waltz_anim("step")
+	_ribbon(u, hit)
+	_swirl(hit, ROSE_GOLD, 0.9, 0.4)
+	_petals(hit, 4, 1.2, 0.8, 0.6, 0.6)
+	_petals(u.position + Vector3(0, 0.5, 0), 3, 1.3, 0.7, 0.6, 0.15)
+	return full
+
+
+## O Giro: ela dá a volta inteira, a saia abre até a borda do bônus, o Embalo sobe e o Par acompanha.
+func _giro(u: Unit, hit: Vector3) -> float:
+	var amount: float = WALTZ_GIRO + WALTZ_GIRO_PER * u.embalo
+	_chimes([7, 12], 0.06)
+	u.waltz_anim("giro", 0.36)
+	var r := skirt_r(u)
+	_ring_floor(u.position, LILAC.lightened(0.3), 0.6, r, 0.45)
+	_ring_floor(u.position, ROSE_GOLD, 0.4, r * 0.7, 0.36)
+	_petals(u.position + Vector3(0, 0.7, 0), 12, r * 0.8, 1.6, 0.9)
+	_ribbon(u, hit, true)
+	_swirl(hit, ROSE_GOLD, 2.0, 0.55)
+	_swirl(hit + Vector3(0.5, 0.4, 0.1), Color(1, 1, 1), 1.1, 0.45)
+	_petals(hit, 10, 2.4, 1.2, 0.8, 0.7)
+	_burst(hit, ROSE_GOLD, 2.2)
+	shake_t = maxf(shake_t, 0.12)
+	shake_amp = maxf(shake_amp, 0.12)
+	_embalo_add(u, 1)
+	_duet_echo(u)
+	return amount
+
+
+## O Par acompanha o Giro (no Grande Baile, a party inteira acompanha).
+func _duet_echo(u: Unit) -> void:
+	var amount: float = DUET_ECHO + DUET_ECHO_PER * u.embalo
+	for o in units:
+		if o != u and o.alive and (o == u.partner or u.ball_t > 0.0):
+			_duet_strike(u, o, amount, false)
+
+
+## Uma voluta sai dela, chega no aliado, e ele acerta a boss junto. O dano é DELE (aparece no DPS dele).
+func _duet_strike(u: Unit, o: Unit, amount: float, big: bool) -> void:
+	var orb := Fx.inst(fx_root, Fx.spiral_mesh(), Fx.flat(Color(1.5, 1.2, 0.45, 0.95)), u.position + Vector3(0, 1.4, 0))
+	orb.scale = Vector3.ONE * 0.45
+	var tw := orb.create_tween()
+	tw.tween_property(orb, "position", o.position + Vector3(0, 1.4, 0), 0.12)
+	tw.parallel().tween_property(orb, "rotation:z", -TAU, 0.12)
+	tw.tween_callback(orb.queue_free)
+	tw.tween_callback(func():
+		if ended or not is_instance_valid(o) or not o.alive:
+			return
+		o.punch()
+		_swirl(o.position + Vector3(0, 2.3, 0), ROSE_GOLD, 1.1 if big else 0.7, 0.4)
+		var hit := _bp(Vector3(randf_range(-1.4, 1.4), randf_range(2.0, 4.2), -11.0))
+		var shot := Fx.inst(fx_root, Fx.sphere(0.36 if big else 0.26), Fx.mat(o.color.lightened(0.45), 7.0, true), o.position + Vector3(0, 1.2, 0))
+		var ts := shot.create_tween()
+		ts.tween_property(shot, "position", hit, 0.1)
+		ts.tween_callback(shot.queue_free)
+		ts.tween_callback(func():
+			_swirl(hit, o.color.lightened(0.5), 1.9 if big else 1.3, 0.45)
+			_petals(hit, 5, 1.6, 0.9, 0.7, 0.8))
+		_damage_boss(o, amount, true, big))
+
+
+## Quem é o Par: o escolhido no card; sem escolha, o Par de agora; sem Par, quem o jogador controla
+## ou, entre os outros, quem mais está batendo.
+func _duet_pick(u: Unit, by_ai: bool) -> Unit:
+	if not by_ai and sel >= 0 and units[sel].alive and units[sel] != u:
+		return units[sel]
+	if u.partner != null and u.partner.alive:
+		return u.partner
+	var best: Unit = null
+	for o in units:
+		if o == u or not o.alive:
+			continue
+		if best == null or (o.controlled and not best.controlled) or (o.controlled == best.controlled and o.dps > best.dps):
+			best = o
+	return best
+
+
+## Cura quem está na dança dela (dentro da saia, o Par, ela mesma).
+func _dance_heal(u: Unit, amount: float, size := 40) -> void:
+	for o in units:
+		if not _in_dance(u, o) or o.hp >= o.max_hp:
+			continue
+		o.hp = minf(o.max_hp, o.hp + amount)
+		u.enmity += amount * HEAL_ENMITY
+		_popup(int(amount), Color(0.75, 1.0, 0.7), size, o.position + Vector3(0, 2.6, 0), "+")
+
+
+## Passo a Dois: ela estende a mão pro Par. Os dois acertam a boss juntos, ele é curado, vira o Par
+## (o fio dourado) e o compasso dela pula direto pro Giro.
+func _duet(u: Unit) -> void:
+	var o: Unit = u.cast_target
+	if o == null or not o.alive or o == u:
+		o = _duet_pick(u, true)
+	if o == null:
+		u.skill_cd[1] = 0.0
+		return
+	var fresh := u.partner != o
+	u.partner = o
+	u.face(o.position - u.position)
+	u.waltz_anim("offer")
+	get_tree().create_timer(0.34, false).timeout.connect(func():
+		if is_instance_valid(u) and u.alive:
+			u.face(boss_pos - u.position))
+	_chimes([4, 9, 12], 0.07)
+	# o fio acende de ponta a ponta
+	_beam(u.position + Vector3(0, 0.25, 0), o.position + Vector3(0, 0.25, 0), Color(1.0, 0.85, 0.4, 0.9), 0.35)
+	_swirl(o.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.5, 0.6, true)
+	_swirl(u.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.5, 0.6, true)
+	_petals(o.position + Vector3(0, 1.0, 0), 8, 1.5)
+	if o.hp < o.max_hp:
+		o.hp = minf(o.max_hp, o.hp + DUET_HEAL)
+		u.enmity += DUET_HEAL * HEAL_ENMITY
+		_popup(int(DUET_HEAL), Color(0.75, 1.0, 0.7), 52, o.position + Vector3(0, 2.6, 0), "+")
+	if _in_range(u):
+		var hit := _waltz_at()
+		_ribbon(u, hit, true)
+		_swirl(hit, ROSE_GOLD, 1.6, 0.5)
+		_damage_boss(u, DUET_DMG, true, true)
+	_duet_strike(u, o, DUET_DMG, true)
+	u.waltz_step = 2  # o próximo Passo de Valsa já é o Giro (o botão brilha)
+	if fresh and u.controlled:
+		hud.toast("PAR DE DANÇA: %s" % o.unit_name.to_upper(), 1.2)
+
+
+## Pirueta: três voltas na ponta do pé. Enquanto gira (TWIRL_TIME), golpe nenhum pega nela (ver hurt:
+## é o BRAVO!). Dá dano se estiver ao alcance, rende Embalo e o Par acompanha, como num Giro.
+func _twirl(u: Unit) -> void:
+	u.twirl_t = TWIRL_TIME
+	u.twirl_hit = false
+	u.waltz_anim("pirueta", TWIRL_TIME)
+	_chimes([7, 9, 12, 16], 0.09)
+	var r := skirt_r(u)
+	var cols := [LILAC.lightened(0.3), ROSE_GOLD, Color(1, 1, 1)]
+	for k in 3:
+		get_tree().create_timer(k * 0.16, false).timeout.connect(func():
+			if is_instance_valid(u) and u.alive:
+				_ring_floor(u.position, cols[k], 0.5, r * (0.6 + k * 0.2), 0.42)
+				_swirl(u.position + Vector3(0, 0.5 + k * 0.9, 0), cols[(k + 1) % 3], 1.5 - k * 0.25, 0.5, true)
+				_petals(u.position + Vector3(0, 0.8 + k * 0.4, 0), 7, r * 0.8, 2.0, 0.9))
+	if _in_range(u):
+		var hit := _waltz_at()
+		_ribbon(u, hit, true)
+		_swirl(hit, ROSE_GOLD, 2.3, 0.6)
+		_swirl(hit, LILAC.lightened(0.4), 1.4, 0.5)
+		_petals(hit, 12, 2.6, 1.3, 0.8, 0.7)
+		_damage_boss(u, TWIRL_DMG, true, true)
+	_embalo_add(u, 1)
+	_duet_echo(u)
+
+
+## BRAVO!: um golpe chegou no meio da Pirueta e passou direto. A plateia joga rosas, o Embalo sobe e
+## a recarga da Pirueta cai. Vale uma vez por Pirueta (os outros golpes do mesmo giro só são desviados).
+func _bravo(u: Unit) -> void:
+	_petals(u.position + Vector3(0, 1.2, 0), 8, 1.6)
+	_swirl(u.position + Vector3(0, 1.3, 0), Color(1, 1, 1), 1.3, 0.35)
+	if u.twirl_hit:
+		return
+	u.twirl_hit = true
+	_embalo_add(u, TWIRL_BRAVO)
+	u.skill_cd[2] *= TWIRL_REFUND
+	_rose_rain(u.position)
+	_chimes([12, 16, 19], 0.06)
+	if u.controlled:
+		hud.toast("BRAVO!", 0.9)
+		hud.flash(ROSE_GOLD, 0.25)
+
+
+## Rosas jogadas da plateia: caem em volta dela e ficam um instante no chão.
+func _rose_rain(at: Vector3) -> void:
+	for k in 7:
+		var a := randf() * TAU
+		var land := Vector3(at.x + cos(a) * randf_range(0.8, 2.4), 0.08, at.z + sin(a) * randf_range(0.8, 2.4))
+		var rose := Fx.rose(fx_root, 0.17)
+		rose.position = land + Vector3(randf_range(-3.0, 3.0), 6.0, 5.0)
+		var t := randf_range(0.35, 0.6)
+		var tw := rose.create_tween()
+		tw.tween_interval(k * 0.05)
+		tw.tween_property(rose, "position", land, t).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(rose, "rotation", Vector3(randf_range(-6.0, 6.0), randf_range(-6.0, 6.0), 0), t)
+		tw.tween_property(rose, "rotation", Vector3.ZERO, 0.08)
+		tw.tween_interval(0.7)
+		tw.tween_property(rose, "scale", Vector3.ONE * 0.01, 0.2)
+		tw.tween_callback(rose.queue_free)
+
+
+## Chuva de Pétalas: ela joga o buquê pro alto, ele estoura e as pétalas caem dentro da saia por
+## PETAL_TIME, curando quem está na dança (a cura por segundo sai em _tick_valsa).
+func _petal_rain(u: Unit) -> void:
+	u.petal_t = PETAL_TIME
+	u.petal_tick = 1.0
+	u.waltz_anim("toss")
+	_chimes([0, 4, 7, 12], 0.07)
+	var top := u.position + Vector3(0, 4.6, 0)
+	var bouquet := Fx.rose(fx_root, 0.3)
+	bouquet.position = u.position + Vector3(0, 2.2, 0)
+	var r := skirt_r(u)
+	var tw := bouquet.create_tween()
+	tw.tween_property(bouquet, "position", top, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(bouquet, "rotation", Vector3(5.0, 3.0, 0), 0.3)
+	tw.tween_callback(bouquet.queue_free)
+	tw.tween_callback(func():
+		_burst(top, ROSE_GOLD, 2.6)
+		_swirl(top, ROSE_GOLD, 1.9, 0.6)
+		_petals(top, 28, r, 1.0, 1.4))
+	_dance_heal(u, PETAL_BURST, 52)
+
+
+## Crescendo: a música sobe. Por CRESC_TIME o bônus da saia dobra, o compasso acelera e o Embalo não cai.
+func _crescendo(u: Unit) -> void:
+	u.crescendo_t = CRESC_TIME
+	u.embalo_t = EMBALO_HOLD
+	u.skill_cd[0] = minf(u.skill_cd[0], 0.2)
+	u.waltz_anim("crescendo")
+	_chimes([0, 4, 7, 12, 16, 19], 0.06)
+	var r := skirt_r(u)
+	_ring_floor(u.position, ROSE_GOLD, 0.5, r, 0.6)
+	_ring_floor(u.position, Color(1, 1, 1), 0.3, r * 0.8, 0.5)
+	for k in 4:
+		get_tree().create_timer(0.1 + k * 0.09, false).timeout.connect(func():
+			if is_instance_valid(u) and u.alive:
+				_swirl(u.position + Vector3(0, 0.6 + k * 0.85, 0), ROSE_GOLD if k % 2 == 0 else Color(1, 1, 1), 2.1 - k * 0.3, 0.6, true))
+	_petals(u.position + Vector3(0, 1.0, 0), 18, r, 2.4, 1.1, 0.8)
+	for o in units:
+		if o != u and _in_dance(u, o):
+			_swirl(o.position + Vector3(0, 2.2, 0), ROSE_GOLD, 1.0, 0.6)
+			_ring_floor(o.position, ROSE_GOLD, 0.3, 1.3, 0.5)
+	if u.controlled:
+		hud.toast("CRESCENDO: BÔNUS DA SAIA EM DOBRO", 1.4)
+		hud.edge_glow(ROSE_GOLD, 0.8, 0.8)
+
+
+## Grande Baile: a arena vira salão por BALL_TIME. A party inteira conta como dentro da saia, o Embalo
+## fica no máximo, todo mundo acompanha os Giros dela, e o baile fecha com o último acorde (_ball_finale).
+func _grand_ball(u: Unit) -> void:
+	u.ball_t = BALL_TIME
+	_embalo_add(u, EMBALO_MAX)
+	u.waltz_anim("ball", 1.2)
+	_ball_build()
+	_chimes([0, 7, 4, 7, 12, 16, 12, 19], 0.11)
+	hud.toast("GRANDE BAILE", 1.6)
+	hud.flash(LILAC.lightened(0.3), 0.3)
+	_ring_floor(u.position, ROSE_GOLD, 0.5, arena_r, 0.9)
+	_ring_floor(u.position, LILAC.lightened(0.3), 0.3, arena_r * 0.8, 0.7)
+	_petals(u.position + Vector3(0, 1.2, 0), 30, 5.0, 3.0, 1.3, 0.6)
+	for o in units:
+		if o.alive:
+			_swirl(o.position + Vector3(0, 0.1, 0), ROSE_GOLD, 1.7, 0.8, true)
+			_swirl(o.position + Vector3(0, 2.4, 0), Color(1, 1, 1), 0.9, 0.6)
+	shake_t = maxf(shake_t, 0.25)
+	shake_amp = maxf(shake_amp, 0.2)
+
+
+## O salão: a roseta da saia do tamanho da arena, o lustre descendo do alto e um foco de luz por herói.
+func _ball_build() -> void:
+	if ball_node != null and is_instance_valid(ball_node):
+		ball_node.queue_free()
+	ball_node = Node3D.new()
+	fx_root.add_child(ball_node)
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(2.0, 2.0)
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/valsa_aura.gdshader")
+	mat.set_shader_parameter("lobes", 16.0)
+	mat.set_shader_parameter("energy", 1.0)
+	mat.set_shader_parameter("gold", 0.35)
+	mat.set_shader_parameter("alpha", 0.0)
+	ball_mat = mat
+	var floor_mi := Fx.inst(ball_node, plane, mat, Vector3(0, 0.03, 0))
+	floor_mi.scale = Vector3(arena_r / 0.93, 1.0, arena_r / 0.93)
+	floor_mi.create_tween().tween_method(func(a: float): mat.set_shader_parameter("alpha", a), 0.0, 0.8, 0.5)
+	ball_lamp = Node3D.new()
+	ball_lamp.position = Vector3(0, 19.0, -2.0)
+	ball_node.add_child(ball_lamp)
+	var gold_m := Fx.mat(ROSE_GOLD, 3.0, true)
+	Fx.inst(ball_lamp, Fx.torus(2.2, 2.45), gold_m)
+	Fx.inst(ball_lamp, Fx.torus(1.0, 1.18), gold_m, Vector3(0, 0.8, 0))
+	Fx.inst(ball_lamp, Fx.cyl(0.07, 0.07, 6.0), gold_m, Vector3(0, 3.8, 0))
+	Fx.inst(ball_lamp, Fx.sphere(0.5), Fx.mat(Color(1.0, 0.95, 0.75), 6.0, true), Vector3(0, -0.5, 0))
+	var candle_m := Fx.mat(Color(1.0, 0.95, 0.7), 8.0, true)
+	var drop_m := Fx.mat(Color(0.85, 0.75, 1.0), 5.0, true)
+	for k in 10:
+		var a := k * TAU / 10.0
+		Fx.inst(ball_lamp, Fx.sphere(0.2), candle_m, Vector3(cos(a) * 2.32, 0.3, sin(a) * 2.32))
+		var drop := Fx.inst(ball_lamp, Fx.sphere(0.11), drop_m, Vector3(cos(a) * 2.32, -0.5, sin(a) * 2.32))
+		drop.scale.y = 1.8
+	ball_lamp.create_tween().tween_property(ball_lamp, "position:y", 10.5, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	ball_spots.clear()
+	for o in units:
+		var cone := Fx.inst(ball_node, Fx.cyl(0.12, 1.25, 9.0), Fx.mat(Color(1.0, 0.92, 0.6, 0.1), 2.0, true), o.position + Vector3(0, 4.5, 0))
+		cone.visible = o.alive
+		ball_spots.append(cone)
+
+
+func _ball_clear() -> void:
+	var node := ball_node
+	var mat := ball_mat
+	ball_node = null
+	ball_spots.clear()
+	if node == null or not is_instance_valid(node):
+		return
+	var tw := node.create_tween()
+	tw.tween_method(func(a: float): mat.set_shader_parameter("alpha", a), 0.8, 0.0, 0.5)
+	tw.parallel().tween_property(node, "scale", Vector3(1.0, 0.01, 1.0), 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(node.queue_free)
+
+
+## O último acorde: ela faz a reverência, a luz de todo mundo corre pra boss e uma rosa enorme desabrocha nela.
+func _ball_finale(u: Unit) -> void:
+	u.waltz_anim("bow", 0.5)
+	_chimes([12, 16, 19, 24], 0.05)
+	var hit := _bp(Vector3(0, 3.6, -11.0))
+	for o in units:
+		if o.alive:
+			_beam(o.position + Vector3(0, 0.4, 0), hit - Vector3(0, 1.0, 0), Color(1.0, 0.86, 0.45, 0.85), 0.5)
+			_ring_floor(o.position, ROSE_GOLD, 0.3, 1.6, 0.5)
+	var bloom := Fx.rose(fx_root, 0.3)
+	bloom.position = hit
+	bloom.rotation.x = PI / 2.0
+	var tb := bloom.create_tween()
+	tb.tween_property(bloom, "scale", Vector3.ONE * 2.6, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tb.parallel().tween_property(bloom, "rotation:z", TAU * 0.5, 0.7)
+	tb.tween_interval(0.25)
+	tb.tween_property(bloom, "scale", Vector3.ONE * 0.01, 0.2)
+	tb.tween_callback(bloom.queue_free)
+	_swirl(hit, ROSE_GOLD, 5.0, 0.9)
+	_swirl(hit, Color(1, 1, 1), 3.0, 0.7)
+	_petals(hit, 44, 5.5, 2.6, 1.4, 0.7)
+	_burst(hit, ROSE_GOLD, 7.0)
+	hud.flash(ROSE_GOLD, 0.3)
+	hud.toast("ÚLTIMO ACORDE", 1.2)
+	shake_t = 0.4
+	shake_amp = 0.45
+	for o in units:
+		if o.alive and o.hp < o.max_hp:
+			o.hp = minf(o.max_hp, o.hp + BALL_END_HEAL)
+			_popup(int(BALL_END_HEAL), Color(0.75, 1.0, 0.7), 56, o.position + Vector3(0, 2.6, 0), "+")
+	_ball_clear()
+	_damage_boss(u, BALL_END_DMG, true, true)
+
+
+## Valsa, a cada frame (só viva): os tempos do kit, a chuva de pétalas e o Embalo, que cai se ela para de girar.
+func _tick_valsa(u: Unit, delta: float) -> void:
+	u.twirl_t = maxf(0.0, u.twirl_t - delta)
+	if u.partner != null and not u.partner.alive:
+		u.partner = null  # o fio se desfaz; o Passo a Dois escolhe outro
+	if u.crescendo_t > 0.0:
+		u.crescendo_t = maxf(0.0, u.crescendo_t - delta)
+		if randf() < delta * 7.0:
+			var a := randf() * TAU
+			var d := randf() * skirt_r(u)
+			_swirl(u.position + Vector3(cos(a) * d, randf_range(0.3, 2.6), sin(a) * d), ROSE_GOLD, randf_range(0.35, 0.7), 0.5)
+	if u.petal_t > 0.0:
+		u.petal_t = maxf(0.0, u.petal_t - delta)
+		if randf() < delta * 16.0:
+			_petal_fall(u.position, skirt_r(u))
+		u.petal_tick -= delta
+		if u.petal_tick <= 0.0:
+			u.petal_tick += 1.0
+			_dance_heal(u, PETAL_HPS, 34)
+	if u.ball_t > 0.0:
+		u.ball_t -= delta
+		u.embalo = EMBALO_MAX
+		u.embalo_t = EMBALO_HOLD
+		if randf() < delta * 14.0:
+			_petal_fall(Vector3.ZERO, arena_r, 0.5)
+		if u.ball_t <= 0.0:
+			u.ball_t = 0.0
+			_ball_finale(u)
+			return
+	elif u.embalo > 0 and u.crescendo_t <= 0.0:
+		u.embalo_t -= delta
+		if u.embalo_t <= 0.0:
+			u.embalo -= 1
+			u.embalo_t = EMBALO_DROP
+
+
+## Valsa na mão da IA sem a carta Rotação: dança sozinha enquanto bate. A cada AI_WALTZ_EVERY ela gira,
+## junta Embalo (até AI_WALTZ_MAX) e o Par (quem o jogador controla, de preferência) acompanha.
+func _ai_waltz(u: Unit, delta: float) -> void:
+	if u.partner == null:
+		u.partner = _duet_pick(u, true)
+	u.ai_waltz += delta
+	if u.ai_waltz < AI_WALTZ_EVERY:
+		return
+	u.ai_waltz = 0.0
+	u.face(boss_pos - u.position)
+	u.waltz_anim("giro", 0.36)
+	var r := skirt_r(u)
+	_ring_floor(u.position, LILAC.lightened(0.3), 0.6, r, 0.45)
+	_petals(u.position + Vector3(0, 0.7, 0), 8, r * 0.8, 1.6, 0.9)
+	_swirl(_waltz_at(), ROSE_GOLD, 1.4, 0.5)
+	if u.embalo < AI_WALTZ_MAX:
+		_embalo_add(u, 1)
+	else:
+		u.embalo_t = EMBALO_HOLD
+	_duet_echo(u)
+
+
+## O que se vê da Valsa no mundo, a cada frame: a roseta da saia no chão (o alcance do bônus), o fio
+## dourado até o Par, a voluta girando sob quem está recebendo o bônus e o salão do Grande Baile.
+func _tick_valsa_view(delta: float) -> void:
+	var any := false
+	var any_ball := false
+	for v in units:
+		if v.key != "valsa":
+			continue
+		any = true
+		var on: bool = v.alive
+		v.aura.visible = on
+		if on:
+			var r := skirt_r(v) / 0.93
+			v.aura.scale = v.aura.scale.lerp(Vector3(r, 1.0, r), minf(1.0, delta * 8.0))
+			v.aura_spin += delta * (0.3 + 0.28 * v.embalo + v.skirt_kick * 6.0 + (1.6 if v.crescendo_t > 0.0 else 0.0))
+			v.aura_mat.set_shader_parameter("spin", v.aura_spin)
+			v.aura_mat.set_shader_parameter("energy", float(v.embalo) / EMBALO_MAX)
+			v.aura_mat.set_shader_parameter("gold", 1.0 if v.crescendo_t > 0.0 else 0.0)
+			v.aura_mat.set_shader_parameter("alpha", 1.0 if v.controlled else 0.75)
+			any_ball = any_ball or v.ball_t > 0.0
+		_thread_view(v, on and v.partner != null and v.partner.alive)
+	if not any:
+		return
+	if valsa_marks.size() < units.size() or not is_instance_valid(valsa_marks[0]):
+		valsa_marks.clear()
+		for i in units.size():
+			var made := Fx.inst(fx_root, Fx.spiral_mesh(), Fx.flat(Color(1.5, 1.2, 0.45, 0.85)))
+			made.rotation.x = -PI / 2.0
+			made.visible = false
+			valsa_marks.append(made)
+	for i in units.size():
+		var o := units[i]
+		var mk: MeshInstance3D = valsa_marks[i]
+		var b := valsa_bonus(o)
+		mk.visible = b > 0.0
+		if mk.visible:
+			mk.position = Vector3(o.position.x, 0.07, o.position.z)
+			mk.rotation.z -= delta * (2.5 + b * 20.0)
+			mk.scale = Vector3.ONE * (0.8 + b * 2.2)
+	if ball_node != null and is_instance_valid(ball_node):
+		if any_ball:
+			ball_mat.set_shader_parameter("spin", Time.get_ticks_msec() * 0.00035)
+			ball_lamp.rotation.y += delta * 0.6
+			for i in mini(ball_spots.size(), units.size()):
+				var cone: MeshInstance3D = ball_spots[i]
+				cone.visible = units[i].alive
+				cone.position = units[i].position + Vector3(0, 4.5, 0)
+		else:
+			_ball_clear()
+
+
+## O fio do Par: contas douradas correndo em espiral dela até ele, e uma rosa girando em cima dele.
+func _thread_view(v: Unit, on: bool) -> void:
+	var th: Dictionary = valsa_threads.get(v.idx, {})
+	if th.is_empty() or not is_instance_valid(th["root"]):
+		if not on:
+			return
+		var made := Node3D.new()
+		fx_root.add_child(made)
+		var made_beads: Array = []
+		var bead_m := Fx.mat(Color(1.0, 0.84, 0.4), 6.0, true)
+		for k in 14:
+			made_beads.append(Fx.inst(made, Fx.sphere(0.07), bead_m))
+		th = {"root": made, "beads": made_beads, "rose": Fx.rose(made, 0.2)}
+		valsa_threads[v.idx] = th
+	var root: Node3D = th["root"]
+	root.visible = on
+	if not on:
+		return
+	var t := Time.get_ticks_msec() * 0.001
+	var a := v.position + Vector3(0, 1.25, 0)
+	var along := v.partner.position - v.position
+	var side := Vector3.RIGHT
+	if along.length() > 0.05:
+		side = Vector3(-along.z, 0, along.x).normalized()
+	var beads: Array = th["beads"]
+	for k in beads.size():
+		var f := fmod(float(k) / beads.size() + t * 0.35, 1.0)
+		var wind := f * TAU * 2.5 - t * 5.0
+		var bead: MeshInstance3D = beads[k]
+		bead.position = a + along * f + Vector3(0, sin(f * PI) * 0.9 + sin(wind) * 0.2, 0) + side * cos(wind) * 0.2
+		bead.scale = Vector3.ONE * (0.6 + sin(f * PI) * 0.9)
+	var rose: Node3D = th["rose"]
+	rose.position = v.partner.position + Vector3(0, 2.75 + sin(t * 3.0) * 0.08, 0)
+	rose.rotation = Vector3(0.5, t * 2.0, 0)
+
+
 # ---------------------------------------------------------------- Apotecário
 
 ## Buffs ativos do herói, pro HUD mostrar ao lado do card dele: [{"icon": Texture2D, "t": segundos}].
@@ -4740,6 +5731,9 @@ func buffs_of(u: Unit) -> Array:
 		[u.frenzy_t, "assassina", 5, false],                                # Frenesi da Fera
 		[maxf(u.power_t, u.ward_t), "maga", 1, false],                      # bala Rainbow (dano / guarda)
 		[u.count_t, "ringstar", 3, false],                                  # Contagem Regressiva
+		[u.petal_t, "valsa", 3, false],                                     # Chuva de Pétalas
+		[u.crescendo_t, "valsa", 4, false],                                 # Crescendo
+		[u.ball_t, "valsa", 5, false],                                      # Grande Baile
 		[u.shield_t if u.shield_hp > 0.0 and u.shield_t < 60.0 else 0.0, "healer", 3, false],  # escudo
 		[maxf(u.mend_t, u.haste_t), "apothecary", 4, false],                # regeneração e pressa da Tanatopraxia
 		[u.near_t, "sleepwalker", 0, true],                                 # Perto do Sonho
@@ -4749,6 +5743,13 @@ func buffs_of(u: Unit) -> Array:
 	for b in list:
 		if float(b[0]) > 0.0:
 			out.append({"icon": SkillInfo.icon(b[1], b[2], b[3]), "t": float(b[0])})
+	# Valsa: o Crescendo e o Grande Baile aparecem também em quem está na dança dela
+	for v in units:
+		if v.key == "valsa" and v != u and _in_dance(v, u):
+			if v.crescendo_t > 0.0:
+				out.append({"icon": SkillInfo.icon("valsa", 4), "t": v.crescendo_t})
+			if v.ball_t > 0.0:
+				out.append({"icon": SkillInfo.icon("valsa", 5), "t": v.ball_t})
 	# Paciente do Apotecário: aparece em quem está sendo cuidado
 	for o in units:
 		if o.key == "apothecary" and o.alive and o.patient == u and o.patient_t > 0.0:
@@ -6116,6 +7117,8 @@ func _beam(from: Vector3, to: Vector3, col: Color, time: float) -> void:
 ## Um perigo no chão: aviso (telegraph) por h.total segundos e depois o golpe.
 ## shape: circle (pos, r) · rect (pos, dir, half_l, half_w) · donut (seguro só dentro de r, no centro)
 func _add_hazard(h: Dictionary) -> void:
+	fight_mechs[h["card"]] = true
+	fight_mechs["safe_cast"] = true
 	h["total"] = h["total"] / haste
 	h["t"] = h["total"]
 	if h["shape"] == "void":
@@ -6280,6 +7283,11 @@ func _tick_hazards(delta: float) -> void:
 				if u == player:
 					player_hit = true
 				hurt(u, h["dmg"], h["why"])
+				if h.get("bee", false):
+					_bee_heart(u)
+		# o jogador estava dentro e saiu na mão: conta pra revelar essa mecânica no painel do boss
+		if h["dmg"] > 0.0 and not autoplay and player.alive and h["inside"].has(player.idx) and not _hit_test(h, player.position, 0.0):
+			Knowledge.solve(h["card"])
 		# quem estava dentro quando o ataque apareceu e saiu a tempo, sem ter a carta: aprendeu um pouco
 		if h["dmg"] > 0.0 and not autoplay:
 			for u in units:
@@ -6936,6 +7944,7 @@ func _damage_boss(u: Unit, amount: float, show: bool, big: bool) -> void:
 		dmg *= 1.25
 	if not get_dot("ferida").is_empty():
 		dmg *= WOUND_MULT  # Ferimento das Garras Cruzadas: vale pra party toda
+	dmg *= 1.0 + valsa_bonus(u)  # dentro da saia da Valsa (ou sendo o Par dela)
 	if not u.controlled and Knowledge.has(u.hero, "dps"):
 		dmg *= AI_ROT_MULT  # IA com a carta Rotação: joga o kit inteiro, com parte do dano do jogador
 	if u.key == "nurse" and u.party_t > 0.0:
@@ -7001,6 +8010,10 @@ func hurt(u: Unit, dmg: float, reason: String) -> void:
 		return
 	if u.immortal_t > 0.0:
 		_burst(u.position, Color(1.0, 0.9, 0.5), 1.4)
+		return
+	if u.twirl_t > 0.0 and dmg > 0.0:
+		# Pirueta: o golpe passa por ela enquanto gira. (Mecânica que mata na hora passa por kill().)
+		_bravo(u)
 		return
 	if u.parry_t > 0.0 and dmg > 0.0 and u.mercy_frenzy:
 		# Misericórdia em Frenesi: o golpe não entra e ela nem perde o corte
@@ -7109,6 +8122,8 @@ func _end(victory: bool) -> void:
 	if ended:
 		return
 	ended = true
+	if bee:
+		_bee_hell_stop()
 	won = victory
 	var rank := -1
 	var prize := {}
@@ -7133,6 +8148,8 @@ func _learn_cards() -> void:
 			for id in Knowledge.deck(u.hero)[kind].duplicate():
 				if id == "" or Knowledge.role(id) != "learn":
 					continue
+				if not fight_mechs.has(id) and not ALWAYS_LEARN.has(id):
+					continue  # a mecânica dessa carta nem apareceu nesta luta
 				if card_fail.has(u.hero) and card_fail[u.hero].has(id):
 					continue
 				Knowledge.add_progress(u.hero, id, Knowledge.LEARN_WIN)
@@ -7186,18 +8203,30 @@ func _next_step() -> void:
 	if s.is_empty():
 		step = (step + 1) % steps.size()
 		s = steps[step].duplicate()
+		if bee:
+			s = _bee_next()
 	for key in ["dur", "volley_at"]:
 		if s.has(key):
 			s[key] = s[key] / haste
 	if roam:
 		_storm_end_phase()
+	if bee:
+		_bee_end_phase()
 	cur_step = s
 	phase = s["t"]
+	for id in PHASE_CARDS.get(phase, []):
+		fight_mechs[id] = true
+	if phase == "stack":
+		fight_mechs["stack" if int(s.get("need", 4)) == 4 else "pair"] = true
+	if finale_state == 1:
+		fight_mechs["final"] = true
 	phase_t = 0.0
 	phase_dur = s["dur"]
 	volley_done = false
 	cast_name = ""
 	boss.casting = false
+	if bee:
+		_bee_start(s)
 	match phase:
 		"circles":
 			_spawn_circles(s["n"])
@@ -7314,6 +8343,10 @@ func _tick_boss(delta: float) -> void:
 			_set_void(false, true)
 		"window":
 			vulnerable = false
+		"leap":
+			# a queda: onda de choque fraca em todo mundo
+			_impact_ring(boss_pos + Vector3(0, 0.2, 0), Color(0.6, 0.95, 1.0), arena_r)
+			_raidwide(LEAP_WAVE, "onda de choque do salto")
 		"zones": _resolve_zones()
 		"cata": _resolve_cataclysm()
 		"burn":
@@ -7335,7 +8368,15 @@ func _storm_pick() -> Unit:
 func _storm_leap(dur: float) -> void:
 	cast_name = "Salto Trovejante"
 	boss.casting = true
-	storm_target = _storm_pick()
+	# o salto vai em quem NÃO está com a atenção dele: o tank não é o único que tem o que fazer
+	var top := _aggro_target()
+	storm_target = null
+	for u in _alive_shuffled():
+		if u != top:
+			storm_target = u
+			break
+	if storm_target == null:
+		storm_target = top
 	leap_from = boss_pos
 	leap_to = boss_pos
 	if storm_target != null:
@@ -7356,9 +8397,16 @@ func _storm_chase() -> void:
 func _storm_orbs() -> void:
 	cast_name = "Enxame de Faíscas"
 	boss.casting = true
-	orb_wave_t = 0.5
+	orb_wave_t = 0.9
 	orb_spin = randf() * TAU
 	orb_reds = 0
+	orb_hit = {}
+	if eye_ring == null:
+		eye_ring = Fx.inst(fx_root, Fx.torus(ORB_START - 0.1, ORB_START), Fx.mat(Color(0.5, 1.0, 1.6, 0.9), 0.0, true))
+	eye_ring.visible = true
+	eye_ring.position = Vector3(boss_pos.x, 0.06, boss_pos.z)
+	for u in units:
+		u.remove_meta("eye_plan")
 
 
 func _orb_wave() -> void:
@@ -7369,7 +8417,7 @@ func _orb_wave() -> void:
 			continue  # buraco
 		var a := orb_spin + n * TAU / ORB_COUNT
 		var dir := Vector3(cos(a), 0, sin(a))
-		var node := Fx.inst(fx_root, Fx.sphere(0.3), Fx.mat(Color(0.6, 1.15, 1.7), 0.0, true), boss_pos + dir * 1.4 + Vector3(0, 0.7, 0))
+		var node := Fx.inst(fx_root, Fx.sphere(0.3), Fx.mat(Color(0.6, 1.15, 1.7), 0.0, true), boss_pos + dir * ORB_START + Vector3(0, 0.7, 0))
 		Fx.inst(node, Fx.torus(0.4, 0.5), Fx.mat(Color(DANGER.r * 1.4, DANGER.g, DANGER.b, 0.9), 0.0, true))
 		orbs.append({"node": node, "dir": dir})
 
@@ -7433,6 +8481,16 @@ func fan_eta(u: Unit) -> float:
 
 func _storm_end_phase() -> void:
 	boss.position = boss_pos
+	if eye_ring != null and eye_ring.visible:
+		eye_ring.visible = false
+		# fim das faíscas: quem passou sem tomar nenhuma aprendeu o olho da tempestade
+		if not autoplay:
+			var me := units[ctrl]
+			for u in units:
+				if u.alive and not orb_hit.has(u.hero):
+					Knowledge.learn(u.hero, "eye", LEARN_HAND if u == me else LEARN_EYE)
+					if u == me:
+						Knowledge.solve("eye")
 	if fan_rig != null and is_instance_valid(fan_rig):
 		fan_rig.queue_free()
 	fan_rig = null
@@ -7489,6 +8547,9 @@ func _tick_storm(delta: float) -> void:
 		for u in units:
 			if u.alive and u.invuln <= 0.0 and Vector2(u.position.x - node.position.x, u.position.z - node.position.z).length() <= ORB_R + 0.3:
 				_burst(node.position, Color(0.6, 0.95, 1.0), 1.4)
+				orb_hit[u.hero] = true
+				if not autoplay and not (u == units[ctrl]):
+					Knowledge.learn(u.hero, "eye", LEARN_HIT)
 				hurt(u, ORB_DMG, "tomou uma faísca")
 				node.queue_free()
 				orbs.erase(o)
@@ -7519,7 +8580,7 @@ func _tick_fan(delta: float) -> void:
 	fan_drop_t -= delta
 	if fan_drop_t <= 0.0:
 		fan_drop_t = FAN_DROP
-		_spawn_circles(1)
+		_spawn_circles(4)
 	var player := units[ctrl]
 	for u in units:
 		if not u.alive:
@@ -7549,6 +8610,7 @@ func _tick_fan(delta: float) -> void:
 func _fan_passed(u: Unit, by_hand: bool) -> void:
 	_impact_ring(u.position + Vector3(0, 0.2, 0), Color(0.6, 0.95, 1.0), 1.4)
 	if by_hand:
+		Knowledge.solve("fan")
 		Knowledge.learn(u.hero, "fan", LEARN_HAND)
 		for o in units:
 			if o != u and o.alive:
@@ -7603,6 +8665,19 @@ func _fan_ai(u: Unit, delta: float) -> void:
 
 ## Pra onde a IA vai nas mecânicas do TROVÃO-KUN (null = segue a vida normal).
 func _storm_goal(u: Unit):
+	if phase == "orbs":
+		# olho da tempestade: quem sabe, entra; quem não sabe, fica onde está e tenta desviar das faíscas.
+		# Decide uma vez por fase, pela chance que o conhecimento ("eye") dá.
+		if not u.has_meta("eye_plan"):
+			var k := Knowledge.knowledge(u.hero, "eye") / 100.0
+			u.set_meta("eye_plan", randf() < lerpf(0.15, 0.97, k))
+			if not u.melee:
+				_think(u, "!" if u.get_meta("eye_plan") else "?", Color(1.0, 0.9, 0.3) if u.get_meta("eye_plan") else Color(0.8, 0.85, 1.0))
+		var rel0 := u.position - boss_pos
+		rel0.y = 0.0
+		if u.get_meta("eye_plan") and rel0.length() > ORB_START - 1.0:
+			var inward := rel0.normalized() if rel0.length() > 0.1 else Vector3(1, 0, 0)
+			return [boss_pos + inward * (ORB_START - 1.9), "Entrando no olho"]
 	# faísca vindo na direção dele: dá um passo pro lado, pro buraco mais perto
 	for o in orbs:
 		var rel: Vector3 = u.position - o["node"].position
@@ -7626,6 +8701,846 @@ func _storm_goal(u: Unit):
 		var p := u.position + side * 2.0
 		var flat := Vector2(p.x, p.z).limit_length(arena_r - 0.6)
 		return [Vector3(flat.x, 0, flat.y), "Fugindo do raio"]
+	return null
+
+
+# ---------------------------------------------------------------- MEL-CHAN (boss de desvio)
+
+func _bee_act_now() -> int:
+	var ratio := boss_hp / boss_max
+	return 1 if ratio > BEE_ACT_AT[0] else (2 if ratio > BEE_ACT_AT[1] else 3)
+
+
+## O próximo passo dela. Folga e golpe se alternam; cruzar 66% ou 33% da vida chama o Finale.
+## No 1º ato a primeira volta do saco sai em ordem fixa (cada golpe aparece sozinho, pra ser lido);
+## depois disso o saco é embaralhado e nunca repete o golpe que acabou de sair.
+func _bee_next() -> Dictionary:
+	if _bee_act_now() > bee_act:
+		bee_act += 1
+		bee_bag.clear()
+		bee_n = 0
+		return {"t": "bee_finale", "dur": 3.4}
+	if not bee_hell_done and (boss_hp / boss_max <= HELL_AT_HP or fight_time >= HELL_AT_TIME):
+		bee_hell_done = true
+		bee_n = 0
+		return {"t": "bee_hell", "dur": _hb(HELL_BARS, 1.0)}
+	bee_n += 1
+	if bee_n % 2 == 1:
+		return {"t": "bee_idle", "dur": 2.5 if bee_n == 1 else float(BEE_REST[bee_act - 1])}
+	if bee_bag.is_empty():
+		bee_bag = (BEE_POOL[bee_act - 1] as Array).duplicate()
+		if bee_first:
+			bee_first = false
+		else:
+			bee_bag.shuffle()
+			if bee_bag.size() > 1 and bee_bag[0] == bee_last:
+				bee_bag.append(bee_bag.pop_front())
+	bee_last = bee_bag.pop_front()
+	return {"t": "bee_" + bee_last, "dur": float(BEE_DUR[bee_last][bee_act - 1])}
+
+
+func _bee_flat(v: Vector3) -> Vector3:
+	return Vector3(v.x, 0, v.z)
+
+
+## Direção (no chão) daqui da boss até um herói. Colado nela, sai uma direção qualquer.
+func _bee_dir_to(u: Unit) -> Vector3:
+	var d := Vector3.ZERO
+	if u != null:
+		d = _bee_flat(u.position - boss_pos)
+	if d.length() < 0.3:
+		var a := randf() * TAU
+		return Vector3(cos(a), 0, sin(a))
+	return d.normalized()
+
+
+func _bee_event(at: float, fn: Callable) -> void:
+	bee_events.append([at, fn])
+	bee_events.sort_custom(func(x, y): return float(x[0]) < float(y[0]))
+
+
+## Dica de primeira vez (uma por luta e por golpe): o que fazer, em duas palavras.
+func _bee_tip(id: String, text: String) -> void:
+	if bee_tips.has(id):
+		return
+	bee_tips[id] = true
+	hud.toast(text, 1.8)
+
+
+func _bee_start(s: Dictionary) -> void:
+	bee_events.clear()
+	var a := bee_act - 1
+	# os padrões densos miram em quem o jogador controla; o alvo trava aqui, no começo do golpe
+	bee_focus = units[ctrl] if units[ctrl].alive else _aggro_target()
+	match s["t"]:
+		"bee_idle":
+			# a primeira folga de cada ato novo apresenta os corações teleguiados, sozinhos
+			if bee_act >= 2 and bee_n == 1:
+				_bee_homing(2)
+				_bee_tip("homing", "FUJA DOS CORAÇÕES! (o dash estoura)")
+		"bee_finale":
+			cast_name = "Finale" if bee_act == 2 else "Bis!"
+			boss.casting = true
+			boss.rage_t = s["dur"]
+			_bee_clear()
+			hud.shout("2º ATO!" if bee_act == 2 else "ÚLTIMO ATO!")
+			_bee_event(2.8, _bee_finale_hit)
+		"bee_hell":
+			_bee_hell_start()
+		"bee_wave":
+			cast_name = "Onda de Mel"
+			boss.casting = true
+			var d := _bee_card_dir()
+			var sp: float = BEE_WAVE_SPEED[a]
+			match bee_act:
+				1:
+					_bee_wave(d, 0.0, sp)
+				2:
+					# duas, uma de cada lado: no meio elas chegam juntas
+					_bee_wave(d, 0.0, sp)
+					_bee_wave(-d, 0.0, sp)
+				_:
+					# três em ritmo e uma atravessada por cima
+					for k in 3:
+						_bee_wave(d, k * 0.95, sp)
+					_bee_wave(Vector3(-d.z, 0, d.x), 3.15, sp)
+			_bee_tip("wave", "PULE A ONDA DE MEL!")
+		"bee_ring":
+			cast_name = "Batida do Palco"
+			boss.casting = true
+			# sobe (aviso), cai e solta as ondas de choque: uma por ato
+			_bee_lift_to(3.4, 0.6)
+			_add_hazard({"shape": "circle", "pos": boss_pos, "r": 2.1, "total": 0.9, "dmg": 20.0 * bee_power,
+				"card": "dodge", "why": "ficou embaixo da Batida do Palco", "bee": true})
+			_bee_event(0.74, _bee_lift_to.bind(0.0, 0.14))
+			for k in bee_act:
+				_bee_event(0.9 + k * 0.95, _bee_ring.bind(float(BEE_RING_SPEED[a])))
+			_bee_tip("ring", "PULE A ONDA DE CHOQUE!")
+		"bee_sting":
+			cast_name = "Rajada de Ferrões"
+			boss.casting = true
+			_bee_aim(0.85)
+			var gap: float = [0.75, 0.62, 0.55][a]
+			for k in [3, 5, 6][a]:
+				_bee_event(0.9 + k * gap, _bee_volley.bind(k))
+		"bee_spiral":
+			cast_name = "Chuva de Pólen"
+			boss.casting = true
+			bee_spin = randf() * TAU
+			bee_spin_dir = 1.0 if randf() < 0.5 else -1.0
+			bee_spin_flip = bee_act < 3
+			bee_spiral_t = 0.7
+		"bee_dive":
+			cast_name = "Mergulho"
+			boss.casting = true
+			for k in bee_act:
+				_bee_event(k * 1.2, _bee_dive.bind(k))
+		"bee_slash":
+			cast_name = "Corte Ferroado"
+			boss.casting = true
+			# só no primeiro do aggro: é ele quem decide pra onde o corte vai
+			var d := _bee_dir_to(_aggro_target())
+			_bee_slash(d, 1.15)
+			if bee_act >= 2:
+				_bee_event(1.25, _bee_slash.bind(-d, 0.8))
+			if bee_act >= 3:
+				var side := Vector3(-d.z, 0, d.x)
+				_bee_event(2.2, _bee_slash.bind(side, 0.8))
+				_bee_event(2.2, _bee_slash.bind(-side, 0.8))
+	# do 2º ato em diante os corações teleguiados entram por cima dos golpes
+	if s["t"] != "bee_idle" and s["t"] != "bee_finale" and s["t"] != "bee_hell":
+		if bee_act == 3 or (bee_act == 2 and bee_n % 4 == 0):
+			_bee_homing(2)
+
+
+func _bee_end_phase() -> void:
+	if phase == "bee_hell":
+		_bee_hell_stop()
+	bee_events.clear()
+	bee_aim_t = 0.0
+	if bee_aim_node != null:
+		bee_aim_node.visible = false
+	if bee_lift > 0.01 and (bee_lift_tw == null or not bee_lift_tw.is_running()):
+		_bee_lift_to(0.0, 0.14)
+
+
+## Some com tudo que está voando (Finale).
+func _bee_clear() -> void:
+	for list in [bee_waves, bee_rings, bee_shots, bee_homing]:
+		for o in list:
+			_burst(o["node"].global_position, BEE_COL, 0.9)
+			o["node"].queue_free()
+		list.clear()
+
+
+func _bee_finale_hit() -> void:
+	_raidwide(0.2, "Finale da MEL-CHAN")
+	for u in units:
+		if bee_hearts[u.idx] > 0:
+			_burst(u.position + Vector3(0, 2.4, 0), BEE_COL, 1.6)
+		bee_hearts[u.idx] = 0
+
+
+func _bee_lift_to(h: float, time: float) -> void:
+	if bee_lift_tw != null:
+		bee_lift_tw.kill()
+	bee_lift_tw = create_tween()
+	bee_lift_tw.tween_property(self, "bee_lift", h, time).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT if h > 0.0 else Tween.EASE_IN)
+	if h <= 0.0:
+		bee_lift_tw.tween_callback(func():
+			shake_t = 0.35
+			shake_amp = 0.45
+			_burst(boss_pos, BEE_HONEY, 2.6))
+
+
+func _bee_card_dir() -> Vector3:
+	var a := (randi() % 8) * PI / 4.0
+	return Vector3(cos(a), 0, sin(a))
+
+
+## Onda de Mel: uma barra baixa que atravessa a arena inteira. Fica um instante parada na borda
+## (aviso) e depois corre. É rente ao chão: só o pulo passa.
+func _bee_wave(dir: Vector3, delay: float, speed: float) -> void:
+	var box := BoxMesh.new()
+	box.size = Vector3(arena_r * 2.0 + 2.0, 0.55, BEE_WAVE_W * 2.0)
+	var m := Fx.mat(Color(BEE_HONEY.r, BEE_HONEY.g, BEE_HONEY.b, 0.35), 0.0, true)
+	var s0 := -(arena_r + 0.8)
+	var node := Fx.inst(fx_root, box, m, dir * s0 + Vector3(0, 0.28, 0))
+	node.rotation.y = atan2(-dir.x, -dir.z)
+	node.scale = Vector3(1, 0.3, 1)
+	node.visible = delay <= 0.0
+	# setas no chão, na frente da barra: mostram pra que lado ela vai
+	for k in 3:
+		var tip := Fx.inst(node, Fx.cyl(0.0, 0.45, 0.9), Fx.mat(Color(1.0, 0.5, 0.75, 0.85), 0.0, true), Vector3((k - 1) * arena_r * 0.55, 0, -1.3))
+		tip.rotation.x = -PI / 2.0
+		tip.scale = Vector3(1, 1, 0.25)
+	bee_waves.append({"node": node, "mat": m, "dir": dir, "s": s0, "delay": delay, "warn": BEE_WAVE_WARN,
+		"speed": speed, "done": {}, "seen": {}})
+
+
+## Onda de choque: um anel que cresce a partir de onde ela caiu. Também é rente ao chão.
+func _bee_ring(speed: float) -> void:
+	var mesh := Fx.torus(0.2, 0.2 + BEE_RING_W * 2.0)
+	var node := Fx.inst(fx_root, mesh, Fx.mat(Color(BEE_COL.r, BEE_COL.g, BEE_COL.b, 0.95), 0.0, true), boss_pos + Vector3(0, 0.25, 0))
+	node.scale = Vector3(1, 0.55, 1)
+	bee_rings.append({"node": node, "mesh": mesh, "pos": boss_pos, "r": 0.6, "speed": speed, "done": {}, "seen": {}})
+	shake_t = 0.25
+	shake_amp = 0.3
+	_burst(boss_pos, BEE_COL, 2.0)
+
+
+func _bee_shot(from: Vector3, dir: Vector3, speed: float) -> void:
+	var node := Fx.inst(fx_root, Fx.sphere(0.28), Fx.mat(Color(1.25, 0.5, 0.85), 0.0, true), from + dir * 1.2 + Vector3(0, 0.7, 0))
+	Fx.inst(node, Fx.torus(0.36, 0.46), Fx.mat(Color(1.0, 0.95, 0.4, 0.95), 0.0, true))
+	bee_shots.append({"node": node, "dir": dir, "speed": speed})
+
+
+## Linha de mira: um fio fino da boss até o alvo, pelo tempo do aviso.
+func _bee_aim(time: float) -> void:
+	if bee_aim_node == null:
+		var box := BoxMesh.new()
+		box.size = Vector3(0.1, 0.05, 1.0)
+		bee_aim_node = Fx.inst(fx_root, box, Fx.mat(Color(1.0, 0.4, 0.7, 0.8), 0.0, true))
+	bee_aim_t = time
+	bee_aim_node.visible = true
+
+
+## Uma leva de ferrões em leque. Leva par: 5, com um no meio (desvie pro lado). Leva ímpar: 4, com um
+## vão no meio (fique parado). A leva pesada vai em quem o jogador controla; outro herói recebe um só.
+func _bee_volley(k: int) -> void:
+	if bee_focus == null or not bee_focus.alive:
+		bee_focus = _aggro_target()
+	if bee_focus == null:
+		return
+	var a := bee_act - 1
+	var base := _bee_dir_to(bee_focus)
+	var count := 5 if k % 2 == 0 else 4
+	for i in count:
+		var off := (i - (count - 1) * 0.5) * 0.34
+		_bee_shot(boss_pos, base.rotated(Vector3.UP, off), float(BEE_SHOT_SPEED[a]))
+	bee_face = atan2(base.x, base.z)
+	for u in _alive_shuffled():
+		if u != bee_focus:
+			_bee_shot(boss_pos, _bee_dir_to(u), float(BEE_SHOT_SPEED[a]) * 0.7)
+			break
+
+
+## Mergulho: marca uma faixa da boss até o outro lado da arena, passando pelo alvo, e atravessa.
+func _bee_dive(k: int) -> void:
+	var tgt: Unit = bee_focus if k == 0 and bee_focus != null and bee_focus.alive else null
+	if tgt == null:
+		var pool := _alive_shuffled()
+		tgt = pool[0] if not pool.is_empty() else null
+	var dir := _bee_dir_to(tgt)
+	# até onde dá pra ir nessa direção sem sair da arena
+	var lim := arena_r - 1.6
+	var b := boss_pos.dot(dir)
+	var out := -b + sqrt(maxf(0.0, b * b - (boss_pos.length_squared() - lim * lim)))
+	var run := maxf(out, 2.0)
+	var to := boss_pos + dir * run
+	var flat := Vector2(to.x, to.z).limit_length(lim)
+	to = Vector3(flat.x, 0, flat.y)
+	_add_hazard({"shape": "rect", "pos": boss_pos + dir * run * 0.5, "dir": dir, "half_l": run * 0.5 + 0.8, "half_w": 1.25,
+		"total": 0.85, "dmg": float(BEE_DMG["dive"]) * bee_power, "card": "dodge", "why": "ficou no caminho do Mergulho", "bee": true})
+	bee_face = atan2(dir.x, dir.z)
+	var tw := create_tween()
+	tw.tween_interval(0.85)
+	tw.tween_property(self, "boss_pos", to, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+
+## Corte Ferroado: uma faixa larga saindo dela. O primeiro vai em quem está no topo do aggro.
+func _bee_slash(dir: Vector3, total: float) -> void:
+	_add_hazard({"shape": "rect", "pos": boss_pos + dir * 3.7, "dir": dir, "half_l": 3.7, "half_w": 1.8,
+		"total": total, "dmg": float(BEE_DMG["slash"]) * bee_power, "card": "dodge", "why": "ficou no Corte Ferroado", "bee": true})
+	bee_face = atan2(dir.x, dir.z)
+
+
+## Corações teleguiados: nascem na borda, param um instante (aviso) e perseguem devagar. O primeiro
+## sempre vai em quem o jogador controla. Encostar dá coração; passar de dash por dentro estoura.
+func _bee_homing(n: int) -> void:
+	var targets: Array = []
+	if units[ctrl].alive:
+		targets.append(units[ctrl])
+	for u in _alive_shuffled():
+		if not targets.has(u):
+			targets.append(u)
+	for k in mini(n, targets.size()):
+		var tgt: Unit = targets[k]
+		var away := _bee_flat(tgt.position)
+		var a := (atan2(away.z, away.x) if away.length() > 0.5 else randf() * TAU) + PI + randf_range(-0.9, 0.9)
+		var node := Node3D.new()
+		node.position = Vector3(cos(a), 0, sin(a)) * (arena_r - 0.8) + Vector3(0, 0.9, 0)
+		fx_root.add_child(node)
+		var pink := Fx.mat(Color(1.3, 0.35, 0.7), 0.0, true)
+		for sx in [-1.0, 1.0]:
+			Fx.inst(node, Fx.sphere(0.27), pink, Vector3(sx * 0.17, 0.12, 0))
+		Fx.inst(node, Fx.cyl(0.4, 0.0, 0.48), pink, Vector3(0, -0.2, 0))
+		node.scale = Vector3.ONE * 0.2
+		bee_homing.append({"node": node, "unit": tgt, "life": BEE_HOMING_LIFE, "warn": 0.9})
+
+
+## Um golpe da MEL-CHAN pegou: dano, um instante de invulnerabilidade (pra não tomar dois seguidos)
+## e +1 coração.
+func _bee_hit(u: Unit, kind: String, why: String) -> void:
+	if not u.alive or u.immortal_t > 0.0:
+		return
+	# quem a IA controla recebe a versão leve do golpe; o coração conta igual
+	var soft := 1.0 if (u == units[ctrl] and not autoplay) else (BEE_AI_SOFT_HELL if bee_hell else BEE_AI_SOFT)
+	hurt(u, float(BEE_DMG[kind]) * bee_power * soft, why)
+	_bee_heart(u)
+
+
+## +1 coração. No quarto: encantado (parado e intocável), e ela se cura e fica mais forte pra sempre.
+func _bee_heart(u: Unit) -> void:
+	if not bee or not u.alive:
+		return
+	u.invuln = maxf(u.invuln, BEE_IFRAMES)
+	bee_hearts[u.idx] += 1
+	_burst(u.position + Vector3(0, 2.4, 0), BEE_COL, 1.1)
+	if bee_hearts[u.idx] < BEE_HEARTS:
+		return
+	bee_hearts[u.idx] = 0
+	bee_charms += 1
+	# o encanto de quem a IA controla rende bem menos pra ela: quem decide a luta é o jogador
+	var mine: bool = u == units[ctrl] and not autoplay
+	var gain := 1.0 if mine else BEE_AI_CHARM
+	bee_power = minf(BEE_POWER_MAX, bee_power + BEE_POWER_UP * gain)
+	u.lock_t = maxf(u.lock_t, BEE_CHARM)
+	u.invuln = maxf(u.invuln, BEE_CHARM)
+	u.channel_t = 0.0
+	boss_hp = minf(boss_max, boss_hp + boss_max * BEE_HEAL * gain)
+	boss.rage()
+	boss.scale = Vector3.ONE * float(boss_def["scale"]) * (1.0 + 0.05 * mini(bee_charms, 6))
+	if u.controlled:
+		hud.shout("ENCANTADO!")
+	else:
+		hud.toast("%s ficou encantado!" % u.unit_name, 1.6)
+	# anel rosa girando em volta de quem está encantado
+	var m := Fx.mat(Color(BEE_COL.r, BEE_COL.g, BEE_COL.b, 0.9), 0.0, true)
+	var ring := Fx.inst(u, Fx.torus(0.75, 0.9), m, Vector3(0, 1.1, 0))
+	var tw := ring.create_tween()
+	tw.tween_property(ring, "rotation:y", TAU * 3.0, BEE_CHARM)
+	tw.parallel().tween_property(ring, "position:y", 2.0, BEE_CHARM)
+	tw.tween_callback(ring.queue_free)
+
+
+## Os corações em cima da cabeça de cada herói. No terceiro eles piscam: o próximo encanta.
+func _bee_pips() -> void:
+	for u in units:
+		if not bee_pip_nodes.has(u.idx):
+			var arr: Array = []
+			for k in BEE_HEARTS - 1:
+				var pip := Node3D.new()
+				pip.position = Vector3((k - 1) * 0.42, 3.05, 0)
+				u.add_child(pip)
+				var pink := Fx.mat(Color(1.3, 0.35, 0.7), 0.0, true)
+				for sx in [-1.0, 1.0]:
+					Fx.inst(pip, Fx.sphere(0.11), pink, Vector3(sx * 0.07, 0.05, 0))
+				Fx.inst(pip, Fx.cyl(0.165, 0.0, 0.2), pink, Vector3(0, -0.08, 0))
+				arr.append(pip)
+			bee_pip_nodes[u.idx] = arr
+		var n: int = bee_hearts[u.idx] if u.alive else 0
+		var pips: Array = bee_pip_nodes[u.idx]
+		for k in pips.size():
+			pips[k].visible = k < n
+			var pulse := 1.0 + (0.35 * absf(sin(fight_time * 11.0)) if n >= BEE_HEARTS - 1 else 0.0)
+			pips[k].scale = Vector3.ONE * pulse
+
+
+## Encostou num ataque rente ao chão (onda ou anel). No ar: passou. No chão: tomou.
+func _bee_low_touch(u: Unit, o: Dictionary, kind: String, why: String) -> void:
+	if o["done"].has(u.idx):
+		return
+	o["done"][u.idx] = true
+	var by_hand: bool = u == units[ctrl] and not autoplay
+	if u.airborne():
+		_fan_passed(u, by_hand)
+	elif u.invuln <= 0.0:
+		_bee_hit(u, kind, why)
+		if not by_hand:
+			Knowledge.learn(u.hero, "fan", LEARN_HIT)
+
+
+func _tick_bee(delta: float) -> void:
+	var now := _bee_clock()
+	while not bee_events.is_empty() and now >= float(bee_events[0][0]):
+		var ev: Array = bee_events.pop_front()
+		(ev[1] as Callable).call()
+	_tick_hell_fire()
+	match phase:
+		"bee_hell":
+			# parada no meio, girando devagar; o pólen sai em colcheias, no tempo da música
+			bee_face += delta * 1.4
+			if bee_hell_dir != 0.0:
+				bee_spin += bee_hell_dir * 1.05 * delta
+				while now >= bee_hell_next:
+					bee_hell_next += HELL_BEAT * 0.5
+					for n in 4:
+						var sa := bee_spin + n * TAU / 4.0
+						_bee_shot(boss_pos, Vector3(cos(sa), 0, sin(sa)), BEE_SPIRAL_SPEED)
+		"bee_idle":
+			# anda atrás do primeiro do aggro e para no limite do corpo a corpo
+			var top := _aggro_target()
+			if top != null:
+				var to := _bee_flat(top.position - boss_pos)
+				if to.length() > ROAM_MELEE - 0.6:
+					boss_pos += to.normalized() * BEE_CHASE * delta
+				if to.length() > 0.2:
+					bee_face = atan2(to.x, to.z)
+		"bee_spiral":
+			if not bee_spin_flip and phase_t >= phase_dur * 0.5:
+				bee_spin_flip = true
+				bee_spin_dir = -bee_spin_dir
+			bee_spin += bee_spin_dir * 1.15 * delta
+			bee_spiral_t -= delta
+			if bee_spiral_t <= 0.0 and phase_t < phase_dur - 0.8:
+				bee_spiral_t = 0.17
+				var arms: int = [3, 3, 4][bee_act - 1]
+				for n in arms:
+					var a := bee_spin + n * TAU / arms
+					_bee_shot(boss_pos, Vector3(cos(a), 0, sin(a)), BEE_SPIRAL_SPEED)
+	var flat := Vector2(boss_pos.x, boss_pos.z).limit_length(arena_r - 1.4)
+	boss_pos = Vector3(flat.x, 0, flat.y)
+	boss.position = boss_pos + Vector3(0, bee_lift, 0)
+	boss.rotation.y = lerp_angle(boss.rotation.y, bee_face, minf(1.0, delta * 9.0))
+	# linha de mira
+	if bee_aim_t > 0.0 and bee_aim_node != null and bee_focus != null:
+		bee_aim_t -= delta
+		var d := _bee_flat(bee_focus.position - boss_pos)
+		bee_aim_node.position = boss_pos + d * 0.5 + Vector3(0, 0.12, 0)
+		bee_aim_node.rotation.y = atan2(d.x, d.z)
+		bee_aim_node.scale = Vector3(1.0 + sin(fight_time * 30.0) * 0.4, 1, maxf(d.length(), 0.1))
+		bee_aim_node.visible = bee_aim_t > 0.0
+	# ondas de mel
+	for w in bee_waves.duplicate():
+		var node: MeshInstance3D = w["node"]
+		if w["delay"] > 0.0:
+			w["delay"] -= delta
+			node.visible = w["delay"] <= 0.0
+			continue
+		var dir: Vector3 = w["dir"]
+		if w["warn"] > 0.0:
+			w["warn"] -= delta
+			# treme na borda, como quem pega impulso
+			node.position = dir * (float(w["s"]) + sin(fight_time * 26.0) * 0.12) + Vector3(0, 0.28, 0)
+			if w["warn"] <= 0.0:
+				(w["mat"] as StandardMaterial3D).albedo_color = Color(BEE_HONEY.r * 1.2, BEE_HONEY.g * 1.1, BEE_HONEY.b, 0.95)
+				node.create_tween().tween_property(node, "scale:y", 1.0, 0.1)
+			continue
+		w["s"] += float(w["speed"]) * delta
+		node.position = dir * float(w["s"]) + Vector3(0, 0.28, 0)
+		if w["s"] > arena_r + 1.0:
+			node.queue_free()
+			bee_waves.erase(w)
+			continue
+		for u in units:
+			if u.alive and absf(u.position.dot(dir) - float(w["s"])) <= BEE_WAVE_W + 0.2:
+				_bee_low_touch(u, w, "wave", "tomou a Onda de Mel")
+	# ondas de choque
+	for r in bee_rings.duplicate():
+		r["r"] += float(r["speed"]) * delta
+		var rad: float = r["r"]
+		var tm: TorusMesh = r["mesh"]
+		tm.inner_radius = maxf(0.05, rad - BEE_RING_W)
+		tm.outer_radius = rad + BEE_RING_W
+		var c: Vector3 = r["pos"]
+		if rad > arena_r + c.length() + 1.0:
+			r["node"].queue_free()
+			bee_rings.erase(r)
+			continue
+		for u in units:
+			if u.alive and absf(_bee_flat(u.position - c).length() - rad) <= BEE_RING_W + 0.15:
+				_bee_low_touch(u, r, "ring", "tomou a onda de choque")
+	# ferrões e pólen: seguem reto até sair da arena. A área de acerto é menor que o desenho.
+	for o in bee_shots.duplicate():
+		var node: MeshInstance3D = o["node"]
+		node.position += (o["dir"] as Vector3) * float(o["speed"]) * delta
+		node.rotate_y(delta * 7.0)
+		if Vector2(node.position.x, node.position.z).length() > arena_r + 0.5:
+			node.queue_free()
+			bee_shots.erase(o)
+			continue
+		for u in units:
+			if u.alive and u.invuln <= 0.0 and Vector2(u.position.x - node.position.x, u.position.z - node.position.z).length() <= BEE_SHOT_R + 0.14:
+				_burst(node.position, BEE_COL, 1.2)
+				_bee_hit(u, "shot", "tomou um ferrão")
+				node.queue_free()
+				bee_shots.erase(o)
+				break
+	# corações teleguiados
+	for h in bee_homing.duplicate():
+		var node: Node3D = h["node"]
+		node.rotate_y(delta * 3.0)
+		if h["warn"] > 0.0:
+			h["warn"] -= delta
+			node.scale = Vector3.ONE * lerpf(1.0, 0.2, clampf(float(h["warn"]) / 0.9, 0.0, 1.0))
+			continue
+		h["life"] -= delta
+		var tgt: Unit = h["unit"]
+		if tgt == null or not tgt.alive:
+			var pool := _alive_shuffled()
+			tgt = pool[0] if not pool.is_empty() else null
+			h["unit"] = tgt
+		if h["life"] <= 0.0 or tgt == null:
+			_burst(node.position, BEE_COL, 1.0)
+			node.queue_free()
+			bee_homing.erase(h)
+			continue
+		var to := _bee_flat(tgt.position - node.position)
+		if to.length() > 0.05:
+			node.position += to.normalized() * BEE_HOMING_SPEED * (1.0 + 0.12 * (bee_act - 1)) * delta
+		# perto do fim ele pisca: vai estourar sozinho
+		node.visible = h["life"] > 1.2 or fmod(float(h["life"]), 0.2) > 0.08
+		for u in units:
+			if u.alive and _bee_flat(u.position - node.position).length() <= 0.62:
+				if u.invuln > 0.0:
+					_impact_ring(node.position, BEE_COL, 1.6)  # estourou no dash
+				else:
+					_bee_hit(u, "homing", "foi pego por um coração")
+				_burst(node.position, BEE_COL, 1.3)
+				node.queue_free()
+				bee_homing.erase(h)
+				break
+	_bee_pips()
+
+
+# ---------------------------------------------------------------- MEL-CHAN: HELL TIME
+
+## Instante (dentro do passo) de um compasso e tempo da música. Compasso 0 = fim da subida.
+func _hb(bar: int, beat: float) -> float:
+	return HELL_PRE + (bar * 4.0 + beat) * HELL_BEAT
+
+
+## O relógio dos eventos do passo. No HELL TIME é o tempo da MÚSICA, pra os golpes saírem na batida;
+## sem áudio (testes), ou se ela escorregar demais, vale o tempo do passo.
+func _bee_clock() -> float:
+	if phase == "bee_hell" and hell_player != null and hell_player.playing:
+		var mt := hell_player.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()
+		if absf(mt - phase_t) < 0.35:
+			return mt
+	return phase_t
+
+
+## HELL TIME: ela volta pro meio do palco durante a subida da música e fica lá até o fim. O fogo
+## roxo sobe atrás do cenário e os golpes saem em cima da batida (ver _bee_hell_plan).
+func _bee_hell_start() -> void:
+	cast_name = "HELL TIME"
+	boss.casting = true
+	bee_hell = true
+	bee_hell_dir = 0.0
+	hud.shout("HELL TIME!!!")
+	_bee_clear()
+	_bee_lift_to(3.2, HELL_PRE * 0.45)
+	var tw := create_tween()
+	tw.tween_property(self, "boss_pos", Vector3.ZERO, HELL_PRE * 0.8).set_trans(Tween.TRANS_SINE)
+	_hell_fire(true)
+	if not autoplay and ResourceLoader.exists(HELL_MUSIC):
+		if hell_player == null:
+			hell_player = AudioStreamPlayer.new()
+			hell_player.stream = load(HELL_MUSIC)
+			hell_player.bus = &"SFX"
+			add_child(hell_player)
+		hell_player.volume_db = -5.0
+		hell_player.play()
+	_bee_hell_plan()
+
+
+## A partitura do HELL TIME: 32 compassos em quatro seções de 8, iguais às da música.
+##   A (0-7)   Pulso  — onda de choque a cada dois tempos, leques de ferrões no 4º tempo
+##   B (8-15)  Pólen  — quatro braços de pólen girando (inverte no meio), cruzes de corte
+##   C (16-23) Marés  — ondas de mel de um lado e do outro, corações teleguiados
+##   D (24-31) Tudo   — choque + pólen + ferrões, e o palco alternando "pra dentro" e "pra fora"
+func _bee_hell_plan() -> void:
+	var evs: Array = []
+	var ev := func(at: float, fn: Callable): evs.append([at, fn])
+	ev.call(HELL_PRE - 0.3, _bee_lift_to.bind(0.0, 0.3))
+	# A
+	for bar in range(0, 8):
+		ev.call(_hb(bar, 0), _bee_ring.bind(HELL_RING))
+		ev.call(_hb(bar, 2), _bee_ring.bind(HELL_RING))
+		if bar >= 1:
+			ev.call(_hb(bar, 3) - 0.8, _bee_aim.bind(0.8))
+			ev.call(_hb(bar, 3), _bee_volley.bind(bar))
+		if bar >= 4:
+			ev.call(_hb(bar, 1), _bee_volley.bind(bar + 1))
+	# B
+	ev.call(_hb(8, 0), _bee_hell_spiral.bind(1.0))
+	ev.call(_hb(12, 0), _bee_hell_spiral.bind(-1.0))
+	ev.call(_hb(16, 0), _bee_hell_spiral.bind(0.0))
+	for bar in range(8, 16):
+		ev.call(_hb(bar, 0), _bee_ring.bind(HELL_RING))
+		if bar % 2 == 1:
+			# a cruz aparece no começo do compasso e bate no começo do seguinte
+			ev.call(_hb(bar, 0), _bee_cross.bind(0.0 if (bar / 2) % 2 == 0 else PI / 4.0, HELL_BEAT * 4.0))
+	# C
+	for bar in range(16, 24):
+		var axis := Vector3(0, 0, 1) if bar < 20 else Vector3(1, 0, 0)
+		for half in 2:
+			var k := (bar - 16) * 2 + half
+			# a onda começa a correr em cima do tempo
+			ev.call(_hb(bar, half * 2.0) - BEE_WAVE_WARN, _bee_wave.bind(axis * (1.0 if k % 2 == 0 else -1.0), 0.0, HELL_WAVE))
+		if bar % 2 == 0:
+			ev.call(_hb(bar, 3) - 0.8, _bee_aim.bind(0.8))
+			ev.call(_hb(bar, 3), _bee_volley.bind(1))
+	ev.call(_hb(16, 0), _bee_homing.bind(3))
+	ev.call(_hb(20, 0), _bee_homing.bind(3))
+	# D
+	for bar in range(24, 32):
+		ev.call(_hb(bar, 0), _bee_ring.bind(HELL_RING))
+		ev.call(_hb(bar, 2), _bee_ring.bind(HELL_RING))
+		if bar % 2 == 0:
+			ev.call(_hb(bar, 0), _bee_hell_spiral.bind(1.0 if (bar / 2) % 2 == 0 else -1.0))
+			# dentro e fora: a explosão cai dois compassos depois, no tempo forte
+			ev.call(_hb(bar, 0), _bee_inout.bind((bar / 2) % 2 == 0, HELL_BEAT * 8.0))
+		ev.call(_hb(bar, 3) - 0.8, _bee_aim.bind(0.8))
+		ev.call(_hb(bar, 3), _bee_volley.bind(bar))
+	ev.call(_hb(HELL_BARS, 0), _bee_hell_end)
+	evs.sort_custom(func(x, y): return float(x[0]) < float(y[0]))
+	bee_events = evs
+
+
+func _bee_hell_spiral(dir: float) -> void:
+	if bee_hell_dir == 0.0 and dir != 0.0:
+		bee_hell_next = _bee_clock()
+	bee_hell_dir = dir
+
+
+## Quatro faixas saindo do meio, em cruz (ângulo 0) ou em X (45 graus).
+func _bee_cross(angle: float, total: float) -> void:
+	for k in 4:
+		var a := angle + k * PI / 2.0
+		var dir := Vector3(cos(a), 0, sin(a))
+		_add_hazard({"shape": "rect", "pos": dir * (arena_r * 0.5 + 0.2), "dir": dir, "half_l": arena_r * 0.5 + 0.4, "half_w": 1.3,
+			"total": total, "dmg": 30.0 * bee_power, "card": "dodge", "why": "ficou na cruz do HELL TIME", "bee": true})
+
+
+## Pra dentro (a borda explode: cole nela) ou pra fora (o meio explode: vá pra borda).
+func _bee_inout(inward: bool, total: float) -> void:
+	if inward:
+		_add_hazard({"shape": "donut", "pos": Vector3.ZERO, "r": 3.8, "total": total, "dmg": 30.0 * bee_power,
+			"card": "dodge", "why": "ficou na borda do palco no HELL TIME", "bee": true})
+	else:
+		_add_hazard({"shape": "circle", "pos": Vector3.ZERO, "r": 5.4, "total": total, "dmg": 30.0 * bee_power,
+			"card": "dodge", "why": "ficou no meio do palco no HELL TIME", "bee": true})
+
+
+func _bee_hell_end() -> void:
+	bee_hell = false
+	bee_hell_dir = 0.0
+	shake_t = 0.5
+	shake_amp = 0.6
+	_burst(Vector3(0, 1.0, 0), Color(0.8, 0.3, 1.0), arena_r)
+	hud.flash(Color(0.8, 0.4, 1.0, 0.4))
+	_hell_fire(false)
+
+
+## Corta o HELL TIME no meio (a luta acabou, ou o passo foi trocado): apaga o fogo e a música.
+func _bee_hell_stop() -> void:
+	bee_hell = false
+	bee_hell_dir = 0.0
+	_hell_fire(false)
+	if hell_player != null and hell_player.playing:
+		var tw := hell_player.create_tween()
+		tw.tween_property(hell_player, "volume_db", -40.0, 0.7)
+		tw.tween_callback(hell_player.stop)
+
+
+## Uma chama low-poly: três cones de quatro lados, um dentro do outro (do roxo escuro ao rosa), e
+## duas línguas tortas dos lados. `inward` aponta pro meio do palco: as camadas claras ficam na frente.
+func _flame(parent: Node3D, at: Vector3, h: float, w: float, inward: Vector3) -> void:
+	var root := Node3D.new()
+	root.position = at
+	parent.add_child(root)
+	var cols := [Color(0.3, 0.06, 0.55), Color(0.62, 0.12, 0.8), Color(0.95, 0.42, 0.95)]
+	for k in 3:
+		var m := CylinderMesh.new()
+		m.top_radius = 0.0
+		m.bottom_radius = w * (1.0 - k * 0.28)
+		m.height = h * (1.0 - k * 0.25)
+		m.radial_segments = 4
+		m.rings = 1
+		var mi := Fx.inst(root, m, Fx.mat(cols[k], 0.0, true), Vector3(0, m.height * 0.5, 0) + inward * (k * 0.5))
+		mi.rotation.y = randf() * TAU
+	var side := Vector3(-inward.z, 0, inward.x)
+	for s in [-1.0, 1.0]:
+		var m := CylinderMesh.new()
+		m.top_radius = 0.0
+		m.bottom_radius = w * 0.5
+		m.height = h * randf_range(0.45, 0.62)
+		m.radial_segments = 3
+		m.rings = 1
+		var mi := Fx.inst(root, m, Fx.mat(cols[0] if s < 0.0 else cols[1], 0.0, true), side * (s * w * 0.8) + Vector3(0, m.height * 0.5, 0))
+		mi.rotation = Vector3(inward.z, 0, -inward.x) * (s * 0.22)
+	# cada chama estica e encolhe no seu tempo
+	var tw := root.create_tween().set_loops()
+	var d := randf_range(0.26, 0.5)
+	tw.tween_property(root, "scale", Vector3(0.9, 1.16, 0.9), d).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(root, "scale", Vector3(1.08, 0.86, 1.08), d).set_trans(Tween.TRANS_SINE)
+
+
+## O fogo do HELL TIME: uma muralha de chamas atrás da arquibancada e algumas dos lados, mais três
+## luzes roxas. Nasce apagado (hell_glow 0) e só sobe em _hell_fire.
+func _build_hell_fire() -> void:
+	hell_fire = Node3D.new()
+	hell_fire.scale = Vector3(1, 0.001, 1)
+	hell_fire.visible = false
+	add_child(hell_fire)
+	for n in 15:
+		var a := -PI / 2.0 + lerpf(-1.5, 1.5, n / 14.0)
+		var out := Vector3(cos(a), 0, sin(a))
+		_flame(hell_fire, out * (arena_r + 13.6 + randf_range(-0.8, 0.8)) + Vector3(0, 1.5, 0), randf_range(11.0, 18.0), randf_range(2.8, 3.8), -out)
+	for s in [-1.0, 1.0]:
+		for n in 3:
+			var a: float = -PI / 2.0 + s * (1.85 + n * 0.3)
+			var out := Vector3(cos(a), 0, sin(a))
+			_flame(hell_fire, out * (arena_r + 9.5 + n * 1.5), randf_range(6.5, 9.5), randf_range(2.0, 2.8), -out)
+	for p in [Vector3(0, 7, -(arena_r + 8.0)), Vector3(-(arena_r + 7.0), 6, -2), Vector3(arena_r + 7.0, 6, -2)]:
+		var light := OmniLight3D.new()
+		light.position = p
+		light.light_color = Color(0.8, 0.3, 1.0)
+		light.omni_range = 30.0
+		light.light_energy = 0.0
+		add_child(light)
+		hell_lights.append(light)
+
+
+func _hell_fire(on: bool) -> void:
+	if hell_fire == null:
+		return
+	if hell_tw != null:
+		hell_tw.kill()
+	hell_tw = create_tween().set_parallel(true)
+	hell_tw.tween_property(self, "hell_glow", 1.0 if on else 0.0, 1.8 if on else 1.2)
+	if stage_env != null:
+		hell_tw.tween_property(stage_env, "ambient_light_color", Color(0.72, 0.4, 0.95) if on else Color(0.75, 0.62, 0.78), 1.8)
+		hell_tw.tween_property(stage_env, "background_color", Color(0.14, 0.02, 0.2) if on else Color(0.09, 0.03, 0.12), 1.8)
+	floor_mat.set_shader_parameter("rim_col", Color(0.75, 0.3, 1.0) if on else Color(1.0, 0.45, 0.72))
+
+
+## O fogo acompanha a música: cresce um pouco em cada batida, e as luzes piscam junto.
+func _tick_hell_fire() -> void:
+	if hell_fire == null:
+		return
+	hell_fire.visible = hell_glow > 0.002
+	if not hell_fire.visible:
+		for light in hell_lights:
+			light.light_energy = 0.0
+		return
+	var pulse := 0.0
+	if bee_hell:
+		pulse = exp(-fposmod(_bee_clock() - HELL_PRE, HELL_BEAT) / HELL_BEAT * 4.0)
+	hell_fire.scale = Vector3(1, maxf(0.001, hell_glow * (1.0 + 0.13 * pulse)), 1)
+	for i in hell_lights.size():
+		(hell_lights[i] as OmniLight3D).light_energy = hell_glow * (3.0 + 1.8 * pulse + sin(fight_time * 17.0 + i * 2.0) * 0.5)
+
+
+## Quanto falta (em segundos) pro próximo ataque rente ao chão chegar neste herói, e qual é ele.
+func _bee_low_eta(u: Unit) -> Array:
+	var best := INF
+	var which = null
+	for w in bee_waves:
+		var gap: float = u.position.dot(w["dir"]) - float(w["s"])
+		if gap <= 0.0:
+			continue
+		var eta: float = maxf(0.0, w["delay"]) + maxf(0.0, w["warn"]) + gap / float(w["speed"])
+		if eta < best:
+			best = eta
+			which = w
+	for r in bee_rings:
+		var gap: float = _bee_flat(u.position - r["pos"]).length() - float(r["r"])
+		if gap <= 0.0:
+			continue
+		var eta: float = gap / float(r["speed"])
+		if eta < best:
+			best = eta
+			which = r
+	return [best, which]
+
+
+## A IA nas ondas: é o mesmo saber do ventilador de raios (pular na hora). O conhecimento dá a
+## chance de tentar e a precisão do tempo; cada onda é decidida uma vez por herói.
+func _bee_ai(u: Unit, delta: float) -> void:
+	if u.ai_hop_at >= 0.0:
+		u.ai_hop_at -= delta
+		if u.ai_hop_at <= 0.0:
+			u.ai_hop_at = -1.0
+			jump(u)
+	var low := _bee_low_eta(u)
+	if low[1] == null or float(low[0]) > 0.95:
+		return
+	var o: Dictionary = low[1]
+	if o["seen"].has(u.idx):
+		return
+	o["seen"][u.idx] = true
+	var k := Knowledge.knowledge(u.hero, "fan") / 100.0
+	if randf() < lerpf(0.3, 0.97, k):
+		var miss := randfn(0.0, lerpf(0.3, 0.04, k))
+		u.ai_hop_at = maxf(0.0, float(low[0]) - JUMP_AIR * 0.5 + miss)
+		if k < 0.5:
+			_think(u, "!", Color(1.0, 0.9, 0.3))
+	elif randf() < 0.5:
+		_think(u, "?", Color(0.8, 0.85, 1.0))
+
+
+## Pra onde a IA vai nos padrões da MEL-CHAN (null = segue a vida normal).
+func _bee_goal(u: Unit):
+	# coração teleguiado chegando perto: corre dele
+	for h in bee_homing:
+		if h["warn"] <= 0.0 and _bee_flat(u.position - h["node"].position).length() < 2.6:
+			return [_flee_from(u, h["node"].position), "Fugindo do coração"]
+	# ferrão vindo na direção dele: um passo pro lado
+	for o in bee_shots:
+		var rel: Vector3 = _bee_flat(u.position - o["node"].position)
+		var dir: Vector3 = o["dir"]
+		var along := rel.dot(dir)
+		if along < 0.0 or along > float(o["speed"]) * 0.8:
+			continue
+		var side := rel - dir * along
+		if side.length() < BEE_SHOT_R + 0.6:
+			var step := side.normalized() if side.length() > 0.05 else Vector3(-dir.z, 0, dir.x)
+			var p := u.position + step * 1.3
+			var flat := Vector2(p.x, p.z).limit_length(arena_r - 0.6)
+			return [Vector3(flat.x, 0, flat.y), "Desviando do ferrão"]
 	return null
 
 
