@@ -34,6 +34,7 @@ const ROSTER := [
 	["maga", "E08A14", "FFC233"],
 	["healer", "1F8A4C", "3FB86B"],
 	["ringstar", "D9408F", "FF73BE"],
+	["valsa", "7A5FD0", "A98CF5"],
 	["sleepwalker", "5A5FC8", "8A8FF0"],
 	["burner", "D9622A", "FF9A4D"],
 	["apothecary", "2F7A5C", "46A082"],

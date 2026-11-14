@@ -14,7 +14,7 @@ signal back_pressed
 signal cards_pressed(hero: int)
 
 const STAGE := Vector2(1280, 720)
-const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8]
+const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8, 9]
 const DIM := Color("B9BEEA")
 const BONUS := Color("54DE85")
 const BASE_SPEED := 6.5

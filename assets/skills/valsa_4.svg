@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<defs>
+<radialGradient id="valsa_4_bg" cx="0.5" cy="0.3" r="0.8">
+<stop offset="0" stop-color="#B9F0C9"/>
+<stop offset="0.5" stop-color="#3FA078"/>
+<stop offset="1" stop-color="#0E3320"/>
+</radialGradient>
+</defs>
+<rect x="3" y="3" width="122" height="122" rx="16" fill="url(#valsa_4_bg)"/>
+<polygon points="0,-10 6,0 0,8 -6,0" transform="translate(24.0,62.0) rotate(20) scale(1.50)" fill="#E2D6FF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.0"/>
+<polygon points="0,-10 6,0 0,8 -6,0" transform="translate(46.0,86.0) rotate(-25) scale(1.70)" fill="#FFCC40" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="1.8"/>
+<polygon points="0,-10 6,0 0,8 -6,0" transform="translate(70.0,70.0) rotate(40) scale(1.40)" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.1"/>
+<polygon points="0,-10 6,0 0,8 -6,0" transform="translate(96.0,92.0) rotate(-10) scale(1.80)" fill="#E2D6FF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="1.7"/>
+<polygon points="0,-10 6,0 0,8 -6,0" transform="translate(104.0,58.0) rotate(30) scale(1.30)" fill="#FFCC40" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.3"/>
+<polygon points="0,-10 6,0 0,8 -6,0" transform="translate(30.0,104.0) rotate(-40) scale(1.30)" fill="#FFFFFF" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.3"/>
+<polygon points="0,-10 6,0 0,8 -6,0" transform="translate(72.0,108.0) rotate(15) scale(1.20)" fill="#FFE9A0" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5"/>
+<polygon points="86.0,30.0 75.0,49.1 53.0,49.1 42.0,30.0 53.0,10.9 75.0,10.9" fill="#E09A1A" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="4.5"/>
+<polygon points="77.4,37.7 64.1,45.4 50.7,37.7 50.6,22.3 63.9,14.6 77.3,22.3" fill="#FFCC40" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="2.7"/>
+<polygon points="68.0,36.8 60.1,36.9 56.1,30.1 60.0,23.2 67.9,23.1 71.9,29.9" fill="#FFE9A0"/>
+<path d="M44,40 C36,44 34,52 38,58" fill="none" stroke="#7CF29C" stroke-width="5" stroke-linecap="round"/>
+<path d="M84,40 C92,44 94,52 90,58" fill="none" stroke="#7CF29C" stroke-width="5" stroke-linecap="round"/>
+<path d="M100,20 h8 v-8 h8 v8 h8 v8 h-8 v8 h-8 v-8 h-8 z" transform="translate(-10,0) scale(0.9)" fill="#7CF29C" stroke="#121429" stroke-linejoin="round" stroke-linecap="round" stroke-width="3.6"/>
+
+<rect x="3" y="3" width="122" height="122" rx="16" fill="none" stroke="#121429" stroke-width="6"/>
+<rect x="8" y="8" width="112" height="112" rx="12" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.25"/>
+</svg>

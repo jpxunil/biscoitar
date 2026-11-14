@@ -693,7 +693,7 @@ func _tick_bullets(me: Unit) -> void:
 		bullet_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bullet_row.draw.connect(_draw_bullets)
 		fight_ui.add_child(bullet_row)
-	bullet_row.visible = me.alive and me.key in ["maga", "apothecary", "sleepwalker", "nurse"]
+	bullet_row.visible = me.alive and me.key in ["maga", "apothecary", "sleepwalker", "nurse", "valsa"]
 	if bullet_row.visible:
 		bullet_row.queue_redraw()
 
@@ -757,6 +757,48 @@ func _draw_bullets() -> void:
 			# quanto falta pra próxima bala
 			if me.bullets.size() < g.BULLET_MAX:
 				bullet_row.draw_rect(Rect2(60, 66, 300.0 * me.bullet_t / g.BULLET_EVERY, 3), UiStyle.PAPER)
+		"valsa":
+			# o mesmo que a saia mostra no mundo, em números: o compasso (1 · 2 · 3), as rosas do Embalo
+			# e quanto a party está ganhando agora
+			var cresc: bool = me.crescendo_t > 0.0
+			var bonus: float = (g.SKIRT_BONUS + g.SKIRT_BONUS_PER * me.embalo) * (g.CRESC_MULT if cresc else 1.0)
+			bullet_row.draw_rect(Rect2(0, 38, 420, 32), UiStyle.INK)
+			if cresc or me.ball_t > 0.0:
+				var beat := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.012)
+				bullet_row.draw_rect(Rect2(-4, 34, 428, 40), Color(g.ROSE_GOLD.r, g.ROSE_GOLD.g, g.ROSE_GOLD.b, 0.45 + 0.45 * beat), false, 4.0)
+			for n in 3:
+				var c := Vector2(26 + n * 30, 54)
+				var now: bool = n == me.waltz_step
+				var tone: Color = g.ROSE_GOLD if n == 2 else g.LILAC.lightened(0.3)
+				bullet_row.draw_circle(c, 12.0 if now else 9.0, UiStyle.PAPER if now else UiStyle.INK_SOFT)
+				if now:
+					bullet_row.draw_circle(c, 9.5, tone)
+				bullet_row.draw_string(f, c + Vector2(-12, 5), str(n + 1), HORIZONTAL_ALIGNMENT_CENTER, 24, 13, UiStyle.INK if now else UiStyle.PAPER)
+			for n in g.EMBALO_MAX:
+				var c := Vector2(138 + n * 28, 54)
+				if n < me.embalo:
+					bullet_row.draw_circle(c, 11.0, UiStyle.PAPER)
+					bullet_row.draw_circle(c, 8.5, g.ROSE_GOLD)
+					bullet_row.draw_circle(c, 4.0, g.ROSE_GOLD.lightened(0.5))
+				else:
+					bullet_row.draw_circle(c, 7.0, UiStyle.INK_SOFT)
+			bullet_row.draw_string(f, Vector2(270, 59), "PARTY +%d%%" % roundi(bonus * 100.0), HORIZONTAL_ALIGNMENT_RIGHT, 142, 15, g.ROSE_GOLD if (cresc or me.embalo >= g.EMBALO_MAX) else UiStyle.PAPER)
+			# o Embalo vai cair: a linha encolhe
+			if me.embalo > 0 and not cresc and me.ball_t <= 0.0:
+				bullet_row.draw_rect(Rect2(126, 66, 136.0 * clampf(me.embalo_t / g.EMBALO_HOLD, 0.0, 1.0), 3), UiStyle.PAPER)
+			var above := ""
+			var above_col: Color = g.ROSE_GOLD
+			if me.ball_t > 0.0:
+				above = "GRANDE BAILE  %d s" % ceili(me.ball_t)
+			elif cresc:
+				above = "CRESCENDO  %d s" % ceili(me.crescendo_t)
+			elif me.partner != null and me.partner.alive:
+				above = "PAR: %s" % me.partner.unit_name.to_upper()
+			else:
+				above = "SEM PAR: PASSO A DOIS"
+				above_col = UiStyle.PAPER
+			bullet_row.draw_rect(Rect2(90, 12, 240, 22), UiStyle.INK)
+			bullet_row.draw_string(f, Vector2(90, 28), above, HORIZONTAL_ALIGNMENT_CENTER, 240, 13, above_col)
 		"apothecary":
 			bullet_row.draw_rect(Rect2(80, 40, 260, 28), UiStyle.INK)
 			bullet_row.draw_string(f, Vector2(92, 60), "VESTÍGIOS", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, UiStyle.PAPER)

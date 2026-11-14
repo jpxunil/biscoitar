@@ -25,9 +25,9 @@ void fragment() {
 	// renda: uma fileira de furinhos perto da barra e um anel fino no meio
 	float lace = smoothstep(0.55, 0.9, 0.5 + 0.5 * cos(a * lobes * 2.0)) * smoothstep(0.05, 0.0, abs(r - (hem - 0.15)));
 	float ring = smoothstep(0.018, 0.0, abs(r - 0.42)) * inside;
-	float fill = inside * (0.07 + 0.2 * fold + 0.1 * energy * fold);
+	float fill = inside * (0.045 + 0.12 * fold + 0.06 * energy * fold);
 	float k = clamp(gold + edge * (0.25 + 0.75 * energy) + lace * 0.8, 0.0, 1.0);
 	vec3 c = mix(col_a, col_b, k);
-	ALBEDO = c * (1.0 + 0.9 * energy + 0.8 * gold);
+	ALBEDO = c * (1.0 + 0.45 * energy + 0.35 * gold);
 	ALPHA = clamp(fill + edge * 0.9 + lace * 0.7 + ring * (0.35 + 0.5 * energy), 0.0, 1.0) * alpha;
 }

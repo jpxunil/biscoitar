@@ -202,7 +202,7 @@ func _build_sound(page: Control) -> void:
 		_refresh_sound())
 	page.add_child(reset)
 
-	var note := _text("O jogo hoje só toca efeitos sonoros. Música, vozes e sons de interface ganham um controle aqui quando existirem.", 14, DIM)
+	var note := _text("A música toca no HELL TIME da MEL-CHAN. Vozes e sons de interface ganham um controle aqui quando existirem.", 14, DIM)
 	note.position = Vector2(8, y + 76)
 	note.size = Vector2(900, 44)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

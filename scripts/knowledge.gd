@@ -72,9 +72,10 @@ const BOSS_MECHS := [
 	["dodge", "zone", "partner", "shelter", "mitigate"],
 	["dodge", "stack", "spread", "zone", "partner", "shelter", "mitigate"],
 	["dodge", "fan", "eye", "mitigate", "stack"],
-	["dodge", "fan"],
+	["dodge", "honey", "hell"],
 ]
-const KNOW_NAME := {"fan": "Pulo no ventilador de raios", "eye": "Olho da tempestade"}
+const KNOW_NAME := {"fan": "Pulo no ventilador de raios", "eye": "Olho da tempestade",
+	"honey": "Pulo nas ondas de mel", "hell": "Ritmo do HELL TIME"}
 const KINDS := ["purple", "gold", "white", "item"]
 const SLOTS := {"purple": 2, "gold": 3, "white": 4, "item": 1}
 const KIND_NAME := {"purple": "Épica", "gold": "Rara", "white": "Comum", "item": "Item"}

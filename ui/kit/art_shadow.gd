@@ -46,6 +46,7 @@ const COLORS := {
 	"burner": Color("39C8FF"),      # fogo azul
 	"apothecary": Color("9E5CFF"),  # roxo, contra o verde da fumaça
 	"sleepwalker": Color("FFE08A"), # luz de abajur
+	"valsa": Color("FFCC40"),       # o dourado das rosas
 }
 const RAINBOW := ["maga", "ringstar"]
 

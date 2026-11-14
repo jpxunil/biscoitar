@@ -801,6 +801,7 @@ const BEE_SPIRAL_SPEED := 4.6
 const BEE_HOMING_SPEED := 2.9
 const BEE_HOMING_LIFE := 7.0
 const BEE_CHASE := 2.2
+const BEE_JUMP_CD := 0.6       # recarga do pulo nesta luta (o normal é JUMP_CD): sobra 0,2 s por onda
 const BEE_AI_SOFT := 0.6      # dano dos golpes dela em quem a IA controla
 ## HELL TIME: uma vez por luta ela volta pro meio do palco e fica uns 50 s soltando combinações
 ## em cima da batida da música (tools/hell_time_music.py gera o arquivo; os tempos são os mesmos).
@@ -1054,7 +1055,8 @@ func _ready() -> void:
 		if a.begins_with("--know="):
 			# só pra teste: todo mundo já entra sabendo esse tanto (0..100) do ventilador de raios
 			for h in Knowledge.HEROES.size():
-				Knowledge.know[h] = {"fan": float(a.trim_prefix("--know="))}
+				var kv := float(a.trim_prefix("--know="))
+				Knowledge.know[h] = {"fan": kv, "honey": kv, "hell": kv}
 		if a.begins_with("--party="):
 			# só pra teste: os quatro heróis da luta (índices de HEROES), sem tocar no save
 			var picks: Array = []
@@ -1672,7 +1674,8 @@ func jump(u: Unit) -> bool:
 	if not u.alive or u.asleep or u.hop_t > 0.0 or u.hop_cd > 0.0 or u.air_t > 0.0 or u.lock_t > 0.0:
 		return false
 	u.hop_t = JUMP_AIR
-	u.hop_cd = JUMP_CD
+	# na MEL-CHAN o pulo recarrega mais rápido: as ondas do HELL TIME vêm a cada 0,8 s
+	u.hop_cd = BEE_JUMP_CD if bee else JUMP_CD
 	u.hop(JUMP_AIR, JUMP_H)
 	return true
 
@@ -5497,9 +5500,11 @@ func _ball_build() -> void:
 	ball_mat = mat
 	var floor_mi := Fx.inst(ball_node, plane, mat, Vector3(0, 0.03, 0))
 	floor_mi.scale = Vector3(arena_r / 0.93, 1.0, arena_r / 0.93)
-	floor_mi.create_tween().tween_method(func(a: float): mat.set_shader_parameter("alpha", a), 0.0, 0.8, 0.5)
+	# fraco de propósito: os avisos vermelhos da boss precisam continuar mandando no chão
+	floor_mi.create_tween().tween_method(func(a: float): mat.set_shader_parameter("alpha", a), 0.0, 0.4, 0.5)
 	ball_lamp = Node3D.new()
-	ball_lamp.position = Vector3(0, 19.0, -2.0)
+	ball_lamp.position = Vector3(0, 21.0, -1.0)
+	ball_lamp.scale = Vector3.ONE * 0.8
 	ball_node.add_child(ball_lamp)
 	var gold_m := Fx.mat(ROSE_GOLD, 3.0, true)
 	Fx.inst(ball_lamp, Fx.torus(2.2, 2.45), gold_m)
@@ -5513,7 +5518,7 @@ func _ball_build() -> void:
 		Fx.inst(ball_lamp, Fx.sphere(0.2), candle_m, Vector3(cos(a) * 2.32, 0.3, sin(a) * 2.32))
 		var drop := Fx.inst(ball_lamp, Fx.sphere(0.11), drop_m, Vector3(cos(a) * 2.32, -0.5, sin(a) * 2.32))
 		drop.scale.y = 1.8
-	ball_lamp.create_tween().tween_property(ball_lamp, "position:y", 10.5, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	ball_lamp.create_tween().tween_property(ball_lamp, "position:y", 11.6, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	ball_spots.clear()
 	for o in units:
 		var cone := Fx.inst(ball_node, Fx.cyl(0.12, 1.25, 9.0), Fx.mat(Color(1.0, 0.92, 0.6, 0.1), 2.0, true), o.position + Vector3(0, 4.5, 0))
@@ -5529,7 +5534,7 @@ func _ball_clear() -> void:
 	if node == null or not is_instance_valid(node):
 		return
 	var tw := node.create_tween()
-	tw.tween_method(func(a: float): mat.set_shader_parameter("alpha", a), 0.8, 0.0, 0.5)
+	tw.tween_method(func(a: float): mat.set_shader_parameter("alpha", a), 0.4, 0.0, 0.5)
 	tw.parallel().tween_property(node, "scale", Vector3(1.0, 0.01, 1.0), 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(node.queue_free)
 
@@ -5644,7 +5649,7 @@ func _tick_valsa_view(delta: float) -> void:
 			v.aura_mat.set_shader_parameter("spin", v.aura_spin)
 			v.aura_mat.set_shader_parameter("energy", float(v.embalo) / EMBALO_MAX)
 			v.aura_mat.set_shader_parameter("gold", 1.0 if v.crescendo_t > 0.0 else 0.0)
-			v.aura_mat.set_shader_parameter("alpha", 1.0 if v.controlled else 0.75)
+			v.aura_mat.set_shader_parameter("alpha", (1.0 if v.controlled else 0.75) * (0.5 if v.ball_t > 0.0 else 1.0))
 			any_ball = any_ball or v.ball_t > 0.0
 		_thread_view(v, on and v.partner != null and v.partner.alive)
 	if not any:
@@ -9094,11 +9099,32 @@ func _bee_low_touch(u: Unit, o: Dictionary, kind: String, why: String) -> void:
 	o["done"][u.idx] = true
 	var by_hand: bool = u == units[ctrl] and not autoplay
 	if u.airborne():
-		_fan_passed(u, by_hand)
+		_bee_passed(u, by_hand)
 	elif u.invuln <= 0.0:
 		_bee_hit(u, kind, why)
 		if not by_hand:
-			Knowledge.learn(u.hero, "fan", LEARN_HIT)
+			Knowledge.learn(u.hero, _bee_mech(), LEARN_HIT)
+
+
+## O que a IA está aprendendo agora: pular as ondas de mel ("honey") ou, no HELL TIME, pular no
+## ritmo da música ("hell"). São dois saberes separados no painel "o que a party sabe".
+func _bee_mech() -> String:
+	return "hell" if bee_hell else "honey"
+
+
+## Alguém passou por cima de uma onda. Na mão do jogador conta como mecânica resolvida, ensina
+## muito o herói dele e um pouco quem viu; a IA que acerta sozinha repete o que deu certo.
+func _bee_passed(u: Unit, by_hand: bool) -> void:
+	var mech := _bee_mech()
+	_impact_ring(u.position + Vector3(0, 0.2, 0), BEE_HONEY if mech == "honey" else Color(0.8, 0.4, 1.0), 1.4)
+	if by_hand:
+		Knowledge.solve(mech)
+		Knowledge.learn(u.hero, mech, LEARN_HAND)
+		for o in units:
+			if o != u and o.alive:
+				Knowledge.learn(o.hero, mech, LEARN_WATCH)
+	else:
+		Knowledge.learn(u.hero, mech, LEARN_OWN)
 
 
 func _tick_bee(delta: float) -> void:
@@ -9278,7 +9304,7 @@ func _bee_hell_start() -> void:
 		if hell_player == null:
 			hell_player = AudioStreamPlayer.new()
 			hell_player.stream = load(HELL_MUSIC)
-			hell_player.bus = &"SFX"
+			hell_player.bus = &"Music"
 			add_child(hell_player)
 		hell_player.volume_db = -5.0
 		hell_player.play()
@@ -9512,7 +9538,7 @@ func _bee_ai(u: Unit, delta: float) -> void:
 	if o["seen"].has(u.idx):
 		return
 	o["seen"][u.idx] = true
-	var k := Knowledge.knowledge(u.hero, "fan") / 100.0
+	var k := Knowledge.knowledge(u.hero, _bee_mech()) / 100.0
 	if randf() < lerpf(0.3, 0.97, k):
 		var miss := randfn(0.0, lerpf(0.3, 0.04, k))
 		u.ai_hop_at = maxf(0.0, float(low[0]) - JUMP_AIR * 0.5 + miss)

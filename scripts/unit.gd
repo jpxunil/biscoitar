@@ -117,6 +117,15 @@ var ai_waltz := 0.0    # IA sem a carta Rotação: tempo dançando ao alcance da
 ## está aberta A MAIS por causa de um giro (as animações mexem nele); `skirt_open` segue o Embalo.
 var rig: Node3D
 var skirt: Node3D
+## Andar dela é patinar: `glide` (0..1) é o quanto está deslizando agora, `glide_foot` a perna de apoio
+## (a outra estende pra trás) e `glide_swap` quanto falta pra trocar de pé. `pose` inclina o corpo todo.
+var pose: Node3D
+var legs: Array[Node3D] = []
+var leg_k := [0.0, 0.0]
+var glide := 0.0
+var glide_foot := 0
+var glide_swap := 1.2
+var _last_pos := Vector3.ZERO
 var curls: Array[Node3D] = []
 var skirt_kick := 0.0
 var skirt_open := 0.78
@@ -820,14 +829,16 @@ func _hand_home(s: float) -> Vector3:
 ## os cachos voam pra fora quando ela gira, e as rosas do Embalo orbitam a cintura.
 func _tick_skirt(delta: float) -> void:
 	var t := Time.get_ticks_msec() * 0.001
+	_tick_glide(delta, t)
 	skirt_open = lerpf(skirt_open, 0.78 + 0.075 * embalo, minf(1.0, delta * 6.0))
-	var open := skirt_open + skirt_kick * 0.42
+	var open := skirt_open + skirt_kick * 0.42 + glide * 0.2
 	skirt.scale = Vector3(open, 1.0 - (open - 0.78) * 0.4, open)
 	skirt.rotation.y -= delta * (0.5 + 0.35 * embalo + skirt_kick * 16.0)
 	skirt.rotation.x = sin(t * 2.2) * 0.03
 	for n in curls.size():
 		var s := -1.0 if n == 0 else 1.0
 		curls[n].rotation.z = s * (skirt_kick * 0.55 + sin(t * 2.6 + n) * 0.04)
+		curls[n].rotation.x = -0.4 * glide  # deslizando, os cachos ficam pra trás
 	if rose_orbit != null:
 		rose_orbit.visible = alive and embalo > 0
 		rose_orbit.rotation.y += delta * (1.2 + 0.4 * embalo + skirt_kick * 5.0)
@@ -835,6 +846,41 @@ func _tick_skirt(delta: float) -> void:
 			var holder: Node3D = rose_orbit.get_child(n)
 			holder.visible = n < embalo
 			holder.position.y = sin(t * 3.0 + n * 1.3) * 0.12
+
+
+## Ela não anda: desliza, como patinadora. Em movimento o corpo inclina pra frente, os braços abrem
+## (um mais alto que o outro), uma perna estende pra trás e, de tempos em tempos, ela troca o pé de
+## apoio. Parada, volta à pose normal. Um passo de dança em curso tem prioridade sobre os braços.
+func _tick_glide(delta: float, t: float) -> void:
+	var speed := 0.0
+	if delta > 0.0 and alive:
+		speed = Vector2(position.x - _last_pos.x, position.z - _last_pos.z).length() / delta
+	_last_pos = position
+	var busy := _waltz_tw != null and _waltz_tw.is_running()
+	var want := 0.0 if busy else clampf(speed / 3.0, 0.0, 1.0)
+	glide = lerpf(glide, want, minf(1.0, delta * (7.0 if want > glide else 4.0)))
+	if glide > 0.3:
+		glide_swap -= delta
+		if glide_swap <= 0.0:
+			glide_swap = randf_range(1.3, 2.4)
+			glide_foot = 1 - glide_foot
+	var side := -1.0 if glide_foot == 0 else 1.0
+	for n in legs.size():
+		# a perna livre (a que não é a de apoio) estende pra trás e abre um pouco; a de apoio dobra de leve
+		var free: float = glide if n != glide_foot else 0.0
+		leg_k[n] = lerpf(leg_k[n], free, minf(1.0, delta * 9.0))
+		var k: float = leg_k[n]
+		legs[n].rotation.x = -1.3 * k + 0.16 * glide * (1.0 - k)
+		legs[n].rotation.z = (-1.0 if n == 0 else 1.0) * 0.14 * k
+	if pose != null:
+		pose.rotation.x = -0.34 * glide
+		pose.rotation.z = lerpf(pose.rotation.z, side * -0.12 * glide, minf(1.0, delta * 6.0))
+		pose.position.y = sin(t * 4.0) * 0.03 * glide
+	if not busy and hands.size() == 2:
+		var lh := _hand_home(-1.0)
+		var rh := _hand_home(1.0)
+		hands[0].position = lh.lerp(lh + Vector3(-0.9, 0.35 - 0.3 * side, 0.35), glide)
+		hands[1].position = rh.lerp(rh + Vector3(0.9, 0.35 + 0.3 * side, 0.35), glide)
 
 
 ## Uma rosa do Embalo acabou de nascer: ela estoura grande e assenta.

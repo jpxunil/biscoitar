@@ -14,7 +14,7 @@ extends Control
 signal back_pressed
 
 const STAGE := Vector2(1280, 720)
-const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8]
+const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8, 9]
 const DIM := Color("B9BEEA")
 const ROW_H := 82.0
 

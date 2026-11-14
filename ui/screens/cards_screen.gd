@@ -69,9 +69,10 @@ const QUOTES := {
 	"ringstar": "Um, dois... nocaute!",
 	"apothecary": "Remédio ou veneno? Depende da dose.",
 	"sleepwalker": "Zzz... só mais cinco minutinhos.",
+	"valsa": "Um, dois, três... e gira!",
 }
 ## Ordem dos heróis no seletor: as duas tanks ficam lado a lado.
-const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8]
+const ORDER := [0, 4, 1, 2, 3, 5, 6, 7, 8, 9]
 ## Enquadramento da arte. As artes (assets/portraits/<chave>_art.webp) são de corpo inteiro, recortadas
 ## rente à figura, cada uma com uma proporção. A largura na tela sai da proporção do arquivo (ver
 ## _art_frame): figura alta aparece da cabeça até a cintura e o resto fica atrás dos painéis; figura

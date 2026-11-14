@@ -10,6 +10,7 @@ const PATH := "user://settings.cfg"
 const CHANNELS := [
 	{"bus": &"Master", "name": "Volume geral"},
 	{"bus": &"SFX", "name": "Efeitos sonoros"},
+	{"bus": &"Music", "name": "Música"},
 ]
 
 ## bus -> 0..1

@@ -964,6 +964,172 @@ func _initialize() -> void:
 	main.use_skill(u, 5)
 	check(u.air_t > 0.0, "Nocaute Final: salta (o resto está no bloco NOCAUTE FINAL)")
 
+	# ================================================================ VALSA
+	main = await fight(9)
+	u = main.units[main.ctrl]
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0  # a boss fica parada neste passo: o teste é do herói
+	check(u.key == "valsa" and u.unit_name == "Valsa" and u.melee, "Valsa entra na luta (classe nova, suporte corpo a corpo)")
+	kit = main.SKILLS["valsa"]
+	names = []
+	cds = []
+	for sk in kit:
+		names.append(sk["name"])
+		cds.append(sk["cd"])
+	check(names == ["Passo de Valsa", "Passo a Dois", "Pirueta", "Chuva de Pétalas", "Crescendo", "Grande Baile"], "Valsa: as seis da ficha: %s" % [names])
+	check(cds == [1.2, 8.0, 9.0, 18.0, 30.0, 60.0], "Valsa: recargas da ficha: %s" % [cds])
+	check(u.skirt != null and u.hands.size() == 2 and u.curls.size() == 2 and u.aura != null and u.rose_orbit.get_child_count() == main.EMBALO_MAX, "o boneco dela tem a saia, as mãos, os cachos, a roseta no chão e as rosas do Embalo")
+	for n in 6:
+		check(SkillInfo.icon("valsa", n) != null and String(SkillInfo.info("valsa", n)["desc"]) != "", "ícone e ficha do slot %d" % (n + 1))
+	check(main._in_range(u), "começa ao alcance da boss")
+	# o compasso: um, dois, TRÊS
+	before = u.dmg_total
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.dmg_total - before, 16.0) and u.waltz_step == 1 and u.embalo == 0 and main.glow_slot(u) == -1, "primeiro passo: 16 de dano, sem Embalo")
+	ready(u)
+	before = u.dmg_total
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.dmg_total - before, 16.0) and main.glow_slot(u) == 0, "segundo passo: 16, e o botão brilha (o próximo é o Giro)")
+	await frames_of(3)
+	check(main.hud.skill_ui[0]["ui"].glow, "na barra, o Passo de Valsa brilha antes do Giro")
+	ready(u)
+	before = u.dmg_total
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.dmg_total - before, main.WALTZ_GIRO) and u.embalo == 1 and u.waltz_step == 0 and main.glow_slot(u) == -1, "terceiro tempo, o Giro: %d de dano, +1 de Embalo e o compasso recomeça" % main.WALTZ_GIRO)
+	check(is_equal_approx(u.skill_cd[0], 1.2), "o Passo de Valsa recarrega em 1,2 s")
+	for n in 3:
+		ready(u)
+		before = u.dmg_total
+		main.use_skill(u, 0)
+	check(is_equal_approx(u.dmg_total - before, main.WALTZ_GIRO + main.WALTZ_GIRO_PER) and u.embalo == 2, "o Giro seguinte bate mais (%d por ponto de Embalo) e o Embalo vai a 2" % main.WALTZ_GIRO_PER)
+	check(is_equal_approx(main.skirt_r(u), main.SKIRT_R + 2.0 * main.SKIRT_R_PER), "a saia abre com o Embalo: raio %.1f" % main.skirt_r(u))
+	# o bônus é de quem está dentro da saia
+	var v_ally: Unit = main.units[(main.ctrl + 1) % 4]
+	var v_near: Vector3 = u.position + Vector3(1.0, 0, 0)
+	v_ally.position = v_near
+	check(is_equal_approx(main.valsa_bonus(v_ally), main.SKIRT_BONUS + 2.0 * main.SKIRT_BONUS_PER), "aliado dentro da saia: +%d%% de dano com 2 de Embalo" % roundi(main.valsa_bonus(v_ally) * 100.0))
+	check(main.valsa_bonus(u) == 0.0, "ela não fortalece a si mesma")
+	var v_a0: float = v_ally.dmg_total
+	main._damage_boss(v_ally, 100.0, false, false)
+	var v_in: float = v_ally.dmg_total - v_a0
+	v_ally.position = u.position + Vector3(main.skirt_r(u) + 1.0, 0, 0)
+	check(main.valsa_bonus(v_ally) == 0.0, "fora da saia: sem bônus")
+	v_a0 = v_ally.dmg_total
+	main._damage_boss(v_ally, 100.0, false, false)
+	check(is_equal_approx(v_in / (v_ally.dmg_total - v_a0), 1.1), "o mesmo golpe do aliado sai 10% maior dentro da saia")
+	main._tick_valsa_view(0.0)
+	check(u.aura.visible and not main.valsa_marks[v_ally.idx].visible and not main.valsa_marks[u.idx].visible, "no mundo: a roseta dela aparece; quem está fora não tem a voluta nos pés")
+	v_ally.position = v_near
+	main._tick_valsa_view(0.0)
+	check(main.valsa_marks[v_ally.idx].visible, "... e quem está dentro tem")
+	# Passo a Dois
+	v_ally.position = Vector3(0, 0, 6.0)
+	ready(u)
+	before = u.dmg_total
+	v_a0 = v_ally.dmg_total
+	var v_hp: float = v_ally.max_hp - 50.0
+	v_ally.hp = v_hp
+	check(main.use_skill(u, 1, false, v_ally) and u.partner == v_ally, "Passo a Dois: o aliado vira o Par")
+	check(is_equal_approx(u.dmg_total - before, main.DUET_DMG) and main.glow_slot(u) == 0, "ela acerta %d e o próximo Passo de Valsa já é o Giro" % main.DUET_DMG)
+	check(v_ally.hp >= v_hp + main.DUET_HEAL - 0.01, "o Par recupera %d de vida" % main.DUET_HEAL)
+	check(main.valsa_bonus(v_ally) > 0.0, "o Par recebe o bônus da saia de qualquer lugar da arena")
+	await wait(0.4)
+	check(v_ally.dmg_total - v_a0 >= main.DUET_DMG, "e o Par acerta a boss junto (%d a mais no DPS dele)" % int(v_ally.dmg_total - v_a0))
+	check(main.valsa_threads.has(u.idx) and main.valsa_threads[u.idx]["root"].visible, "o fio dourado liga as duas")
+	ready(u)
+	v_a0 = v_ally.dmg_total
+	main.use_skill(u, 0)
+	await wait(0.4)
+	check(u.embalo == 3 and v_ally.dmg_total - v_a0 >= main.DUET_ECHO + main.DUET_ECHO_PER * 3.0, "no Giro, o Par acompanha com um golpe dele")
+	# Pirueta e BRAVO!
+	ready(u)
+	u.shield_hp = 0.0
+	main.use_skill(u, 2)
+	check(u.twirl_t > 0.0 and u.embalo == 4, "Pirueta: gira por %.1f s e rende 1 de Embalo" % main.TWIRL_TIME)
+	var v_hp0: float = u.hp
+	var v_cd: float = u.skill_cd[2]
+	main.hurt(u, 30.0, "teste")
+	check(is_equal_approx(u.hp, v_hp0) and u.embalo == 5 and is_equal_approx(u.skill_cd[2], v_cd * main.TWIRL_REFUND), "BRAVO!: o golpe passa por ela, o Embalo sobe e a recarga cai pela metade")
+	main.hurt(u, 30.0, "teste")
+	check(is_equal_approx(u.hp, v_hp0) and is_equal_approx(u.skill_cd[2], v_cd * main.TWIRL_REFUND), "outro golpe no mesmo giro também passa, mas o BRAVO vale uma vez só")
+	await wait(0.8)
+	main.hurt(u, 10.0, "teste")
+	check(u.hp < v_hp0, "acabou o giro: o golpe entra normalmente")
+	u.position = Vector3(0, 0, 6.0)
+	ready(u)
+	check(not main.use_skill(u, 0) and main.use_skill(u, 2), "de longe o Passo de Valsa não alcança, mas a Pirueta sai (é o desvio dela)")
+	u.position = v_near
+	await wait(0.8)
+	# Chuva de Pétalas
+	ready(u)
+	u.hp = 30.0
+	main.use_skill(u, 3)
+	check(is_equal_approx(u.hp, 30.0 + main.PETAL_BURST) and u.petal_t > 0.0, "Chuva de Pétalas: %d de cura na hora" % main.PETAL_BURST)
+	await wait(1.3)
+	check(u.hp >= 30.0 + main.PETAL_BURST + main.PETAL_HPS - 0.01, "... e %d por segundo enquanto as pétalas caem" % main.PETAL_HPS)
+	# Crescendo
+	ready(u)
+	var v_b0: float = main.valsa_bonus(v_ally)
+	main.use_skill(u, 4)
+	check(u.crescendo_t > 0.0 and is_equal_approx(main.valsa_bonus(v_ally), v_b0 * main.CRESC_MULT), "Crescendo: o bônus da saia dobra (+%d%%)" % roundi(main.valsa_bonus(v_ally) * 100.0))
+	u.position = Vector3(1.3, 0, -5.2)
+	u.skill_cd[0] = 0.0
+	main.use_skill(u, 0)
+	check(is_equal_approx(u.skill_cd[0], main.CRESC_GCD), "... e o compasso acelera: Passo de Valsa em %.1f s" % main.CRESC_GCD)
+	u.embalo = 3
+	u.embalo_t = 0.05
+	await wait(0.3)
+	check(u.embalo == 3, "... e o Embalo não cai durante o Crescendo")
+	u.crescendo_t = 0.0
+	u.embalo_t = 0.05
+	await wait(0.3)
+	check(u.embalo == 2, "parou de girar: o Embalo cai um ponto")
+	# Grande Baile
+	ready(u)
+	u.partner = null
+	v_ally.position = Vector3(0, 0, 6.0)
+	u.position = Vector3(1.3, 0, -5.2)
+	check(main.valsa_bonus(v_ally) == 0.0, "(sem Par e longe: sem bônus)")
+	main.use_skill(u, 5)
+	check(u.ball_t > 0.0 and u.embalo == main.EMBALO_MAX and is_equal_approx(main.valsa_bonus(v_ally), main.SKIRT_BONUS + main.SKIRT_BONUS_PER * main.EMBALO_MAX), "Grande Baile: Embalo no máximo e a party toda conta como dentro da saia, onde estiver")
+	check(main.ball_node != null and main.ball_spots.size() == 4, "a arena vira salão (chão, lustre e um foco por herói)")
+	u.ball_t = 0.05
+	before = u.dmg_total
+	await wait(0.3)
+	check(is_equal_approx(u.dmg_total - before, main.BALL_END_DMG) and main.ball_node == null, "o último acorde: %d de dano, e o salão se desfaz" % main.BALL_END_DMG)
+	# IA sem a carta Rotação: dança sozinha
+	main.set_ctrl((main.ctrl + 1) % 4)
+	u.embalo = 0
+	u.partner = null
+	u.position = Vector3(1.3, 0, -5.2)
+	u.ai_waltz = main.AI_WALTZ_EVERY - 0.05
+	main._ai_waltz(u, 0.1)
+	check(u.embalo == 1 and u.partner != null and u.partner.controlled, "na mão da IA ela gira sozinha, junta Embalo e faz Par com quem o jogador controla")
+	u.die()
+	await frames_of(3)
+	check(not u.aura.visible and u.embalo == 0, "caída: a roseta some e o Embalo zera")
+	# andar é patinar
+	main = await fight(9)
+	u = main.units[main.ctrl]
+	main.phase = "dodgetime"
+	main.phase_dur = 9999.0
+	check(u.legs.size() == 2 and u.pose != null and u.glide < 0.05, "parada, ela fica de pé (duas pernas no chão)")
+	var v_foot: int = u.glide_foot
+	var v_t0: int = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - v_t0 < 700:
+		u.position.x += 3.5 * main.get_process_delta_time()
+		await process_frame
+	check(u.glide > 0.8 and u.legs[1 - u.glide_foot].rotation.x < -0.8 and absf(u.legs[u.glide_foot].rotation.x) < 0.3, "andando ela desliza: a perna livre estende pra trás e a de apoio fica no chão")
+	check(u.pose.rotation.x < -0.2 and u.hands[0].position.x < u._hand_home(-1.0).x - 0.5 and u.hands[1].position.x > u._hand_home(1.0).x + 0.5, "... o corpo inclina e os braços abrem")
+	u.glide_swap = 0.0
+	v_t0 = Time.get_ticks_msec()
+	while Time.get_ticks_msec() - v_t0 < 700:
+		u.position.x -= 3.5 * main.get_process_delta_time()
+		await process_frame
+	check(u.glide_foot != v_foot and u.legs[v_foot].rotation.x < -0.8, "de tempos em tempos ela troca o pé de apoio")
+	await wait(1.2)
+	check(u.glide < 0.1 and absf(u.legs[0].rotation.x) < 0.15 and absf(u.legs[1].rotation.x) < 0.15, "parou: volta à pose normal")
+
 	# ================================================================ APOTECÁRIO
 	main = await fight(7)
 	u = main.units[main.ctrl]
@@ -1409,7 +1575,7 @@ func _initialize() -> void:
 				var info := SkillInfo.info(key, n, mode)
 				if String(info["desc"]).length() < 15 or String(info["name"]) != String(list[n]["name"]) or not SkillInfo.TYPE_COL.has(info["type"]):
 					miss += "ficha:%s " % list[n]["name"]
-	check(miss == "" and seen.size() == 60, "as 60 habilidades (incluindo as do Modo Dormindo) têm ícone próprio e ficha completa %s" % miss)
+	check(miss == "" and seen.size() == 66, "as 66 habilidades (incluindo as do Modo Dormindo) têm ícone próprio e ficha completa %s" % miss)
 	check(SkillInfo.info("sleepwalker", 0, false)["cast"] == main.SW_CAST and SkillInfo.info("sleepwalker", 4, true)["cost"] == "50 de Torpor", "a ficha do Sleepwalker traz conjuração e custo de Torpor")
 	check(String(SkillInfo.info("ringstar", 5)["desc"]).contains(str(int(main.KNOCKOUT_DMG))), "a descrição usa os números do jogo (Nocaute Final: %d)" % main.KNOCKOUT_DMG)
 	var bigs := 0
@@ -1417,7 +1583,7 @@ func _initialize() -> void:
 		for sk in main.SKILLS[h["key"]]:
 			if sk.get("big", false):
 				bigs += 1
-	check(bigs == 8 and main.SKILLS_ASLEEP[4].get("big", false), "cada herói tem uma habilidade de destaque (a do Sleepwalker é A Casa que Engole)")
+	check(bigs == 9 and main.SKILLS_ASLEEP[4].get("big", false), "cada herói tem uma habilidade de destaque (a do Sleepwalker é A Casa que Engole)")
 	# destaque só pro personagem controlado
 	main = await fight(6)
 	u = main.units[main.ctrl]
@@ -2039,6 +2205,9 @@ func _initialize() -> void:
 	Knowledge.passive = {}
 	Knowledge.progress = {}
 	Knowledge.learned_now.clear()
+	# aprendizado: as ondas de mel e o ritmo do HELL TIME são dois saberes, e aparecem no painel
+	check(Knowledge.BOSS_MECHS[5].has("honey") and Knowledge.BOSS_MECHS[5].has("hell") and Knowledge.mech_name("hell") == "Ritmo do HELL TIME", "o painel da MEL-CHAN lista as ondas de mel e o ritmo do HELL TIME")
+	check(is_equal_approx(main.BEE_JUMP_CD, 0.6) and main.BEE_JUMP_CD < main.HELL_BEAT * 2.0 - 0.15, "o pulo recarrega com folga pro intervalo das ondas do HELL TIME")
 	# HELL TIME: abaixo de metade da vida ela volta pro meio e toca a partitura
 	main.boss_pos = Vector3(4.0, 0, -3.0)
 	main.boss_hp = main.boss_max * 0.49
@@ -2050,6 +2219,16 @@ func _initialize() -> void:
 	await wait(main.HELL_PRE + 0.25)
 	check(main.boss_pos.length() < 0.2 and main.bee_rings.size() >= 1, "ela chega no meio do palco junto com a primeira batida")
 	check(main.hell_fire.visible and main.hell_glow > 0.9, "o fogo roxo sobe atrás do cenário")
+	var hk0: float = Knowledge.knowledge(u.hero, "hell")
+	var honey0: float = Knowledge.knowledge(u.hero, "honey")
+	u.invuln = 0.0
+	u.hop_cd = 0.0
+	u.hop_t = 0.0
+	u.position = Vector3(3.0, 0, 0)
+	main.jump(u)
+	check(is_equal_approx(u.hop_cd, main.BEE_JUMP_CD), "nesta luta o pulo usa a recarga curta")
+	main._bee_low_touch(u, {"done": {}}, "ring", "teste")
+	check(is_equal_approx(Knowledge.knowledge(u.hero, "hell"), hk0 + main.LEARN_HAND) and is_equal_approx(Knowledge.knowledge(u.hero, "honey"), honey0), "pular uma onda no HELL TIME ensina o ritmo do HELL TIME, não as ondas de mel")
 	main.phase_t = main._hb(8, 0.5)
 	await frames_of(3)
 	check(main.bee_hell_dir != 0.0 and main.boss_pos.length() < 0.2, "na seção B o pólen gira e ela continua parada no meio")

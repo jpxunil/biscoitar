@@ -177,6 +177,27 @@ Boxeadora / estrela pop / magical girl com luvas mágicas gigantes. Sem gauge ne
 - Slots 1–3 dividem o GCD. Botão fortalecido **brilha**. GCD errado no meio perde o
   fortalecimento; oGCDs no meio não quebram a sequência.
 
+## 10. Valsa (NOVA) — suporte corpo a corpo, fácil de entender
+
+Dançarina de salão: saia enorme, rosas douradas, volutas de ouro. Chave "valsa", herói 9. Ela não
+anda, desliza como patinadora (uma perna pra trás, braços abertos, troca o pé de apoio).
+Recurso: **Embalo** (0 a 5). Cada Giro dá 1; sem girar por 6 s, cai 1 a cada 2 s. O Embalo abre a saia
+(a roseta no chão): quem está dentro dela dá +6% de dano, +2% por ponto (até +16%). Ela mesma não ganha.
+Tudo se lê no mundo: tamanho da saia e da roseta, rosas orbitando a cintura, voluta girando nos pés de
+quem está com o bônus, fio dourado até o Par.
+
+| Slot | Habilidade | Recarga | Funcionamento |
+|---|---|---:|---|
+| 1 | Passo de Valsa | 1,2 s | Um, dois, TRÊS: 16, 16 e o Giro (40 + 4 por Embalo, +1 de Embalo). O botão brilha no três. |
+| 2 | Passo a Dois | 8 s | Ela e um aliado acertam a boss (28 cada), ele cura 18 e vira o Par: recebe o bônus de qualquer lugar e acompanha cada Giro (8 + 4 por Embalo, no DPS dele). O próximo Passo já é o Giro. |
+| 3 | Pirueta | 9 s | 0,6 s girando: 50 de dano, +1 de Embalo. Golpe que chegar nesse tempo passa por ela: BRAVO!, +2 de Embalo e a recarga cai pela metade. |
+| 4 | Chuva de Pétalas | 18 s | Cura 20 na hora e 7/s por 6 s em quem está na dança (saia, Par, ela). |
+| 5 | Crescendo | 30 s | 8 s: o bônus da saia dobra, o Passo de Valsa vai a 0,8 s e o Embalo não cai. |
+| 6 | Grande Baile | 60 s | 10 s: a party toda conta como dentro da saia, Embalo no máximo, todos acompanham os Giros. Último acorde: 260 de dano e 40 de cura em todos. |
+
+- Na mão da IA sem a carta Rotação ela gira sozinha a cada 3,6 s (Embalo até 3) e faz Par com quem o
+  jogador controla.
+
 ## Perguntas em aberto
 
 - **Party (DECIDIDO pelo autor em 2026-11-13): 4 LIVRES.** O jogador escolhe quaisquer 4 das 9 classes, sem obrigar tank/healer. Falta implementar (tela de party + código que hoje assume lugar 0 = tank).
